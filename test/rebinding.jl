@@ -366,6 +366,59 @@ let test_code =
     @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
 end
 
+# Test that image binding backedges wait for a binding to be replaced in an image that theirs
+# was built against, and that only such images then validate in full
+let test_code =
+    """
+    using Test
+    include("precompile_utils.jl")
+
+    precompile_test_harness("deferred binding backedges") do load_path
+        write(joinpath(load_path, "DeferredBackedgesA.jl"),
+              "module DeferredBackedgesA
+                 const read_me = 1
+               end")
+        Base.compilecache(Base.PkgId("DeferredBackedgesA"))
+        for name in ("DeferredBackedgesB", "DeferredBackedgesD")
+            write(joinpath(load_path, name * ".jl"),
+                  "module \$name
+                     import DeferredBackedgesA
+                     @eval f() = \\\$(GlobalRef(DeferredBackedgesA, :read_me))
+                     @eval g() = \\\$(GlobalRef(DeferredBackedgesA, :created))
+                     @eval names_main() = \\\$(GlobalRef(Main, :deferred_backedges_main))
+                     precompile(g, ())
+                   end")
+            Base.compilecache(Base.PkgId(name))
+        end
+        write(joinpath(load_path, "DeferredBackedgesC.jl"),
+              "module DeferredBackedgesC
+                 @eval f() = \\\$(GlobalRef(Base, :sin))
+               end")
+        Base.compilecache(Base.PkgId("DeferredBackedgesC"))
+        @eval using DeferredBackedgesA, DeferredBackedgesB, DeferredBackedgesC
+        invokelatest() do
+            RU = Base.Compiler.ReinferUtils
+            nbackedges(m, name) = ccall(:jl_binding_backedges_length, Csize_t, (Any,),
+                                        convert(Core.Binding, GlobalRef(m, name)))
+            unreplaced(m) = RU.image_deps_unreplaced(RU.external_blob_index(m))
+            @test nbackedges(DeferredBackedgesA, :read_me) == 0
+            # every image was built against `Main`, so what names it is not deferred
+            @test nbackedges(Main, :deferred_backedges_main) == 1
+            @eval @eval DeferredBackedgesA const created = 1
+            @test nbackedges(DeferredBackedgesA, :read_me) == 1
+            @test !unreplaced(DeferredBackedgesB) && unreplaced(DeferredBackedgesC)
+            # `created` did not exist when DeferredBackedgesD was built
+            @eval using DeferredBackedgesD
+            @test nbackedges(DeferredBackedgesA, :read_me) == 2
+            @test (@eval DeferredBackedgesD.g()) == 1
+        end
+    end
+
+    finish_precompile_test!()
+    """
+    @test success(pipeline(`$(Base.julia_cmd()) -e $test_code`; stderr))
+end
+
 # Test the binding-partition machinery across the precompile boundary: cached code
 # whose resolved global reads froze a binding partition must revalidate at load across
 # a flag-only (`export`) partition flip, and must be invalidated when its binding is

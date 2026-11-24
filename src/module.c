@@ -1645,6 +1645,11 @@ JL_DLLEXPORT void jl_module_using(jl_module_t *to, jl_module_t *from, size_t fla
         jl_atomic_store_relaxed(&to->has_reexports, 1);
     }
 
+    // Names that `to` has no binding for yet resolve differently from here on, without a
+    // partition of `to` being replaced.
+    if (to != jl_main_module)
+        jl_image_binding_replaced(to, new_world);
+
     JL_UNLOCK(&to->lock);
 
     // Go through all exported bindings. If we have a binding for this in the
@@ -1989,7 +1994,6 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked(jl_binding_t *b,
         new_world);
 }
 
-extern JL_DLLEXPORT _Atomic(size_t) jl_first_image_replacement_world;
 JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
     jl_binding_partition_t *old_bpart, jl_value_t *restriction_val, size_t kind, size_t new_world)
 {
@@ -2009,17 +2013,15 @@ JL_DLLEXPORT jl_binding_partition_t *jl_replace_binding_locked2(jl_binding_t *b,
                       jl_symbol_name(b->globalref->mod->name), jl_symbol_name(b->globalref->name));
     }
 
-    // Check if this is a replacing a binding in the system or a package image.
-    // Until the first such replacement, we can fast-path validation.
-    // For these purposes, we consider the `Main` module to be a non-sysimg module.
+    // Check if this is replacing a binding of a module in the system or a package image.
+    // Until the first such replacement, the images loaded against that image can fast-path
+    // validation. For these purposes, we consider the `Main` module to be a non-sysimg module.
     // This is legal, because we special case the `Main` in check_safe_import_from.
-    if (jl_object_in_image((jl_value_t*)b) && b->globalref->mod != jl_main_module && jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0) {
+    if (b->globalref->mod != jl_main_module && jl_image_binding_replaced(b->globalref->mod, new_world)) {
         // During incremental compilation replacement of image bindings is forbidden;
         // We use this to avoid inserting backedges while loading pkgimages.
-        // `check_safe_newbinding` checks an equivalent condition on `b->globalref->mod`,
-        // but doesn't quite query `jl_object_in_image`, so assert here to be extra sure.
+        // `check_safe_newbinding` checks this on `b->globalref->mod`; assert to be extra sure.
         assert(!(jl_options.incremental && jl_generating_output()));
-        jl_atomic_store_relaxed(&jl_first_image_replacement_world, new_world);
     }
 
     assert(jl_atomic_load_relaxed(&b->partitions) == old_bpart);

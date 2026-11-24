@@ -209,7 +209,13 @@ typedef struct {
                              // this one was loaded against, and itself
     _Atomic(size_t) world;   // the world in which the image's methods were activated
                              // (0 until then)
+    _Atomic(uint8_t) binding_replaced; // a binding of one of its modules has been replaced
+    _Atomic(size_t) deps_unreplaced;   // the value of n_images_replaced for which none of
+                                       // `deps` had (memo for jl_linkage_blob_deps_replaced)
 } image_metadata_t;
+
+// number of images with `binding_replaced` set
+static _Atomic(size_t) n_images_replaced;
 
 // readers use a snapshot without passing a safepoint, so free it after the next collection
 static void image_tree_retire(void *snapshot) JL_NOTSAFEPOINT
@@ -307,6 +313,78 @@ JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTS
     size_t world = jl_atomic_load_relaxed(&blobmeta->world);
     assert(world != 0);
     return world;
+}
+
+// A binding of `m` is being replaced or `m` is `using` another module, under the
+// world_counter_lock. Returns whether `m` belongs to an image: the images loaded against
+// that one then validate in full.
+int jl_image_binding_replaced(jl_module_t *m, size_t new_world) JL_NOTSAFEPOINT
+{
+    image_metadata_t *meta = external_blob_metadata((jl_value_t*)m);
+    if (meta == NULL)
+        return 0;
+    if (!jl_atomic_load_relaxed(&meta->binding_replaced)) {
+        // set before the count, which readers load first
+        jl_atomic_store_release(&meta->binding_replaced, 1);
+        if (jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0)
+            jl_atomic_store_release(&jl_first_image_replacement_world, new_world);
+        jl_atomic_store_release(&n_images_replaced, jl_atomic_load_relaxed(&n_images_replaced) + 1);
+    }
+    return 1;
+}
+
+static int image_binding_replaced(void *meta) JL_NOTSAFEPOINT
+{
+    return meta != EYT_NOTFOUND && meta != NULL &&
+           jl_atomic_load_acquire(&((image_metadata_t*)meta)->binding_replaced);
+}
+
+// Whether a binding has been replaced in the sysimage or in one of `depmods`, the images
+// that the image being restored was built against.
+static int depmods_binding_replaced(jl_array_t *depmods) JL_NOTSAFEPOINT
+{
+    if (jl_atomic_load_acquire(&n_images_replaced) == 0)
+        return 0;
+    if (image_binding_replaced(eyt_tree_range_data(&image_tree, 0)))
+        return 1;
+    for (size_t i = 0, ld = depmods ? jl_array_nrows(depmods) : 0; i < ld; i++) {
+        if (image_binding_replaced(external_blob_metadata(jl_array_ptr_ref(depmods, i))))
+            return 1;
+    }
+    return 0;
+}
+
+// Whether a binding has been replaced in linkage blob `image` or in one it was loaded
+// against (which includes the sysimage). For anything else, in any image at all.
+JL_DLLEXPORT int jl_linkage_blob_deps_replaced(size_t image) JL_NOTSAFEPOINT
+{
+    size_t n = jl_atomic_load_acquire(&n_images_replaced);
+    if (n == 0)
+        return 0;
+    void *data = eyt_tree_range_data(&image_tree, image);
+    if (data == EYT_NOTFOUND)
+        return 1;
+    image_metadata_t *meta = (image_metadata_t*)data;
+    if (meta->deps == NULL)
+        return 1;
+    if (jl_atomic_load_relaxed(&meta->deps_unreplaced) == n)
+        return 0;
+    for (size_t blob = 0; blob <= image; blob++) {
+        if (bitvector_get(meta->deps, blob) &&
+            image_binding_replaced(eyt_tree_range_data(&image_tree, blob)))
+            return 1;
+    }
+    jl_atomic_store_relaxed(&meta->deps_unreplaced, n);
+    return 0;
+}
+
+// The same, once any replacement in progress has run its invalidation and published its world.
+JL_DLLEXPORT int jl_linkage_blob_deps_replaced_locked(size_t image)
+{
+    JL_LOCK(&world_counter_lock);
+    int replaced = jl_linkage_blob_deps_replaced(image);
+    JL_UNLOCK(&world_counter_lock);
+    return replaced;
 }
 
 JL_DLLEXPORT uint8_t jl_object_in_image(jl_value_t *obj) JL_NOTSAFEPOINT
@@ -4870,7 +4948,7 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
         }
     }
     if (s.incremental) {
-        int no_replacement = jl_atomic_load_relaxed(&jl_first_image_replacement_world) == ~(size_t)0;
+        int no_replacement = !depmods_binding_replaced(depmods);
         for (size_t i = 0; i < s.fixup_objs.len; i++) {
             uintptr_t item = (uintptr_t)s.fixup_objs.items[i];
             jl_value_t *obj = (jl_value_t*)(image_base + item);
@@ -4951,6 +5029,8 @@ static void jl_restore_system_image_from_stream_(ios_t *f, jl_image_t *image,
     // the sysimage's methods are active by jl_require_world; a package image's
     // are activated by the caller, which records the world
     jl_atomic_store_relaxed(&meta->world, restored == NULL ? jl_require_world : 0);
+    jl_atomic_store_relaxed(&meta->binding_replaced, 0);
+    jl_atomic_store_relaxed(&meta->deps_unreplaced, 0);
     if (meta_out)
         *meta_out = meta;
     // adopt the image's coverage counters
