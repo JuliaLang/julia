@@ -2269,6 +2269,30 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
     end
 end
 
+# A package image keeps the edge of an uninformative call, so the callee's code is kept too.
+precompile_test_harness("uninformative call site image coverage") do load_path
+    write(joinpath(load_path, "UninfCoverageDep.jl"),
+        """
+        module UninfCoverageDep
+        @noinline f(x) = Base.inferencebarrier(identity)(x)
+        end
+        """)
+    write(joinpath(load_path, "UninfCoverage.jl"),
+        """
+        module UninfCoverage
+        using UninfCoverageDep
+        g(v::Vector{Any}) = UninfCoverageDep.f(v[1])
+        g(Any[1])
+        end
+        """)
+    Base.compilecache(Base.PkgId("UninfCoverageDep"))
+    Base.compilecache(Base.PkgId("UninfCoverage"))
+    @eval using UninfCoverage
+    Dep = Base.root_module(Base.PkgId("UninfCoverageDep"))
+    fmi = only(Base.method_instances(Dep.f, (Any,), Base.get_world_counter()))
+    @test isdefined(fmi, :cache)
+end
+
 precompile_test_harness("Issue #48391") do load_path
     write(joinpath(load_path, "I48391.jl"),
         """
