@@ -393,11 +393,15 @@ already dropped the value.
 [`unsafe_pointer_to_objref`](@ref) goes the other way. It turns an untracked pointer
 into a reference to the object it points at, and that reference has to keep the
 object alive like any other one, even after whatever kept it alive until then is gone.
-An address space cast from 0 to Tracked does not achieve this. The GC root placement
-pass does treat such a cast as the definition of a new tracked value, but a cast has
-no effects, so the optimizer is free to move it first: past a safepoint at which
-nothing else roots the object anymore, or above the branch that decides whether the
-pointer refers to an object at all. We thus provide a second intrinsic:
+An address space cast from 0 to Tracked does not achieve this. Such a cast is the idiom
+for a value that needs no root, like a constant that is loaded from a global, and the
+GC root placement pass handles it accordingly. It does root the result of a cast of
+another pointer where that is live across a safepoint, but a cast does not count when
+the pass checks whether the function has a safepoint after its first definition, and
+without one it places no roots at all. A cast also has no effects, so the optimizer is
+free to move it: past a safepoint at which nothing else roots the object anymore, or
+above the branch that decides whether the pointer refers to an object at all. We thus
+provide a second intrinsic:
 ```llvm
 declare ptr addrspace(10) @julia.pointer_to_objref(ptr)
 ```
