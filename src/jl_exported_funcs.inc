@@ -550,6 +550,7 @@
     YY(jl_getFunctionInfo) \
     YY(jl_register_fptrs) \
     YY(jl_register_eh_frames) \
+    YY(jl_register_gdb_object) \
     YY(jl_generate_fptr_for_unspecialized) \
     YY(jl_compile_codeinst) \
     YY(jl_teardown_codegen) \

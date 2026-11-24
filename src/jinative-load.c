@@ -9,6 +9,7 @@
 #include "julia_internal.h"
 #include "julia_assert.h"
 #include "jinative.h"
+#include <stdio.h>
 
 #ifndef _OS_WINDOWS_
 #include <fcntl.h>
@@ -178,6 +179,195 @@ static void *native_resolve_import(const char *name) JL_NOTSAFEPOINT
 
 static pthread_mutex_t native_lock = PTHREAD_MUTEX_INITIALIZER;
 
+static int native_env_flag(const char *name, int dflt) JL_NOTSAFEPOINT
+{
+    const char *v = getenv(name);
+    return v ? atoi(v) != 0 : dflt;
+}
+
+// Debuggers learn about code from the dynamic loader, which does not know these
+// images. With ENABLE_GDBLISTENER=1, as for code from the JIT, describe each
+// linked object to them through the GDB JIT interface: a relocatable ELF file in
+// memory that has the address of the code, the function symbols, the unwind
+// tables and the debug info with its addresses moved to where the image is.
+typedef struct {
+    unsigned char e_ident[16];
+    uint16_t e_type, e_machine;
+    uint32_t e_version;
+    uint64_t e_entry, e_phoff, e_shoff;
+    uint32_t e_flags;
+    uint16_t e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
+} native_elf_ehdr_t;
+typedef struct {
+    uint32_t sh_name, sh_type;
+    uint64_t sh_flags, sh_addr, sh_offset, sh_size;
+    uint32_t sh_link, sh_info;
+    uint64_t sh_addralign, sh_entsize;
+} native_elf_shdr_t;
+typedef struct {
+    uint32_t st_name;
+    unsigned char st_info, st_other;
+    uint16_t st_shndx;
+    uint64_t st_value, st_size;
+} native_elf_sym_t;
+
+static void native_register_debugger(jl_native_image_t *img) JL_NOTSAFEPOINT
+{
+    const jl_native_header_t *h = img->hdr;
+    const jl_native_object_t *objs = (const jl_native_object_t*)(img->meta + h->objects_off);
+    const jl_native_sym_t *syms = (const jl_native_sym_t*)(img->meta + h->syms_off);
+    const jl_native_debug_section_t *dsecs = (const jl_native_debug_section_t*)(img->meta + h->debug_off);
+    const char *strtab = img->meta + h->strtab_off;
+    uint64_t slide = (uintptr_t)img->base - h->link_base;
+    for (uint32_t o = 0; o < h->nobjects; o++) {
+        const jl_native_object_t *obj = &objs[o];
+        size_t lo = 0, hi = h->nsyms;
+        while (lo < hi) { // first symbol of the object
+            size_t mid = (lo + hi) / 2;
+            if (syms[mid].addr < obj->text_start)
+                lo = mid + 1;
+            else
+                hi = mid;
+        }
+        size_t first = lo, nsym = 0, strsz = 1;
+        for (size_t i = first; i < h->nsyms && syms[i].addr < obj->text_end; i++) {
+            nsym++;
+            strsz += strlen(strtab + syms[i].name) + 1;
+        }
+        int has_eh = obj->eh_frame_size != 0;
+        uint32_t nsec = 2 + has_eh + obj->ndebug + 3;
+        size_t shstrsz = 1 + sizeof(".text") + sizeof(".eh_frame") + sizeof(".symtab") + sizeof(".strtab") + sizeof(".shstrtab");
+        size_t size = sizeof(native_elf_ehdr_t) + nsec * sizeof(native_elf_shdr_t) + obj->eh_frame_size;
+        for (uint32_t i = 0; i < obj->ndebug; i++) {
+            shstrsz += strlen(strtab + dsecs[obj->debug + i].name) + 2;
+            size += LLT_ALIGN(dsecs[obj->debug + i].size, 8);
+        }
+        size = LLT_ALIGN(size, 8) + (nsym + 1) * sizeof(native_elf_sym_t) + strsz + shstrsz;
+        char *buf = (char*)calloc(1, size);
+        native_elf_ehdr_t *eh = (native_elf_ehdr_t*)buf;
+        native_elf_shdr_t *sh = (native_elf_shdr_t*)(buf + sizeof(*eh));
+        memcpy(eh->e_ident, "\177ELF\2\1\1", 7);
+        eh->e_type = 1; // ET_REL
+#ifdef _CPU_AARCH64_
+        eh->e_machine = 183;
+#else
+        eh->e_machine = 62;
+#endif
+        eh->e_version = 1;
+        eh->e_shoff = sizeof(*eh);
+        eh->e_ehsize = sizeof(*eh);
+        eh->e_shentsize = sizeof(*sh);
+        eh->e_shnum = nsec;
+        eh->e_shstrndx = nsec - 1;
+        size_t pos = sizeof(*eh) + nsec * sizeof(*sh);
+        char *shstr = buf + size - shstrsz;
+        size_t shstrpos = 1;
+        uint32_t si = 1;
+#define NATIVE_SHNAME(name) (strcpy(shstr + shstrpos, name), shstrpos += strlen(name) + 1, shstrpos - strlen(name) - 1)
+        sh[si].sh_name = NATIVE_SHNAME(".text");
+        sh[si].sh_type = 8; // SHT_NOBITS: the code is where sh_addr says
+        sh[si].sh_flags = 2 | 4; // SHF_ALLOC | SHF_EXECINSTR
+        sh[si].sh_addr = (uintptr_t)img->base + obj->text_start;
+        sh[si].sh_offset = pos;
+        sh[si].sh_size = obj->text_end - obj->text_start;
+        sh[si].sh_addralign = 4;
+        si++;
+        if (has_eh) {
+            sh[si].sh_name = NATIVE_SHNAME(".eh_frame");
+            sh[si].sh_type = 1; // SHT_PROGBITS
+            sh[si].sh_flags = 2;
+            sh[si].sh_addr = (uintptr_t)img->base + obj->eh_frame;
+            sh[si].sh_offset = pos;
+            sh[si].sh_size = obj->eh_frame_size;
+            sh[si].sh_addralign = 8;
+            memcpy(buf + pos, img->base + obj->eh_frame, obj->eh_frame_size);
+            pos += obj->eh_frame_size;
+            si++;
+        }
+        for (uint32_t i = 0; i < obj->ndebug; i++) {
+            const jl_native_debug_section_t *ds = &dsecs[obj->debug + i];
+            pos = LLT_ALIGN(pos, 8);
+            shstr[shstrpos] = '.';
+            strcpy(shstr + shstrpos + 1, strtab + ds->name);
+            sh[si].sh_name = shstrpos;
+            shstrpos += strlen(strtab + ds->name) + 2;
+            sh[si].sh_type = 1;
+            sh[si].sh_offset = pos;
+            sh[si].sh_size = ds->size;
+            sh[si].sh_addralign = 1;
+            memcpy(buf + pos, img->meta + ds->off, ds->size);
+            const uint32_t *slides = (const uint32_t*)(img->meta + ds->slides_off);
+            for (uint32_t j = 0; j < ds->nslides; j++) {
+                uint64_t v;
+                memcpy(&v, buf + pos + slides[j], sizeof(v));
+                v += slide;
+                memcpy(buf + pos + slides[j], &v, sizeof(v));
+            }
+            pos += ds->size;
+            si++;
+        }
+        pos = LLT_ALIGN(pos, 8);
+        native_elf_sym_t *es = (native_elf_sym_t*)(buf + pos);
+        char *str = buf + pos + (nsym + 1) * sizeof(*es);
+        size_t strpos = 1;
+        for (size_t i = 0; i < nsym; i++) {
+            const char *name = strtab + syms[first + i].name;
+            es[i + 1].st_name = strpos;
+            strcpy(str + strpos, name);
+            strpos += strlen(name) + 1;
+            es[i + 1].st_info = (1 << 4) | 2; // STB_GLOBAL, STT_FUNC
+            es[i + 1].st_shndx = 1;
+            es[i + 1].st_value = syms[first + i].addr - obj->text_start; // relative to the section
+            es[i + 1].st_size = syms[first + i].size;
+        }
+        sh[si].sh_name = NATIVE_SHNAME(".symtab");
+        sh[si].sh_type = 2; // SHT_SYMTAB
+        sh[si].sh_offset = pos;
+        sh[si].sh_size = (nsym + 1) * sizeof(*es);
+        sh[si].sh_link = si + 1;
+        sh[si].sh_info = 1;
+        sh[si].sh_addralign = 8;
+        sh[si].sh_entsize = sizeof(*es);
+        si++;
+        sh[si].sh_name = NATIVE_SHNAME(".strtab");
+        sh[si].sh_type = 3; // SHT_STRTAB
+        sh[si].sh_offset = (str - buf);
+        sh[si].sh_size = strsz;
+        sh[si].sh_addralign = 1;
+        si++;
+        sh[si].sh_name = NATIVE_SHNAME(".shstrtab");
+        sh[si].sh_type = 3;
+        sh[si].sh_offset = (shstr - buf);
+        sh[si].sh_size = shstrsz;
+        sh[si].sh_addralign = 1;
+#undef NATIVE_SHNAME
+        assert(si == nsec - 1 && strpos == strsz && shstrpos == shstrsz);
+        // the debugger keeps reading from the buffer, so it is never freed
+        jl_register_gdb_object(buf, size);
+    }
+}
+
+// With ENABLE_JITPROFILING=1, as for code from the JIT, tell perf the names of the functions
+static void native_write_perf_map(jl_native_image_t *img) JL_NOTSAFEPOINT
+{
+    static FILE *map = NULL;
+    const jl_native_header_t *h = img->hdr;
+    const jl_native_sym_t *syms = (const jl_native_sym_t*)(img->meta + h->syms_off);
+    pthread_mutex_lock(&native_lock);
+    if (map == NULL) {
+        char path[64];
+        snprintf(path, sizeof(path), "/tmp/perf-%d.map", (int)getpid());
+        map = fopen(path, "a");
+    }
+    if (map != NULL) {
+        for (uint32_t i = 0; i < h->nsyms; i++)
+            fprintf(map, "%lx %x %s\n", (unsigned long)((uintptr_t)img->base + syms[i].addr),
+                    (unsigned)syms[i].size, img->meta + h->strtab_off + syms[i].name);
+        fflush(map);
+    }
+    pthread_mutex_unlock(&native_lock);
+}
+
 static uint64_t native_time[4]; // map, imports, fixups, registration (ns)
 static uint64_t native_count[4]; // images, rebases, binds, bytes of text
 
@@ -195,8 +385,22 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     jl_native_image_t *img = NULL;
     char *base = (char*)MAP_FAILED, *meta = (char*)MAP_FAILED;
     void **imports = NULL;
-    size_t pagesz = jl_getpagesize();
-    uint64_t t0 = jl_hrtime();
+    size_t pagesz = jl_getpagesize(), text_end = 0, meta_size = 0;
+    int perf = 0, copy = 0, mapped = 0;
+    const uint32_t *import_names;
+    const uint8_t *p;
+    const jl_native_bind_t *binds;
+    uint64_t t0 = jl_hrtime(), t1, t2, t3, t4, slot = 0;
+    size_t n;
+    jl_native_image_t *chunk;
+#ifdef _OS_DARWIN_
+    fsignatures_t sig;
+#endif
+#ifdef JL_DEBUG_BUILD
+    int gdb_default = 1;
+#else
+    int gdb_default = 0;
+#endif
     int fd = open(path, O_RDONLY | O_CLOEXEC);
     if (fd == -1) {
         *err = "cannot open the file";
@@ -210,24 +414,24 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     if (hdr.page_size % pagesz != 0 || off % pagesz != 0)
         goto fail;
     *err = "cannot map the native code section";
-    size_t text_end = LLT_ALIGN(hdr.text_off + hdr.text_size, hdr.page_size);
+    text_end = LLT_ALIGN(hdr.text_off + hdr.text_size, hdr.page_size);
     assert(text_end == hdr.rodata_off);
     base = (char*)mmap(NULL, hdr.vm_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (base == MAP_FAILED)
         goto fail;
-    // The header and the code, shared with every process that has the file mapped
-    int mapped = 0;
+    // The header and the code, shared with every process that has the file mapped.
+    // perf only looks symbols up in its map file for code that is not in a file.
+    perf = native_env_flag("ENABLE_JITPROFILING", 0);
+    copy = perf || getenv("JULIA_NATIVE_IMAGE_COPY") != NULL;
 #ifdef _OS_DARWIN_
     // The kernel only maps signed files executable; the signature is the last part of the section
-    fsignatures_t sig;
     memset(&sig, 0, sizeof(sig));
     sig.fs_file_start = off;
     sig.fs_blob_start = (void*)(uintptr_t)hdr.codesig_off;
     sig.fs_blob_size = hdr.codesig_size;
-    mapped = hdr.codesig_size != 0 && getenv("JULIA_NATIVE_IMAGE_COPY") == NULL &&
-             fcntl(fd, F_ADDFILESIGS_RETURN, &sig) != -1;
+    mapped = hdr.codesig_size != 0 && !copy && fcntl(fd, F_ADDFILESIGS_RETURN, &sig) != -1;
 #else
-    mapped = 1;
+    mapped = !copy;
 #endif
     if (mapped)
         mapped = mmap(base, text_end, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, fd, off) != MAP_FAILED;
@@ -241,25 +445,26 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
         sys_icache_invalidate(base, text_end);
 #endif
     }
-    if (hdr.data_off > hdr.rodata_off &&
-        mmap(base + hdr.rodata_off, hdr.data_off - hdr.rodata_off, PROT_READ, MAP_PRIVATE | MAP_FIXED,
+    if (hdr.relro_off > hdr.rodata_off &&
+        mmap(base + hdr.rodata_off, hdr.relro_off - hdr.rodata_off, PROT_READ, MAP_PRIVATE | MAP_FIXED,
              fd, off + hdr.rodata_off) == MAP_FAILED)
         goto fail;
-    if (hdr.vm_size > hdr.data_off &&
-        mmap(base + hdr.data_off, hdr.vm_size - hdr.data_off, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED,
-             fd, off + hdr.data_off) == MAP_FAILED)
+    // Everything that is fixed up; the first part of it is made read-only afterwards
+    if (hdr.vm_size > hdr.relro_off &&
+        mmap(base + hdr.relro_off, hdr.vm_size - hdr.relro_off, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED,
+             fd, off + hdr.relro_off) == MAP_FAILED)
         goto fail;
     // The tables follow the segments. `meta` is such that their offsets can be used as they are.
-    size_t meta_size = hdr.codesig_off - hdr.vm_size;
+    meta_size = hdr.codesig_off - hdr.vm_size;
     if (meta_size != 0) {
         meta = (char*)mmap(NULL, meta_size, PROT_READ, MAP_PRIVATE, fd, off + hdr.vm_size);
         if (meta == MAP_FAILED)
             goto fail;
         meta -= hdr.vm_size;
     }
-    uint64_t t1 = jl_hrtime();
+    t1 = jl_hrtime();
 
-    const uint32_t *import_names = (const uint32_t*)(meta + hdr.imports_off);
+    import_names = (const uint32_t*)(meta + hdr.imports_off);
     imports = (void**)malloc(sizeof(void*) * (hdr.nimports + 1));
     pthread_mutex_lock(&native_lock);
     for (uint32_t i = 0; i < hdr.nimports; i++) {
@@ -271,10 +476,9 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
         }
     }
     pthread_mutex_unlock(&native_lock);
-    uint64_t t2 = jl_hrtime();
+    t2 = jl_hrtime();
 
-    const uint8_t *p = (const uint8_t*)(meta + hdr.rebase_off);
-    uint64_t slot = 0;
+    p = (const uint8_t*)(meta + hdr.rebase_off);
     for (uint32_t i = 0; i < hdr.nrebase; i++) {
         uint64_t delta = 0;
         unsigned shift = 0;
@@ -290,23 +494,25 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
         v += (uintptr_t)base;
         memcpy(base + slot, &v, sizeof(v));
     }
-    const jl_native_bind_t *binds = (const jl_native_bind_t*)(meta + hdr.bind_off);
+    binds = (const jl_native_bind_t*)(meta + hdr.bind_off);
     for (uint32_t i = 0; i < hdr.nbind; i++) {
         uint64_t v = (uintptr_t)imports[binds[i].import] + binds[i].addend;
         memcpy(base + binds[i].slot, &v, sizeof(v));
     }
     free(imports);
     imports = NULL;
-    uint64_t t3 = jl_hrtime();
+    if (hdr.data_off > hdr.relro_off)
+        mprotect(base + hdr.relro_off, hdr.data_off - hdr.relro_off, PROT_READ);
+    t3 = jl_hrtime();
 
     pthread_mutex_lock(&native_lock);
-    size_t n = jl_atomic_load_relaxed(&native_nimages);
+    n = jl_atomic_load_relaxed(&native_nimages);
     if (n == NATIVE_CHUNK * NATIVE_NCHUNKS) {
         pthread_mutex_unlock(&native_lock);
         *err = "too many native images";
         goto fail;
     }
-    jl_native_image_t *chunk = jl_atomic_load_relaxed(&native_chunks[n / NATIVE_CHUNK]);
+    chunk = jl_atomic_load_relaxed(&native_chunks[n / NATIVE_CHUNK]);
     if (chunk == NULL) {
         chunk = (jl_native_image_t*)calloc(NATIVE_CHUNK, sizeof(jl_native_image_t));
         jl_atomic_store_release(&native_chunks[n / NATIVE_CHUNK], chunk);
@@ -331,7 +537,7 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
             jl_register_eh_frames((uint8_t*)base + objs[i].eh_frame, objs[i].eh_frame_size);
     }
 #endif
-    uint64_t t4 = jl_hrtime();
+    t4 = jl_hrtime();
     native_time[0] += t1 - t0;
     native_time[1] += t2 - t1;
     native_time[2] += t3 - t2;
@@ -342,6 +548,10 @@ jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const ch
     native_count[3] += hdr.text_size;
     pthread_mutex_unlock(&native_lock);
     close(fd);
+    if (native_env_flag("ENABLE_GDBLISTENER", gdb_default))
+        native_register_debugger(img);
+    if (perf)
+        native_write_perf_map(img);
     *err = NULL;
     return img;
 

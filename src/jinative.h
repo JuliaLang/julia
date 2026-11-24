@@ -19,10 +19,10 @@ extern "C" {
 #endif
 
 #define JL_NATIVE_MAGIC "\177JLNATV"
-#define JL_NATIVE_VERSION 1
+#define JL_NATIVE_VERSION 2
 
 // All offsets are relative to the start of the section, which is page aligned in
-// the file. For the three segments the file offset is also the offset from the
+// the file. For the four segments the file offset is also the offset from the
 // load address.
 typedef struct {
     char magic[8];
@@ -32,7 +32,8 @@ typedef struct {
     uint64_t vm_size; // address space the image occupies
     uint64_t text_off, text_size; // r-x, never written at load time
     uint64_t rodata_off, rodata_size; // r--, never written at load time
-    uint64_t data_off, data_size; // rw-, holds every slot that is fixed up
+    uint64_t relro_off, relro_size; // fixed up, then made read-only (GOT, constant pointer tables)
+    uint64_t data_off, data_size; // rw-
     // fixups (not mapped)
     uint64_t rebase_off; // ULEB128 deltas between slots that hold an image offset
     uint64_t bind_off; // jl_native_bind_t[nbind]
@@ -72,11 +73,14 @@ typedef struct {
     uint32_t debug, ndebug; // range of jl_native_debug_section_t
 } jl_native_object_t;
 
-// A DWARF section, with addresses as if the image were loaded at `link_base`
+// A DWARF section, with addresses as if the image were loaded at `link_base`.
+// `slides` are the offsets in it of the 64-bit addresses, for a consumer that
+// needs them to be those of the loaded image (a debugger).
 typedef struct {
     uint64_t off, size;
+    uint64_t slides_off; // uint32_t[nslides]
     uint32_t name; // offset into the string table, e.g. "debug_line"
-    uint32_t pad;
+    uint32_t nslides;
 } jl_native_debug_section_t;
 
 // A loaded image

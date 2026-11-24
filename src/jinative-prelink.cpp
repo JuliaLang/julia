@@ -42,7 +42,15 @@ static const uint64_t VBase = 0x1000000000ULL; // above 4 GiB so that no address
 static const uint64_t ImportBase = 0x7000000000000000ULL;
 static const uint64_t ImportStride = 0x10000;
 
-enum Region { RX, RO, RW, NRegions };
+enum Region { RX, RO, RELRO, RW, NRegions };
+
+// BasicLayout groups sections by protection, so a protection that no section
+// has otherwise marks the ones that are read-only once the loader fixed them up.
+static const orc::MemProt RelroProt = orc::MemProt::Read | orc::MemProt::Write | orc::MemProt::Exec;
+static bool isExec(orc::MemProt Prot)
+{
+    return Prot != RelroProt && (Prot & orc::MemProt::Exec) != orc::MemProt::None;
+}
 
 struct Prelinker;
 
@@ -97,9 +105,10 @@ struct Prelinker {
     struct Sym { uint64_t Addr; uint32_t Size; std::string Name; };
     std::vector<Sym> Syms;
     std::vector<jl_native_object_t> Objs;
-    struct DebugSec { std::string Name; std::vector<char> Data; };
+    struct DebugSec { std::string Name; std::vector<char> Data; std::vector<uint32_t> Slides; };
     std::vector<DebugSec> Debug;
     unsigned NRelaxed = 0, NStubCalls = 0, NDead = 0;
+    uint64_t ZeroFill = 0;
 
     void fail(const Twine &Msg)
     {
@@ -183,7 +192,8 @@ bool Prelinker::isAbsolute(Edge::Kind K) const
            K == x86_64::Pointer8;
 }
 
-// A slot that is fixed up at load time has to be in the data segment.
+// A slot that is fixed up at load time has to be writable then. Sections that
+// are otherwise read-only go to a segment of their own.
 Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
 {
     for (auto &Sec : G.sections()) {
@@ -209,7 +219,7 @@ Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
         if ((Prot & orc::MemProt::Exec) != orc::MemProt::None && Sec.getName() != "$__GOT")
             return make_error<StringError>("pointer in executable section " + Sec.getName() +
                                            " of " + G.getName(), inconvertibleErrorCode());
-        Sec.setMemProt(orc::MemProt::Read | orc::MemProt::Write);
+        Sec.setMemProt(RelroProt);
     }
     return Error::success();
 }
@@ -260,7 +270,7 @@ Error Prelinker::relaxStubCalls(LinkGraph &G)
     for (auto &Sec : G.sections()) {
         if (Sec.getMemLifetime() == orc::MemLifetime::NoAlloc || &Sec == Stubs)
             continue;
-        bool Exec = (Sec.getMemProt() & orc::MemProt::Exec) != orc::MemProt::None;
+        bool Exec = isExec(Sec.getMemProt());
         for (auto *B : Sec.blocks()) {
             for (auto &E : B->edges()) {
                 if (E.getKind() < Edge::FirstRelocation || !E.getTarget().isDefined())
@@ -335,7 +345,7 @@ Error Prelinker::recordFixups(LinkGraph &G)
     for (auto &Sec : G.sections()) {
         if (Sec.getMemLifetime() == orc::MemLifetime::NoAlloc)
             continue;
-        bool Exec = (Sec.getMemProt() & orc::MemProt::Exec) != orc::MemProt::None;
+        bool Exec = isExec(Sec.getMemProt());
         bool Writable = (Sec.getMemProt() & orc::MemProt::Write) != orc::MemProt::None;
         if (Exec && !Sec.empty()) {
             SectionRange R(Sec);
@@ -412,8 +422,14 @@ Error Prelinker::recordFixups(LinkGraph &G)
         DS.Name = Name == "debug_str_offs" ? "debug_str_offsets" : Name.str();
         DS.Data.assign(R.getSize(), 0);
         for (auto *B : Sec.blocks()) {
-            if (!B->isZeroFill())
-                memcpy(DS.Data.data() + (B->getAddress() - R.getStart()), B->getContent().data(), B->getSize());
+            if (B->isZeroFill())
+                continue;
+            uint64_t BOff = B->getAddress() - R.getStart();
+            memcpy(DS.Data.data() + BOff, B->getContent().data(), B->getSize());
+            for (auto &E : B->edges()) {
+                if (isPointer64(E.getKind()) && inImage(E.getTarget().getAddress().getValue()))
+                    DS.Slides.push_back(BOff + E.getOffset());
+            }
         }
         Debug.push_back(std::move(DS));
     }
@@ -437,12 +453,9 @@ void Prelinker::layout()
                 return;
             }
             auto Prot = AG.getMemProt();
-            Region R = (Prot & orc::MemProt::Exec) != orc::MemProt::None ? RX :
+            Region R = Prot == RelroProt ? RELRO : isExec(Prot) ? RX :
                        (Prot & orc::MemProt::Write) != orc::MemProt::None ? RW : RO;
-            if (R == RX && (Prot & orc::MemProt::Write) != orc::MemProt::None) {
-                fail("writable and executable segment in " + A.G->getName());
-                return;
-            }
+            ZeroFill += Seg.ZeroFillSize;
             uint64_t Off = alignTo(RegionSize[R], Seg.Alignment);
             RegionSize[R] = Off + Seg.ContentSize + Seg.ZeroFillSize;
             Placements.push_back({&Seg, R, Off});
@@ -534,6 +547,7 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
     H.link_base = VBase;
     H.text_off = RegionOff[RX]; H.text_size = RegionSize[RX];
     H.rodata_off = RegionOff[RO]; H.rodata_size = RegionSize[RO];
+    H.relro_off = RegionOff[RELRO]; H.relro_size = RegionSize[RELRO];
     H.data_off = RegionOff[RW]; H.data_size = RegionSize[RW];
 
     Out.assign(Image.begin(), Image.end());
@@ -577,9 +591,13 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
     size_t DebugTable = Out.size();
     OS.write_zeros(Debug.size() * sizeof(jl_native_debug_section_t));
     for (size_t I = 0; I < Debug.size(); I++) {
-        jl_native_debug_section_t DS = {Out.size(), Debug[I].Data.size(), str(Debug[I].Name), 0};
-        memcpy(Out.data() + DebugTable + I * sizeof(DS), &DS, sizeof(DS));
+        jl_native_debug_section_t DS = {Out.size(), Debug[I].Data.size(), 0, str(Debug[I].Name),
+                                        (uint32_t)Debug[I].Slides.size()};
         OS.write(Debug[I].Data.data(), Debug[I].Data.size());
+        align();
+        DS.slides_off = Out.size();
+        OS.write((const char*)Debug[I].Slides.data(), Debug[I].Slides.size() * sizeof(uint32_t));
+        memcpy(Out.data() + DebugTable + I * sizeof(DS), &DS, sizeof(DS));
     }
     align();
     H.strtab_off = Out.size();
@@ -669,7 +687,7 @@ bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT
     if (Stats) {
         raw_string_ostream OS(*Stats);
         OS << "objects " << Objects.size() << " text " << P.RegionSize[RX] << " rodata " << P.RegionSize[RO]
-           << " data " << P.RegionSize[RW] << " rebases " << P.Rebases.size() << " binds " << P.Binds.size()
+           << " relro " << P.RegionSize[RELRO] << " data " << P.RegionSize[RW] << " zerofill " << P.ZeroFill << " rebases " << P.Rebases.size() << " binds " << P.Binds.size()
            << " imports " << P.Imports.size() << " syms " << P.Syms.size() << " linked " << P.Objs.size() << " debug " << P.Debug.size()
            << " relaxed " << P.NRelaxed << " stubcalls " << P.NStubCalls << " dead " << P.NDead << " file " << Out.size();
     }

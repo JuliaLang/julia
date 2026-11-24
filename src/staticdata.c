@@ -4152,8 +4152,12 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
     if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
         if (heap_checksum)
             *heap_checksum = checksum;
-        if (native_off && (flags & JI_FLAG_NATIVE_EMBEDDED))
-            *native_off = LLT_ALIGN(dataendpos, JI_NATIVE_ALIGN);
+        // the word after the heap is where the native code section starts
+        if (native_off && (flags & JI_FLAG_NATIVE_EMBEDDED)) {
+            *native_off = UINT64_MAX; // not found
+            if (ios_seek(&s, dataendpos) == 0)
+                *native_off = read_uint64(&s);
+        }
         // without a native image, only an image that was written without code can be restored
         if (!handle && !(flags & JI_FLAG_NO_NATIVE)) {
             ios_close(&s);
@@ -5241,7 +5245,9 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
         buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum, &native_off);
         if (buf.data != NULL && native_off != 0) {
             const char *err;
-            jl_native_image_t *native = jl_native_image_load(fname, native_off, &err);
+            jl_native_image_t *native = native_off == UINT64_MAX ? NULL : jl_native_image_load(fname, native_off, &err);
+            if (native_off == UINT64_MAX)
+                err = "the native code section is missing";
             if (native == NULL)
                 return jl_get_exceptionf(jl_errorexception_type,
                     "Cache file \"%s\": %s.", fname, err);

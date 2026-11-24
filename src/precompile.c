@@ -181,11 +181,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
                        jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
                        checksum, unpack_func, &params);
         if (embed) {
-            // the native code section follows the heap, on a boundary that is a
-            // multiple of the page size
-            int64_t pos = ios_pos(&f);
-            int64_t pad = LLT_ALIGN(pos, 0x10000) - pos;
-            for (int64_t i = 0; i < pad; i++)
+            // The native code section follows the heap, on a boundary that is a
+            // multiple of every page size. The word after the heap says where.
+            int64_t pos = ios_pos(&f) + sizeof(uint64_t);
+            int64_t start = LLT_ALIGN(pos, 0x10000);
+            write_uint64(&f, start);
+            for (int64_t i = pos; i < start; i++)
                 ios_putc(0, &f);
             ios_write(&f, native.buf, native.size);
             ios_close(&native);
