@@ -9113,39 +9113,39 @@ let load_path = mktempdir()
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, depot_path)
 
-        write(joinpath(load_path, "Foo.jl"),
+        write(joinpath(load_path, "OverlayMTFoo.jl"),
             """
-            module Foo
+            module OverlayMTFoo
             Base.Experimental.@MethodTable(mt)
             Base.Experimental.@overlay mt sin(x::Int) = 1
             end
             """)
 
-        # precompiling Foo serializes the overlay method through the `mt` binding in the module
-        Foo = Base.require(Main, :Foo)
-        @test length(Foo.mt) == 1
+        # precompiling OverlayMTFoo serializes the overlay method through the `mt` binding in the module
+        OverlayMTFoo = Base.require(Main, :OverlayMTFoo)
+        @test length(OverlayMTFoo.mt) == 1
 
-        write(joinpath(load_path, "Bar.jl"),
+        write(joinpath(load_path, "OverlayMTBar.jl"),
             """
-            module Bar
+            module OverlayMTBar
             Base.Experimental.@MethodTable(mt)
             end
             """)
 
-        write(joinpath(load_path, "Baz.jl"),
+        write(joinpath(load_path, "OverlayMTBaz.jl"),
             """
-            module Baz
-            using Bar
-            Base.Experimental.@overlay Bar.mt sin(x::Int) = 1
+            module OverlayMTBaz
+            using OverlayMTBar
+            Base.Experimental.@overlay OverlayMTBar.mt sin(x::Int) = 1
             end
             """)
 
         # when referring to a method table in another module,
         # the overlay method needs to be discovered explicitly
-        Bar = Base.require(Main, :Bar)
-        @test length(Bar.mt) == 0
-        Baz = Base.require(Main, :Baz)
-        @test length(Bar.mt) == 1
+        OverlayMTBar = Base.require(Main, :OverlayMTBar)
+        @test length(OverlayMTBar.mt) == 0
+        OverlayMTBaz = Base.require(Main, :OverlayMTBaz)
+        @test length(OverlayMTBar.mt) == 1
     finally
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)
