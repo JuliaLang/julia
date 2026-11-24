@@ -1257,7 +1257,7 @@ function preresolved_closure(s::PrecompileSession, pkg::PkgId)
         path === nothing || checked_now!(s, path) || (cachefiles[i] = nothing)
     end
     return Base.PreresolvedPkg[
-        Base.PreresolvedPkg(nodes[i], loadable[i], sourcespecs[i], cachefiles[i], extensions[i])
+        Base.PreresolvedPkg(nodes[i], loadable[i], sourcespecs[i], cachefiles[i], UInt128(0), extensions[i])
         for i in eachindex(nodes)]
 end
 

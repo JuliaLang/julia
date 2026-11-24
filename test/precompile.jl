@@ -3708,8 +3708,8 @@ end
     end
 
     a, b = Base.PkgId(Base.UUID(1), "A"), Base.PkgId(Base.UUID(2), "B")
-    entries = [Base.PreresolvedPkg(a, [b, a], Base.PkgLoadSpec("/src/\$A.jl", (1, 14)), "/A.ji", ["AExt" => [b]]),
-               Base.PreresolvedPkg(b, Base.PkgId[], nothing, nothing, nothing)]
+    entries = [Base.PreresolvedPkg(a, [b, a], Base.PkgLoadSpec("/src/\$A.jl", (1, 14)), "/A.ji", UInt128(0), ["AExt" => [b]]),
+               Base.PreresolvedPkg(b, Base.PkgId[], nothing, nothing, UInt128(7) << 64 | 9, nothing)]
     roundtrip = Core.eval(Main, Meta.parse(Base._preresolved_str(entries)))
     @test roundtrip isa Vector{Base.PreresolvedPkg}
     @test all(e -> all(f -> getfield(e[1], f) == getfield(e[2], f), fieldnames(Base.PreresolvedPkg)), zip(entries, roundtrip))
