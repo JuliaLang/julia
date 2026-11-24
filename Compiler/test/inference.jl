@@ -7939,6 +7939,13 @@ end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
 end === Union{}
+# a `TypeVar` call with a wrong number of arguments throws a `MethodError`
+@test Base.infer_return_type() do
+    TypeVar()
+end === Union{}
+@test Base.infer_return_type((Symbol,Any,Any,Any)) do name, lb, ub, x
+    TypeVar(name, lb, ub, x)
+end === Union{}
 
 @test Base.infer_return_type((Nothing,)) do x
     @atomic x.count += 1
@@ -8679,6 +8686,8 @@ end == Type
 @test Base.infer_return_type() do
     Compiler.return_type(Tuple)
 end == Type
+
+@test Compiler._return_type(Compiler.NativeInterpreter(), Tuple{typeof(Core.current_scope)}) === Any
 
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")
