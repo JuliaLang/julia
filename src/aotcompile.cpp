@@ -2283,6 +2283,9 @@ static unsigned compute_image_shard_count(const ModuleInfo &info, unsigned worke
 
 jl_emission_params_t default_emission_params = { 1 };
 
+bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT, uint64_t PageSize,
+                             SmallVectorImpl<char> &Out, std::string &Err, std::string *Stats);
+
 static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fname,
                            const char *unopt_bc_fname, const char *obj_fname,
                            const char *asm_fname, ios_t *z, uint32_t checksum,
@@ -2661,6 +2664,20 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
         WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
+        if (obj_fname && params->native_image) {
+            // link the objects here, into a section of the .ji, instead of
+            // writing them out for the linker of the system
+            SmallVector<MemoryBufferRef, 16> objects;
+            for (size_t i = 0; i < shards; i++)
+                objects.push_back(MemoryBufferRef(StringRef(data_outputs[i].obj.data(), data_outputs[i].obj.size()), "text"));
+            objects.push_back(MemoryBufferRef(StringRef(metadata_outputs[0].obj.data(), metadata_outputs[0].obj.size()), "metadata"));
+            SmallVector<char, 0> image;
+            std::string err;
+            if (!jl_prelink_native_image(objects, TheTriple, jl_page_size, image, err, nullptr))
+                report_fatal_error(Twine("cannot link the native code of the image: ") + err);
+            ios_write(params->native_image, image.data(), image.size());
+            obj_fname = nullptr;
+        }
         WRITE_ARCHIVE(obj_fname, obj, "", ".o");
         WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
 #undef WRITE_ARCHIVE

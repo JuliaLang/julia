@@ -2158,6 +2158,16 @@ JL_DLLEXPORT void jl_srand(uint64_t) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_init_rand(void) JL_NOTSAFEPOINT;
 
 JL_DLLEXPORT extern void *jl_exe_handle;
+// jinative-load.c: native code sections of .ji files
+struct _jl_native_image_t;
+struct _jl_native_image_t *jl_native_image_load(const char *path, uint64_t off, const char **err) JL_NOTSAFEPOINT;
+// `dladdr` for the images loaded by jl_native_image_load
+JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const char **path,
+                                          void **saddr, const char **sname) JL_NOTSAFEPOINT;
+struct _jl_native_object_t;
+// Write the native code of package images into their .ji
+int jl_embed_native_code(void) JL_NOTSAFEPOINT;
+
 JL_DLLEXPORT extern void *jl_libjulia_handle;
 JL_DLLEXPORT extern void *jl_libjulia_internal_handle;
 JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
@@ -2778,6 +2788,7 @@ JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,
                                            jl_code_instance_t *fns);
 JL_DLLIMPORT void jl_get_function_id(void *native_code, jl_code_instance_t *ncode,
         int32_t *func_idx, int32_t *specfunc_idx);
+JL_DLLIMPORT void jl_register_eh_frames(uint8_t *addr, size_t size) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                                     jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,

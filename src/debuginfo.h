@@ -18,7 +18,8 @@ bool jl_dylib_DI_for_fptr(size_t pointer, llvm::object::SectionRef *Section, uin
 static llvm::object::SectionedAddress makeAddress(
         llvm::object::SectionRef Section, uint64_t address) JL_NOTSAFEPOINT
 {
-    return llvm::object::SectionedAddress{address, Section.getIndex()};
+    return llvm::object::SectionedAddress{address,
+        Section.getObject() ? Section.getIndex() : (uint64_t)llvm::object::SectionedAddress::UndefSection};
 }
 
 #endif

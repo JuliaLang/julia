@@ -27,6 +27,7 @@ using namespace llvm;
 
 #include "jitlayers.h"
 #include "debuginfo.h"
+#include "jinative.h"
 #if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
@@ -492,7 +493,7 @@ static int lookup_pointer(
 {
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
-    if (!context || !Section.getObject()) {
+    if (!context) {
         if (demangle) {
             char *oldname = (*frames)[0].func_name;
             if (oldname != NULL) {
@@ -760,6 +761,13 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPO
             std::move(error_splitobj.get()),
             std::move(SplitFile.get()));
 }
+// Unwind tables of the native code section of a .ji, as for code from the JIT
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_register_eh_frames_impl(uint8_t *addr, size_t size)
+{
+    register_eh_frames(addr, size);
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
     jl_code_instance_t **cinfos, size_t n)
@@ -1061,6 +1069,34 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
+// Debug info of the native code section of a .ji (see jinative.h). The DWARF
+// sections of each object that was linked into it are in the file, already
+// relocated, so all there is to do is to hand them to a DWARFContext.
+static jl_object_file_entry_t find_native_debug_info(size_t pointer) JL_NOTSAFEPOINT
+{
+    jl_object_file_entry_t entry{nullptr, nullptr, 0, nullptr};
+    jl_native_image_t *img;
+    const jl_native_object_t *obj = jl_native_object_for_addr(pointer, &img);
+    if (obj == NULL || obj->ndebug == 0)
+        return entry;
+    // objects are told apart by the address of their code
+    uint64_t key = (uintptr_t)img->base + obj->text_start;
+    auto success = getJITDebugRegistry().get_objfile_map()->emplace(key, entry);
+    if (!success.second)
+        return success.first->second;
+    const jl_native_header_t *h = img->hdr;
+    const jl_native_debug_section_t *secs = (const jl_native_debug_section_t*)(img->meta + h->debug_off) + obj->debug;
+    StringMap<std::unique_ptr<MemoryBuffer>> sections;
+    for (uint32_t i = 0; i < obj->ndebug; i++) {
+        sections[img->meta + h->strtab_off + secs[i].name] =
+            MemoryBuffer::getMemBuffer(StringRef(img->meta + secs[i].off, secs[i].size), "", false);
+    }
+    entry.ctx = DWARFContext::create(sections, sizeof(void*)).release();
+    entry.slide = h->link_base - (uintptr_t)img->base;
+    (*getJITDebugRegistry().get_objfile_map())[key] = entry;
+    return entry;
+}
+
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t *slide, llvm::DIContext **context,
     bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
@@ -1140,6 +1176,19 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
 #endif
     dladdr_success = dladdr((void*)pointer, &dlinfo) != 0;
 #endif
+    uint64_t native_base;
+    bool native = false;
+    if (jl_native_image_for_addr(pointer, &native_base, &dlinfo.dli_fname, &dlinfo.dli_saddr, &dlinfo.dli_sname)) {
+        native = true;
+        // native code section of a .ji, which the dynamic loader does not know
+        dlinfo.dli_fbase = (void*)(uintptr_t)native_base;
+        dladdr_success = 1;
+#ifdef __GLIBC__
+        static struct link_map native_map;
+        native_map.l_addr = native_base;
+        extra_info = &native_map;
+#endif
+    }
     if (!dladdr_success || !dlinfo.dli_fname)
         return false;
 
@@ -1168,7 +1217,7 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
         jl_copy_str(filename, dlinfo.dli_fname);
     fname = dlinfo.dli_fname;
 #endif // ifdef _OS_WINDOWS_
-    jl_object_file_entry_t entry = find_object_file(fbase, fname);
+    jl_object_file_entry_t entry = native ? find_native_debug_info(pointer) : find_object_file(fbase, fname);
     *slide = entry.slide;
     *context = entry.ctx;
     if (entry.obj)

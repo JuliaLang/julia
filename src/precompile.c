@@ -170,9 +170,26 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
+        ios_t native;
+        jl_emission_params_t params = {1, NULL};
+        int embed = emit_split && jl_options.incremental && jl_embed_native_code();
+        if (embed) {
+            ios_mem(&native, 0);
+            params.native_image = &native;
+        }
         jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
                        jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
-                       checksum, unpack_func, NULL);
+                       checksum, unpack_func, &params);
+        if (embed) {
+            // the native code section follows the heap, on a boundary that is a
+            // multiple of the page size
+            int64_t pos = ios_pos(&f);
+            int64_t pad = LLT_ALIGN(pos, 0x10000) - pos;
+            for (int64_t i = 0; i < pad; i++)
+                ios_putc(0, &f);
+            ios_write(&f, native.buf, native.size);
+            ios_close(&native);
+        }
         jl_postoutput_hook();
     }
 

@@ -640,6 +640,11 @@ static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 // This split .ji has no code, so no native image was written and it is loaded on its own.
 static const uint32_t JI_FLAG_NO_NATIVE = 1 << 2;
+// The native code is a section of this .ji (see jinative.h). Set together with
+// JI_FLAG_NO_NATIVE, since there is no native image file then either.
+static const uint32_t JI_FLAG_NATIVE_EMBEDDED = 1 << 3;
+// The native code section starts at the first multiple of this after the heap
+#define JI_NATIVE_ALIGN 0x10000
 
 static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {
