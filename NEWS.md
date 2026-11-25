@@ -8,6 +8,12 @@ Language changes
 ----------------
 
 * `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
+* `macroexpand`, `macroexpand!` and `@macroexpand` are implemented by JuliaLowering when it is the
+  active lowering, as it is by default. With `legacyscope=true` (the default for `macroexpand`),
+  the variables that an expansion binds are renamed with `gensym` (e.g. `var"##x#123"`), and the
+  `toplevel` forms in expansions keep the hygiene of their arguments as `hygienic-scope` forms, to
+  be resolved when they are expanded. Errors thrown by the macros themselves are rethrown as
+  before; other expansion errors are `JuliaLowering.MacroExpansionError`s.
 
 Compiler/Runtime improvements
 -----------------------------

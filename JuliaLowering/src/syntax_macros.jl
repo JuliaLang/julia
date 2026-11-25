@@ -74,6 +74,9 @@ end
 end
 
 function Base.var"@isdefined"(__context__::MacroContext, ex::SyntaxTree)
+    # like `macro isdefined(s::Symbol)` for `Expr`s
+    head(ex) === :identifier ||
+        throw(MacroExpansionError(ex, "expected a variable name as the argument of `@isdefined`"))
     @ast __context__ __context__.macrocall [:isdefined ex]
 end
 

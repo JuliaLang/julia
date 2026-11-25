@@ -207,8 +207,43 @@ julia> macroexpand(M, :(@m2()), recursive=false)
     The `legacyscope` keyword argument requires at least Julia 1.13.
 """
 function macroexpand(m::Module, @nospecialize(x); recursive=true, legacyscope=true)
+    _lowering_is_active() && return _lowering_macroexpand(m, x, recursive, legacyscope)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, false, legacyscope)
 end
+
+# Macro expansion by JuliaLowering when it is the active lowering (otherwise,
+# while bootstrapping, by the runtime's frontend library). The hygiene of the
+# expansions is kept as `hygienic-scope` and `escape` forms, or resolved for
+# `legacyscope`.
+function _lowering_is_active()
+    lower = getglobal(Core, :_lower)
+    return lower !== nothing && lower !== fl_lower
+end
+
+function _lowering_macroexpand(m::Module, @nospecialize(x), recursive::Bool, legacyscope::Bool)
+    x isa Expr || return x
+    if _has_outer_escape(x)
+        # `escape`s outside of any macro expansion (in code that a macro builds
+        # for its expansion, say) are passed through
+        return Expr(x.head, Any[_has_outer_escape(a) || _has_macrocall(a) ?
+                                _lowering_macroexpand(m, a, recursive, legacyscope) : a
+                                for a in x.args]...)
+    end
+    st = try
+        invokelatest(JuliaLowering.macroexpand, m, expr_to_syntax(x); recursive)
+    catch err
+        # errors from the macros themselves are thrown as they are
+        err isa JuliaLowering.MacroExpansionError && err.err !== nothing && throw(err.err)
+        rethrow()
+    end
+    return legacyscope ? syntax_to_legacy_expr(st) : syntax_to_hygienic_expr(st)
+end
+
+_has_outer_escape(@nospecialize(x)) = x isa Expr &&
+    (x.head === :escape || !(x.head in (:macrocall, :quote, :inert, Symbol("hygienic-scope"))) &&
+                           any(_has_outer_escape, x.args))
+_has_macrocall(@nospecialize(x)) = x isa Expr &&
+    (x.head === :macrocall || !(x.head in (:quote, :inert)) && any(_has_macrocall, x.args))
 
 """
     macroexpand!(m::Module, x; recursive=true, legacyscope=false)
@@ -230,6 +265,7 @@ for in-place expansion as it can be called separately if needed.
     This function requires at least Julia 1.13.
 """
 function macroexpand!(m::Module, @nospecialize(x); recursive=true, legacyscope=false)
+    _lowering_is_active() && return _lowering_macroexpand(m, x, recursive, legacyscope)
     ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, m, recursive, true, legacyscope)
 end
 
