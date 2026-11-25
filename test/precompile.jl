@@ -6354,3 +6354,14 @@ if original_num_precompile_tasks === nothing
 else
     ENV["JULIA_NUM_PRECOMPILE_TASKS"] = original_num_precompile_tasks
 end
+
+# Dumping native code with no output and no parameters frees it, which is what
+# packages that compile with their own pipeline do.
+let params = Ref(Base.CodegenParams())
+    native = ccall(:jl_emit_native, Ptr{Cvoid}, (Any, Any, Ptr{Cvoid}, Ptr{Base.CodegenParams}, Cint),
+                   Any[], Any[], C_NULL, params, 0)
+    @test native != C_NULL
+    ccall(:jl_dump_native, Cvoid,
+          (Ptr{Cvoid}, Cstring, Cstring, Cstring, Cstring, Ptr{Cvoid}, UInt32, Cstring, Ptr{Cvoid}),
+          native, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, 0, C_NULL, C_NULL)
+end

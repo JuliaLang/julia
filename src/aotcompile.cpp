@@ -2692,14 +2692,13 @@ jl_dump_native_impl(void *native_code, const char *bc_fname, const char *unopt_b
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
+    if (!params) {
+        params = &default_emission_params;
+    }
     if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname && !params->native_image) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
         delete data;
         return;
-    }
-
-    if (!params) {
-        params = &default_emission_params;
     }
 
     // We can destroy the LLVM context earlier if we own ThreadSafeModule and
