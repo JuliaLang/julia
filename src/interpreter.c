@@ -699,6 +699,28 @@ static int coverage_visit_stmt(jl_code_info_t *src, jl_module_t *module,
     return 1;
 }
 
+// The PhiC node an Upsilon stores to, as an SSAValue, or `nothing` if no PhiC
+// lists it. Only the PhiC names its Upsilons, and they may run before the
+// `:enter` of the catch block holding it, so search the whole body for it,
+// starting from the Upsilon since that block usually comes after it.
+static jl_value_t *upsilon_phic(jl_array_t *stmts, size_t ns, size_t upsilon_ip) JL_CANSAFEPOINT
+{
+    for (size_t k = 1; k < ns; k++) {
+        size_t ip = (upsilon_ip + k) % ns;
+        jl_value_t *phicnode = jl_array_ptr_ref(stmts, ip);
+        if (!jl_is_phicnode(phicnode))
+            continue;
+        jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
+        for (size_t i = 0; i < jl_array_nrows(values); ++i) {
+            jl_value_t *val = jl_array_ptr_ref(values, i);
+            assert(jl_is_ssavalue(val));
+            if (((jl_ssavalue_t*)val)->id == upsilon_ip + 1)
+                return jl_box_ssavalue(ip + 1);
+        }
+    }
+    return jl_nothing;
+}
+
 static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip, int toplevel)
 {
     jl_handler_t __eh;
@@ -743,44 +765,29 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             return eval_value(jl_returnnode_value(stmt), s);
         }
         else if (jl_is_upsilonnode(stmt)) {
+            // The Upsilon's own SSA slot caches the PhiC it stores to.
+            jl_value_t *phic = s->locals[s->nslots + ip];
+            if (phic == NULL) {
+                phic = upsilon_phic(stmts, ns, ip);
+                s->locals[s->nslots + ip] = phic;
+            }
             jl_value_t *val = jl_fieldref_noalloc(stmt, 0);
             if (val)
                 val = eval_value(val, s);
-            jl_value_t *phic = s->locals[s->nslots + ip];
-            assert(jl_is_ssavalue(phic));
-            ssize_t id = ((jl_ssavalue_t*)phic)->id - 1;
-            s->locals[s->nslots + id] = val;
+            if (phic != jl_nothing) {
+                ssize_t id = ((jl_ssavalue_t*)phic)->id - 1;
+                s->locals[s->nslots + id] = val;
+            }
         }
         else if (jl_is_enternode(stmt)) {
             jl_enter_handler(ct, &__eh);
-            // This is a bit tricky, but supports the implementation of PhiC nodes.
-            // They are conceptually slots, but the slot to store to doesn't get explicitly
-            // mentioned in the store (aka the "UpsilonNode") (this makes them integrate more
-            // nicely with the rest of the SSA representation). In a compiler, we would figure
-            // out which slot to store to at compile time when we encounter the statement. We
-            // can't quite do that here, but we do something similar: We scan the catch entry
-            // block (the only place where PhiC nodes may occur) to find all the Upsilons we
-            // can possibly encounter. Then, we remember which slot they store to (we abuse the
-            // SSA value result array for this purpose). TODO: We could do this only the first
-            // time we encounter a given enter.
+            // The catch block starts with its PhiC nodes, which hold what the
+            // Upsilons stored to them and are never executed themselves.
             size_t catch_ip = jl_enternode_catch_dest(stmt);
             if (catch_ip) {
                 catch_ip -= 1;
-                while (catch_ip < ns) {
-                    jl_value_t *phicnode = jl_array_ptr_ref(stmts, catch_ip);
-                    if (!jl_is_phicnode(phicnode))
-                        break;
-                    jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(phicnode, 0);
-                    for (size_t i = 0; i < jl_array_nrows(values); ++i) {
-                        jl_value_t *val = jl_array_ptr_ref(values, i);
-                        assert(jl_is_ssavalue(val));
-                        size_t upsilon = ((jl_ssavalue_t*)val)->id - 1;
-                        assert(jl_is_upsilonnode(jl_array_ptr_ref(stmts, upsilon)));
-                        s->locals[s->nslots + upsilon] = jl_box_ssavalue(catch_ip + 1);
-                    }
-                    s->locals[s->nslots + catch_ip] = NULL;
+                while (catch_ip < ns && jl_is_phicnode(jl_array_ptr_ref(stmts, catch_ip)))
                     catch_ip += 1;
-                }
                 // store current top of exception stack for restore in pop_exception.
             }
             s->locals[s->nslots + ip] = jl_box_ulong(jl_excstack_state(ct));
