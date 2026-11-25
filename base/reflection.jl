@@ -220,9 +220,10 @@ end
 # this type mirrors jl_emission_params_t (documented in julia.h)
 struct EmissionParams
     emit_metadata::Cint
+    native_image::Ptr{Cvoid}
 
     function EmissionParams(; emit_metadata::Bool=true)
-        return new(Cint(emit_metadata))
+        return new(Cint(emit_metadata), C_NULL)
     end
 end
 

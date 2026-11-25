@@ -742,6 +742,25 @@ void JLDebuginfoPlugin::registerWithGDB(orc::ExecutionSession &ES, JITObjectInfo
     GDBObjects.push_back(std::move(Info.BackingBuffer));
 }
 
+// Hand an object file in memory, with the load addresses of its sections in it,
+// to the debugger through the GDB JIT interface. It has to stay alive.
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_register_gdb_object_impl(const char *buf, size_t size)
+{
+    using namespace orc::shared;
+    orc::ExecutorAddrRange R(orc::ExecutorAddr::fromPtr(buf), size);
+    auto Register = WrapperFunctionCall::Create<SPSArgList<SPSExecutorAddrRange, bool>>(
+        orc::ExecutorAddr::fromPtr(&llvm_orc_registerJITLoaderGDBAllocAction), R, /*AutoRegisterCode*/true);
+    if (!Register) {
+        consumeError(Register.takeError());
+        return;
+    }
+#ifndef __clang_gcanalyzer__
+    if (auto Err = Register->runWithSPSRetErrorMerged())
+        consumeError(std::move(Err));
+#endif
+}
+
 void JLDebuginfoPlugin::enableGDBRegistration(orc::ExecutorAddr Registrar)
 {
     std::lock_guard<std::mutex> lock(PluginMutex);

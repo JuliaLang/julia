@@ -27,6 +27,8 @@ using namespace llvm;
 
 #include "jitlayers.h"
 #include "debuginfo.h"
+#include <llvm/Support/Compression.h>
+#include "jinative.h"
 #if defined(_OS_LINUX_)
 #  include <link.h>
 #endif
@@ -492,7 +494,7 @@ static int lookup_pointer(
 {
     // This function is not allowed to reference any TLS variables
     // since it can be called from an unmanaged thread on OSX.
-    if (!context || !Section.getObject()) {
+    if (!context) {
         if (demangle) {
             char *oldname = (*frames)[0].func_name;
             if (oldname != NULL) {
@@ -760,6 +762,13 @@ openDebugInfo(StringRef debuginfopath, const debug_link_info &info) JL_NOTSAFEPO
             std::move(error_splitobj.get()),
             std::move(SplitFile.get()));
 }
+// Unwind tables of the native code section of a .ji, as for code from the JIT
+extern "C" JL_DLLEXPORT_CODEGEN
+void jl_register_eh_frames_impl(uint8_t *addr, size_t size)
+{
+    register_eh_frames(addr, size);
+}
+
 extern "C" JL_DLLEXPORT_CODEGEN
 void jl_register_fptrs_impl(uint64_t image_base, const jl_image_fptrs_t *fptrs,
     jl_code_instance_t **cinfos, size_t n)
@@ -1061,6 +1070,51 @@ static object::SectionRef getModuleSectionForAddress(const object::ObjectFile *o
 }
 
 
+// Debug info of the native code section of a .ji (see jinative.h). The DWARF
+// sections of each object that was linked into it are in the file, already
+// relocated, so all there is to do is to hand them to a DWARFContext.
+static jl_object_file_entry_t find_native_debug_info(size_t pointer) JL_NOTSAFEPOINT
+{
+    jl_object_file_entry_t entry{nullptr, nullptr, 0, nullptr};
+    jl_native_image_t *img;
+    const jl_native_object_t *obj = jl_native_object_for_addr(pointer, &img);
+    if (obj == NULL || obj->ndebug == 0)
+        return entry;
+    // objects are told apart by the address of their code
+    uint64_t key = (uintptr_t)img->base + obj->text_start;
+    // held until the entry is complete, so that no other thread sees it half made
+    auto map = getJITDebugRegistry().get_objfile_map();
+    auto it = map->find(key);
+    if (it != map->end())
+        return it->second;
+    const jl_native_header_t *h = img->hdr;
+    const jl_native_debug_section_t *secs = (const jl_native_debug_section_t*)(img->meta + h->debug_off) + obj->debug;
+    // the context refers to the buffers and lives as long as the image, which is forever
+    auto &sections = *new StringMap<std::unique_ptr<MemoryBuffer>>();
+    for (uint32_t i = 0; i < obj->ndebug; i++) {
+        StringRef stored(img->meta + secs[i].off, secs[i].size);
+        std::unique_ptr<MemoryBuffer> buf;
+        if (secs[i].usize != 0) {
+            auto data = WritableMemoryBuffer::getNewUninitMemBuffer(secs[i].usize);
+            size_t usize = secs[i].usize;
+            if (auto err = compression::zstd::decompress(arrayRefFromStringRef(stored),
+                                                         (uint8_t*)data->getBufferStart(), usize)) {
+                consumeError(std::move(err));
+                continue;
+            }
+            buf = std::move(data);
+        }
+        else {
+            buf = MemoryBuffer::getMemBuffer(stored, "", false);
+        }
+        sections[img->meta + h->strtab_off + secs[i].name] = std::move(buf);
+    }
+    entry.ctx = DWARFContext::create(sections, sizeof(void*)).release();
+    entry.slide = h->link_base - (uintptr_t)img->base;
+    (*map)[key] = entry;
+    return entry;
+}
+
 bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t *slide, llvm::DIContext **context,
     bool onlyImage, bool *isImage, uint64_t *_fbase, void **saddr, char **name, char **filename) JL_NOTSAFEPOINT
 {
@@ -1079,6 +1133,31 @@ bool jl_dylib_DI_for_fptr(size_t pointer, object::SectionRef *Section, uint64_t 
 #else
     bool untrusted_dladdr = false;
 #endif
+
+    // The native code section of a .ji, which the dynamic loader does not know
+    uint64_t native_base;
+    const char *native_path, *native_name;
+    void *native_saddr;
+    if (jl_native_image_for_addr(pointer, &native_base, &native_path, &native_saddr, &native_name)) {
+        JITDebugInfoRegistry::image_info_t image_info;
+        bool inimage = getJITDebugRegistry().get_image_info(native_base, &image_info);
+        if (isImage)
+            *isImage = inimage;
+        if (onlyImage && !inimage)
+            return false;
+        if (_fbase)
+            *_fbase = native_base;
+        if (saddr)
+            *saddr = native_saddr;
+        if (name && native_name)
+            jl_copy_str(name, native_name);
+        if (filename)
+            jl_copy_str(filename, native_path);
+        jl_object_file_entry_t entry = find_native_debug_info(pointer);
+        *slide = entry.slide;
+        *context = entry.ctx;
+        return true;
+    }
 
 // GOAL: Determine containing Library
 // Assigning fname, fbase

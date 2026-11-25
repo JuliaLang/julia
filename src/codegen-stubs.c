@@ -39,6 +39,16 @@ JL_DLLEXPORT int jl_getFunctionInfo_fallback(jl_frame_t **frames, uintptr_t poin
     return 0;
 }
 
+JL_DLLEXPORT void jl_register_gdb_object_fallback(const char *buf, size_t size)
+{
+    (void)buf; (void)size;
+}
+
+JL_DLLEXPORT void jl_register_eh_frames_fallback(uint8_t *addr, size_t size)
+{
+    (void)addr; (void)size;
+}
+
 JL_DLLEXPORT void jl_register_fptrs_fallback(uint64_t image_base, const struct _jl_image_fptrs_t *fptrs,
                        jl_code_instance_t **linfos, size_t n)
 {

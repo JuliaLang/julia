@@ -1167,7 +1167,8 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
             caches() = Dict(f => read(joinpath(cachedir, f)) for f in readdir(cachedir))
             original = caches()
             @test any(endswith(".ji"), keys(original))
-            @test any(endswith("." * Libdl.dlext), keys(original))
+            @test any(f -> endswith(f, ".ji") && Base.cache_embeds_native_code(joinpath(cachedir, f)),
+                      keys(original))
             for (scope, mode, count) in (("@" * pkgdir, "hit", 1),
                                          ("@" * dir, "count", 2),
                                          ("user", "count", 2), ("all", "hit", 1))
@@ -2141,12 +2142,13 @@ These tests are disabled because they significantly increase CI time.
 end
 =#
 
-# Precompile and load a package, exercising the split pkgimage layout
-# (--pkgimages=yes: native code goes into the ocachefile, the heap stays in the
-# .ji) and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
+# Precompile and load a package, exercising the package image layout
+# (--pkgimages=yes: the .ji has the heap and a section with the native code)
+# and the plain serialized .ji (--pkgimages=no), with --compress-sysimage
 # (which precompile workers inherit through julia_cmd) on and off in each.
-# Compression requires the split layout, so with --pkgimages=no the worker must
-# warn and emit an uncompressed heap. A package with no code gets no ocachefile.
+# Compression requires a split layout, so with --pkgimages=no the worker must
+# warn and emit an uncompressed heap. A package with no code gets no section.
+# The section with the native code is never compressed, since it is mapped.
 @testset "pkgimage: native=$native code=$code compress=$compress" for (native, code) in ((true, true), (true, false), (false, false)), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
@@ -2176,10 +2178,10 @@ end
 
         compiled = joinpath(dir, "depot", "compiled", "v$(VERSION.major).$(VERSION.minor)", "CompressMe")
         ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
-        @test isfile(Base.ocachefile_from_cachefile(ji_file)) == (native && code)
+        @test Base.cache_embeds_native_code(ji_file) == (native && code)
 
         # The heap payload in the .ji must be zstd-compressed exactly when a
-        # compressed split pkgimage with code was requested.
+        # compressed package image was requested.
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
@@ -2189,10 +2191,10 @@ end
             @test err == 0
             @test flags[] & Base.JI_FLAG_PKGIMAGE != 0
             @test (flags[] & Base.JI_FLAG_SPLIT != 0) == native
-            @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == (native && !code)
+            @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == native
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
-            @test (read(io, 4) == zstd_magic) == (native && code && compress)
+            @test (read(io, 4) == zstd_magic) == (native && compress)
         end
 
         # Load again in a fresh process from the existing cache, without

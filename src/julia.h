@@ -3036,6 +3036,9 @@ extern JL_DLLEXPORT jl_cgparams_t jl_default_cgparams;
 
 typedef struct {
     int emit_metadata;
+    // if set, link the objects into a native code section (see jinative.h) and
+    // write it here instead of writing the objects to a file
+    ios_t *native_image;
 } jl_emission_params_t;
 
 #ifdef __cplusplus

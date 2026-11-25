@@ -697,8 +697,5 @@ during precompilation. `Base.compilecache` can still be called manually. The sta
 command line flag is passed to `Pkg.build` to disable automatic precompilation triggering
 when installing, updating, and explicitly building packages.
 
-You can also debug some precompilation failures with environment variables. Setting
-`JULIA_VERBOSE_LINKING=true` may help resolve failures in linking shared libraries of
-compiled native code. See the **Developer Documentation** part of the Julia manual, where
-you will find further details in the section documenting Julia's internals under "Package
-Images".
+See the **Developer Documentation** part of the Julia manual, where you will find further
+details in the section documenting Julia's internals under "Package Images".

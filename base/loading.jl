@@ -1382,44 +1382,32 @@ function cache_file_entry(pkg::PkgId)
         uuid === nothing ? pkg.name : package_slug(uuid)
 end
 
-# Return the cache file candidates in `depot` and whether each has a pkgimage
-# next to it, from a single directory listing without opening or stat'ing any
-# entry; invalid entries are rejected during validation.
+# Return the cache file candidates in `depot`, from a single directory listing
+# without opening or stat'ing any entry; invalid entries are rejected during
+# validation.
 function cachefile_candidates_in_depot(pkg::PkgId, depot::String)
     entrypath, entryfile = cache_file_entry(pkg)
     dir = joinpath(depot, entrypath)
     paths = String[]
-    pkgimages = Bool[]
-    isdir(dir) || return paths, pkgimages
-    entries = readdir(dir, sort = false)
-    use_pkgimages = JLOptions().use_pkgimages != 0
-    for file in entries
+    isdir(dir) || return paths
+    for file in readdir(dir, sort = false)
         if !((pkg.uuid === nothing && file == entryfile * ".ji") ||
              (pkg.uuid !== nothing && startswith(file, entryfile * "_") &&
               endswith(file, ".ji")))
              continue
         end
         push!(paths, joinpath(dir, file))
-        push!(pkgimages, use_pkgimages && ocachefile_from_cachefile(file) in entries)
     end
-    return paths, pkgimages
+    return paths
 end
 
-# Sort candidates best-first: those with a pkgimage before those without, and
-# most recently modified first within each group, so that `touch`ing a cache
+# Sort candidates most recently modified first, so that `touch`ing a cache
 # file makes it the first one tried on the next load.
-function sort_cachefile_candidates!(paths::Vector{String}, pkgimages::Vector{Bool})
+function sort_cachefile_candidates!(paths::Vector{String})
     length(paths) > 1 || return paths
-    sort_by(i) = (; pkgimage=pkgimages[i], mtime=mtime(paths[i]))
-    function sort_lt(a, b)
-        if a.pkgimage != b.pkgimage
-            return a.pkgimage < b.pkgimage
-        end
-        return a.mtime < b.mtime
-    end
-    # allocating the sort vector is less expensive than using sort!(.. by=sort_by),
+    # allocating the sort vector is less expensive than using sort!(.. by=mtime),
     # which would call the relatively slow mtime multiple times per path
-    p = sortperm(sort_by.(eachindex(paths)), lt=sort_lt, rev=true)
+    p = sortperm(mtime.(paths), rev=true)
     permute!(paths, p)
     return paths
 end
@@ -1443,7 +1431,7 @@ function touch_cachefile(pkg::PkgId, path::String)
 end
 
 function sorted_cachefile_candidates_in_depot(pkg::PkgId, depot::String)
-    return sort_cachefile_candidates!(cachefile_candidates_in_depot(pkg, depot)...)
+    return sort_cachefile_candidates!(cachefile_candidates_in_depot(pkg, depot))
 end
 
 # Search the depot containing Sys.STDLIB first for bundled stdlibs.
@@ -1461,17 +1449,11 @@ end
 
 function find_all_in_cache_path(pkg::PkgId, DEPOT_PATH::typeof(DEPOT_PATH)=DEPOT_PATH)
     paths = String[]
-    pkgimages = Bool[]
     for depot in DEPOT_PATH
-        depot_paths, depot_pkgimages = cachefile_candidates_in_depot(pkg, depot)
-        append!(paths, depot_paths)
-        append!(pkgimages, depot_pkgimages)
+        append!(paths, cachefile_candidates_in_depot(pkg, depot))
     end
-    return sort_cachefile_candidates!(paths, pkgimages)
+    return sort_cachefile_candidates!(paths)
 end
-
-ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
-cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Libdl.dlext)"), ".ji")
 
 
 # use an Int counter so that nested @time_imports calls all remain open
@@ -1482,6 +1464,7 @@ const TIMING_IMPORTS = Threads.Atomic{Int}(0)
 # these return either the array of modules loaded from the path / content given
 # or an Exception that describes why it couldn't be loaded
 # and it reconnects the Base.Docs.META
+# `ocachepath` is `path` for a package image and `nothing` for a cache without one
 function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{Nothing, String}, depmods::Vector{Any}; register::Bool=true)
     assert_havelock(require_lock)
     timing_imports = TIMING_IMPORTS[] > 0
@@ -2448,16 +2431,11 @@ function _tryrequire_from_serialized(pkg::PkgId, path::String, ocachepath::Union
         isvalid_cache_header(io, flags) === nothing && return ArgumentError("Incompatible header in cache file $path.")
         _, _, depmodnames, _, _, clone_targets, _ = _parse_cache_header(io, path)
 
-        pkgimage = !isempty(clone_targets)
         if flags[] & JI_FLAG_NO_NATIVE != 0
-            ocachepath = path # an image without code is restored from its .ji alone
-        elseif pkgimage
-            ocachepath !== nothing || return ArgumentError("Expected ocachepath to be provided")
-            isfile(ocachepath) || return ArgumentError("Ocachepath $ocachepath is not a file.")
-            ocachepath == ocachefile_from_cachefile(path) || return ArgumentError("$ocachepath is not the expected ocachefile")
-            # TODO: Check for valid clone_targets?
+            ocachepath = path # a package image is restored from its .ji alone
         else
-            @assert ocachepath === nothing
+            isempty(clone_targets) || return ArgumentError("Cache file $path needs a native image file, which is no longer supported.")
+            ocachepath = nothing
             isvalid_file_crc(io) || return ArgumentError("Invalid checksum in cache file $path.")
         end
     finally
@@ -3300,11 +3278,7 @@ function __require_prelocked(pkg::PkgId, env)
                             if precompiled !== nothing
                                 isempty(precompiled) && return PrecompilableError() # oops, Precompilation forgot to report what this might actually be
                                 local cachefile = precompiled[1]::String
-                                local ocachefile = nothing
-                                if JLOptions().use_pkgimages == 1
-                                    ocachefile = ocachefile_from_cachefile(cachefile)
-                                end
-                                return cachefile, ocachefile
+                                return cachefile, nothing
                             end
                         end
                         triggers = get(EXT_PRIMED, pkg, nothing)
@@ -3696,7 +3670,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # inferred IR on `CodeInstance.inferred` for the non-inlineable methods
     # that would otherwise be discarded, so the irgen pass can short-circuit
     # `typeinf_ext` instead of re-inferring. The image leaves them out.
-    keep_ir = JLOptions().outputo != C_NULL
+    keep_ir = JLOptions().outputo != C_NULL || ccall(:jl_embed_native_code, Cint, ()) != 0
     keep_ir && ccall(:jl_set_precompile_keep_ir, Cvoid, (Int8,), 1)
     # This one changes the parser behavior
     Core.set_edition(__toplevel__, edition)
@@ -3758,7 +3732,7 @@ const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 # Marker prefix used by the precompile subprocess to report per-package timing
 # buckets back to the parent process; the parent surfaces them in verbose mode.
 const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
-function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
+function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String,
                            concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::Redirectable = stderr, internal_stdout::Redirectable = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
                            report_timing::Bool=false,
@@ -3788,7 +3762,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     any(path -> path_sep in path, load_path) &&
         error("LOAD_PATH entries cannot contain $(repr(path_sep))")
 
-    if output_o === nothing
+    if !cacheflags.use_pkgimages
         # remove options that make no difference given the other cache options
         cacheflags = CacheFlags(cacheflags, opt_level=0)
     end
@@ -3796,10 +3770,10 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
     # julia_cmd forwards --code-coverage only for pid-dependent output paths,
     # so request the image's instrumentation explicitly (later options win)
     append!(opts, coverage_cache_options(cacheflags))
-    if output_o !== nothing
+    if cacheflags.use_pkgimages
+        # the worker links the native code into the cache file
         @debug "Generating object cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = get(ENV, "JULIA_CPU_TARGET", nothing)
-        push!(opts, "--output-o", output_o)
     else
         @debug "Generating cache file for $(repr(MIME"text/plain"(), pkg))"
         cpu_target = nothing
@@ -3936,23 +3910,12 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
     # create a temporary file in `cachepath` directory, write the cache in it,
     # write the checksum, _and then_ atomically move the file to `cachefile`.
     mkpath(cachepath)
-    cache_objects = cacheflags.use_pkgimages
     tmppath, tmpio = mktemp(cachepath)
 
-    if cache_objects
-        tmppath_o, tmpio_o = mktemp(cachepath)
-        tmppath_so, tmpio_so = mktemp(cachepath)
-    else
-        tmppath_o = nothing
-    end
     local p::Base.Process
     try
         close(tmpio)
-        if cache_objects
-            close(tmpio_o)
-            close(tmpio_so)
-        end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
+        p = create_expr_cache(pkg, spec, tmppath, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
@@ -3992,29 +3955,15 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
             modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath, header_flags)
             slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
 
-            # an image with no native code gets no object to link
-            has_native = cache_objects && header_flags[] & JI_FLAG_NO_NATIVE == 0
-            if has_native
-                # Run linker over tmppath_o
-                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
-            end
+            # a package image, with or without native code in it
+            pkgimage = header_flags[] & JI_FLAG_NO_NATIVE != 0
 
-            # append checksum for so to the end of the .ji file:
-            crc_so = if has_native
-                open(_crc32c, tmppath_so, "r")
-            else
-                UInt32(0)
-            end
-
-            # append extra crc to the end of the .ji file:
+            # append the crc to the end of the .ji file:
             open(tmppath, "r+") do f
                 if isvalid_cache_header(f) === nothing
                     error("Incompatible header for $(repr(MIME"text/plain"(), pkg)) in new cache file $(repr(tmppath)).")
                 end
-                seekend(f)
-                write(f, crc_so)
-                seekstart(f)
-                write(f, _crc32c(f))
+                write(f, _crc32c(seekstart(f)))
             end
 
             # inherit permission from the source file, but keep it readable and writable
@@ -4030,25 +3979,10 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                 session_only = built_against_other_sources(required_modules)
                 session_only && keep_session_build_lock(pkg, slot_cachefile, cachefile, lock_cachefile_shared(tmppath))
             end
-            ocachefile = has_native ? ocachefile_from_cachefile(cachefile) : nothing
-
-            if has_native
-                ocachefile_new = rename_unique_ocachefile(tmppath_so, ocachefile)
-                if ocachefile_new != ocachefile
-                    cachefile = cachefile_from_ocachefile(ocachefile_new)
-                    ocachefile = ocachefile_new
-                end
-                @static if Sys.isapple()
-                    run(`$(Linking.dsymutil()) $ocachefile`, Base.DevNull(), Base.DevNull(), Base.DevNull())
-                    # Only dsymutil itself reads these back (to relink mergeable libraries)
-                    rm(joinpath(ocachefile * ".dSYM", "Contents", "Resources", "Relocations"); force=true, recursive=true)
-                end
-            end
-            if cache_objects && !has_native
+            if pkgimage
                 # A loaded image keeps its .ji mapped, which Windows will not replace,
-                # so fall back to a new name as for a loaded native image.
-                cachefile = rename_unique_ocachefile(tmppath, cachefile)
-                ocachefile = cachefile # an image without code is restored from its .ji alone
+                # so fall back to a new name.
+                cachefile = rename_unique_cachefile(tmppath, cachefile)
             else
                 # this is atomic according to POSIX (not Win32):
                 # but force=true means it will fall back to non atomic
@@ -4056,17 +3990,14 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                 mv(tmppath, cachefile; force=true)
             end
             pkg.uuid === nothing || prune_cachefiles(pkg, slot_cachefile, cachefile; session_only)
-            return cachefile, ocachefile
+            # the second value is the file that `_require_from_serialized` restores an image from
+            return cachefile, pkgimage ? cachefile : nothing
         end
     finally
         if signal_channel !== nothing
             close(signal_channel)
         end
         rm(tmppath, force=true)
-        if cache_objects
-            rm(tmppath_o::String, force=true)
-            rm(tmppath_so, force=true)
-        end
     end
     if p.exitcode == 125
         return PrecompilableError()
@@ -4075,25 +4006,25 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
     end
 end
 
-function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
+function rename_unique_cachefile(tmppath::String, cachefile_orig::String, cachefile::String = cachefile_orig, num = 0)
     try
-        mv(tmppath_so, ocachefile; force=true)
+        mv(tmppath, cachefile; force=true)
     catch e
         e isa IOError || rethrow()
-        # If `rm` was called on a dir containing a loaded DLL, we moved it to temp for cleanup
-        # on restart. However the old path cannot be used (UV_EACCES) while the DLL is loaded
-        if !isfile(ocachefile) && e.code != Base.UV_EACCES
+        # If `rm` was called on a dir containing a loaded image, we moved it to temp for cleanup
+        # on restart. However the old path cannot be used (UV_EACCES) while the image is loaded
+        if !isfile(cachefile) && e.code != Base.UV_EACCES
             rethrow()
         end
         # Windows prevents renaming a file that is in use so if there is a Julia session started
         # with a package image loaded, we cannot rename that file.
         # The code below appends a `_i` to the name of the cache file where `i` is the smallest number such that
         # that cache file does not exist.
-        ocachename, ocacheext = splitext(ocachefile_orig)
-        ocachefile_unique = ocachename * "_$num" * ocacheext
-        ocachefile = rename_unique_ocachefile(tmppath_so, ocachefile_orig, ocachefile_unique, num + 1)
+        cachename, cacheext = splitext(cachefile_orig)
+        cachefile_unique = cachename * "_$num" * cacheext
+        cachefile = rename_unique_cachefile(tmppath, cachefile_orig, cachefile_unique, num + 1)
     end
-    return ocachefile
+    return cachefile
 end
 
 function object_build_id(obj)
@@ -4107,6 +4038,14 @@ end
 const JI_FLAG_PKGIMAGE::UInt32 = 1 << 0
 const JI_FLAG_SPLIT::UInt32 = 1 << 1
 const JI_FLAG_NO_NATIVE::UInt32 = 1 << 2
+const JI_FLAG_NATIVE_EMBEDDED::UInt32 = 1 << 3
+
+# Does this cache file have native code?
+function cache_embeds_native_code(cachefile::String)
+    flags = Ref{UInt32}()
+    parse_cache_header(cachefile, flags)
+    return flags[] & JI_FLAG_NATIVE_EMBEDDED != 0
+end
 
 function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
     checksum = Ref{UInt32}()
@@ -4120,37 +4059,18 @@ function isvalid_cache_header(f::IOStream, flags::Ref{UInt32}=Ref{UInt32}())
 end
 isvalid_file_crc(f::IOStream) = (_crc32c(seekstart(f), filesize(f) - 4) == read(f, UInt32))
 
-function isvalid_pkgimage_crc(f::IOStream, ocachefile::String)
-    seekstart(f) # TODO necessary
-    seek(f, filesize(f) - 8)
-    expected_crc_so = read(f, UInt32)
-    crc_so = open(_crc32c, ocachefile, "r")
-    expected_crc_so == crc_so
-end
-
 # Cache files whose checksums passed in this process; a replaced file gets a new key.
-# Only the precompile driver's freshness scan uses it; loading checks only .ji-only caches.
-const checksums_valid = Set{NTuple{2, NTuple{5, Float64}}}() # protected by require_lock
+# Only the precompile driver's freshness scan uses it; loading checks only caches without an image.
+const checksums_valid = Set{NTuple{5, Float64}}() # protected by require_lock
 
 file_identity(st::StatStruct) = (Float64(st.device), Float64(st.inode), Float64(st.size), st.mtime, st.ctime)
 
-function checksum_key(io::IOStream, ocachefile::Union{Nothing, String})
-    oid = ocachefile === nothing ? ntuple(_ -> 0.0, 5) : file_identity(stat(ocachefile))
-    return (file_identity(stat(io)), oid)
-end
-
-# With `split_checksums = false` a package image with a .so is not checksummed: the loader
-# matches the .ji to its .so through the heap checksum embedded in the .so.
+# With `split_checksums = false` a package image is not checksummed
 function checksums_invalid(io::IOStream, cachefile::String, ocachefile::Union{Nothing, String}, reasons; split_checksums::Bool=true)
     split_checksums || ocachefile === nothing || return false
     if !isvalid_file_crc(io)
         @debug "Rejecting cache file $cachefile because it has an invalid checksum"
         record_reason(reasons, :checksum_invalid)
-        return true
-    end
-    if ocachefile !== nothing && ocachefile != cachefile && !isvalid_pkgimage_crc(io, ocachefile)
-        @debug "Rejecting cache file $cachefile because $ocachefile has an invalid checksum"
-        record_reason(reasons, :ocache_checksum_invalid)
         return true
     end
     return false
@@ -4175,7 +4095,7 @@ function checksums_invalid(cachefile::String, ocachefile::Union{Nothing, String}
         end
         unverified === nothing && return checksums_invalid(io, cachefile, ocachefile, reasons; split_checksums)
         assert_havelock(require_lock)
-        key = checksum_key(io, ocachefile)
+        key = file_identity(stat(io))
         if key in checksums_valid
             push!(unverified, cachefile)
             return false
@@ -4195,10 +4115,8 @@ function checksums_valid_now(cachefile::String)
         open(cachefile, "r") do io
             flags = Ref{UInt32}(0)
             isvalid_cache_header(io, flags)
-            opath = ocachefile_from_cachefile(cachefile)
-            # a sibling .so of an image without code is left over from another build
-            ocachefile = flags[] & JI_FLAG_NO_NATIVE != 0 ? cachefile : isfile(opath) ? opath : nothing
-            key = checksum_key(io, ocachefile)
+            ocachefile = flags[] & JI_FLAG_NO_NATIVE != 0 ? cachefile : nothing
+            key = file_identity(stat(io))
             invalid = checksums_invalid(io, cachefile, ocachefile, nothing)
             invalid && @lock require_lock delete!(checksums_valid, key)
             return !invalid
@@ -4787,13 +4705,11 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :flags_mismatch          => :actionable  => "different compilation options",
     :pkgimages_disabled      => :actionable  => "native code caching disabled",
     :cpu_target              => :actionable  => "different system or CPU target",
-    :ocachefile_missing      => :actionable  => "native code cache file not found",
     :dep_loaded_incompatible => :actionable  => "a dependency is already loaded at a different version",
     :dep_missing             => :actionable  => "dependency source file not found",
     :source_path_changed     => :actionable  => "different source file path",
     :dep_identity_changed    => :actionable  => "dependency identifier changed",
     :checksum_invalid        => :actionable  => "cache file checksum is invalid",
-    :ocache_checksum_invalid => :actionable  => "native code cache checksum is invalid",
     :preferences_changed     => :actionable  => "package preferences changed",
     :incompatible_header     => :wrong_julia => "incompatible cache header",
     :julia_version           => :wrong_julia => "different Julia version",
@@ -5059,7 +4975,6 @@ end
         end
         pkgimage = !isempty(clone_targets)
         if pkgimage
-            ocachefile = ocachefile_from_cachefile(cachefile)
             if JLOptions().use_pkgimages == 0
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
@@ -5075,13 +4990,7 @@ end
                 record_reason(reasons, :cpu_target)
                 return true
             end
-            if header_flags[] & JI_FLAG_NO_NATIVE != 0
-                ocachefile = cachefile # an image without code is restored from its .ji alone
-            elseif !isfile(ocachefile)
-                @debug "Rejecting cache file $cachefile for $modkey since pkgimage $ocachefile was not found"
-                record_reason(reasons, :ocachefile_missing)
-                return true
-            end
+            ocachefile = cachefile # a package image is restored from its .ji alone
         else
             ocachefile = nothing
         end

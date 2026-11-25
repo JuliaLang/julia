@@ -447,18 +447,8 @@ precompile_test_harness(false) do dir
     @test isfile(cachefile)
     do_pkgimg = Base.JLOptions().use_pkgimages == 1 && Base.JLOptions().permalloc_pkgimg == 1
     if do_pkgimg ||  Base.JLOptions().use_pkgimages == 0
-        if do_pkgimg
-            ocachefile = Base.ocachefile_from_cachefile(cachefile)::String
-            @test isfile(ocachefile)
-            let foo_ptr = Libdl.dlopen(ocachefile::String, RTLD_NOLOAD)
-                f35014_ptr = Libdl.dlsym(foo_ptr, :f35014)
-                @test ccall(f35014_ptr, Int32, (Int32,), 3) == 4
-                f35014_other_ptr = Libdl.dlsym(foo_ptr, :f35014_other)
-                @test ccall(f35014_other_ptr, Int32, (Int32,), 3) == 4
-            end
-        else
-            ocachefile = nothing
-        end
+        # a package image is restored from its .ji
+        ocachefile = do_pkgimg ? cachefile : nothing
         # use _require_from_serialized to ensure that the test fails if
         # the module doesn't reload from the image:
         @test_logs (:warn, "Replacing module `$Foo_module`") begin
@@ -693,8 +683,8 @@ precompile_test_harness(false) do dir
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
-    # FooBar has no native code, so it gets no package image file
-    @test !isfile(Base.ocachefile_from_cachefile(cachefile))
+    # FooBar has no native code
+    @test !Base.cache_embeds_native_code(cachefile)
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
@@ -2265,7 +2255,8 @@ precompile_test_harness("WindowsCacheOverwrite") do load_path
             """)
 
         ji_2, ofile_2 = Base.compilecache(Base.PkgId(name))
-        @test ofile_2 == (code ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
+        @test ofile_2 == ji_2
+        @test Base.cache_embeds_native_code(ji_2) == code
     end
 end
 
@@ -5968,29 +5959,6 @@ precompile_test_harness("Ambiguities and package-image edge validation") do load
     end
 end
 
-# A .ji paired with the .so of another build is rejected without unloading anything
-# needed later, so the package is recompiled to the same path and loaded from it.
-precompile_test_harness("mismatched package image .so is recompiled") do load_path
-    srcfile = joinpath(load_path, "MismatchedSo.jl")
-    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nprecompile(f, (Int,))\nend\n")
-    pkg = Base.PkgId("MismatchedSo")
-    Base.compilecache(pkg)
-    cachefile = only(Base.find_all_in_cache_path(pkg))
-    ocachefile = Base.ocachefile_from_cachefile(cachefile)
-    oldso = read(ocachefile)
-    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nprecompile(f, (Int,))\nend\n")
-    Base.compilecache(pkg)
-    @test only(Base.find_all_in_cache_path(pkg)) == cachefile
-    write(ocachefile, oldso)
-    script = "using MismatchedSo; MismatchedSo.f(1) == 3 && Base.pkgorigins[Base.PkgId(MismatchedSo)].cachepath !== nothing || exit(1)"
-    pathsep = Sys.iswindows() ? ';' : ':'
-    cmd = addenv(`$(Base.julia_cmd()) --startup-file=no -e $script`,
-                 "JULIA_DEPOT_PATH" => join(DEPOT_PATH, pathsep),
-                 "JULIA_LOAD_PATH" => join([load_path, "@stdlib"], pathsep))
-    @test success(pipeline(cmd; stdout, stderr))
-    @test read(ocachefile) != oldso
-end
-
 # Asking about several packages at once gives the same answers as asking about each one.
 precompile_test_harness("isprecompiled for several packages") do load_path
     depfile = joinpath(load_path, "BatchDep.jl")
@@ -6037,7 +6005,6 @@ precompile_test_harness("cache files are only touched in the primary depot") do 
         # invalid cache file ahead of the real one.
         decoy = replace(cachefile, r"_[^_]*\.ji$" => "_decoy.ji")
         write(decoy, "not a cache file")
-        touch(Base.ocachefile_from_cachefile(decoy))
         return cachefile
     end
     primary, secondary = cachefiles
@@ -6386,4 +6353,23 @@ if original_num_precompile_tasks === nothing
     delete!(ENV, "JULIA_NUM_PRECOMPILE_TASKS")
 else
     ENV["JULIA_NUM_PRECOMPILE_TASKS"] = original_num_precompile_tasks
+end
+
+# the native code of package images is mapped from their cache files, not copied
+if !haskey(ENV, "JULIA_NATIVE_IMAGE_COPY") && get(ENV, "ENABLE_JITPROFILING", "0") == "0"
+    let time = zeros(UInt64, 4), count = zeros(UInt64, 4)
+        ccall(:jl_native_image_stats, Cvoid, (Ptr{UInt64}, Ptr{UInt64}), time, count)
+        @test ccall(:jl_native_image_mapped, UInt64, ()) == count[1]
+    end
+end
+
+# Dumping native code with no output and no parameters frees it, which is what
+# packages that compile with their own pipeline do.
+let params = Ref(Base.CodegenParams())
+    native = ccall(:jl_emit_native, Ptr{Cvoid}, (Any, Any, Ptr{Cvoid}, Ptr{Base.CodegenParams}, Cint),
+                   Any[], Any[], C_NULL, params, 0)
+    @test native != C_NULL
+    ccall(:jl_dump_native, Cvoid,
+          (Ptr{Cvoid}, Cstring, Cstring, Cstring, Cstring, Ptr{Cvoid}, UInt32, Cstring, Ptr{Cvoid}),
+          native, C_NULL, C_NULL, C_NULL, C_NULL, C_NULL, 0, C_NULL, C_NULL)
 end

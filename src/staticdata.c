@@ -145,6 +145,10 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
     htable_free(&cache->type_in_worklist);
 }
 
+#include "jinative.h"
+#ifndef _OS_WINDOWS_
+#include <fcntl.h>
+#endif
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
 
@@ -1011,7 +1015,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
                 if (may_discard_trees && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
+                    (jl_options.outputo != NULL || jl_embed_native_code()) && ci->owner == jl_nothing &&
                     (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
                     // Drop IR retained only to generate native code (see jl_precompile_keep_ir).
@@ -3742,6 +3746,20 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
     write_mod_list(f, mod_array);
 }
 
+// Whether the package image that this process writes gets native code, which is
+// linked into the .ji (see jinative.h). Where the prelinker has no support for
+// the target, package images are written without code.
+JL_DLLEXPORT int jl_embed_native_code(void) JL_NOTSAFEPOINT
+{
+#if !(defined(_CPU_AARCH64_) || defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_))
+    return 0;
+#else
+    // an object output that is asked for is written as well
+    return jl_options.incremental && jl_options.outputji != NULL &&
+           (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_YES || jl_options.outputo != NULL);
+#endif
+}
+
 JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *worklist,
                                              bool_t emit_split, bool_t compress, ios_t **s,
                                              jl_array_t **udeps JL_REQUIRE_ROOTED_SLOT,
@@ -3768,12 +3786,14 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             if (suppress_precompile)
                 newly_inferred = NULL;
             *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
-            // an image without code gets no shared library, so loading it does not open one,
-            // and its .ji is left uncompressed so that it can be mapped like any other
-            if (emit_split && jl_native_code_is_empty(*_native_data)) {
+            // a package image is loaded from its .ji alone, so the header has
+            // to say what a native image file would
+            if (emit_split && jl_native_code_is_empty(*_native_data))
                 flags |= JI_FLAG_NO_NATIVE;
-                compress = 0;
-            }
+            else if (emit_split && jl_embed_native_code())
+                flags |= JI_FLAG_NO_NATIVE | JI_FLAG_NATIVE_EMBEDDED;
+            if ((flags & JI_FLAG_NO_NATIVE) && compress)
+                flags |= JI_FLAG_COMPRESSED;
         }
         checksumpos = write_header(f, flags);
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
@@ -4084,7 +4104,7 @@ static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOI
 }
 #endif
 
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT;
+static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off, int *native_fd, uint32_t *ji_flags) JL_CANSAFEPOINT;
 
 // Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
 static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
@@ -4115,12 +4135,16 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
 #ifdef _OS_WINDOWS_
     free((char *)lib_path);
 #endif
-    return jl_image_read_split_ji(ji_path, handle, dest, use_mmap, NULL);
+    return jl_image_read_split_ji(ji_path, handle, dest, use_mmap, NULL, NULL, NULL, NULL);
 }
 
 // Read the split .ji at `ji_path`. With its native image `handle`, first check that the .ji
-// was written with it; without one, store the checksum from its header in `heap_checksum`.
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT
+// was written with it; without one, store the checksum from its header in `heap_checksum`
+// and the offset of its native code section, if it has one, in `native_off`, with a
+// descriptor of the same open file in `native_fd`: the heap and the code have to
+// come from one file, and the path can name another one a moment later.
+// A compressed heap is read into `malloc`ed memory instead of being mapped.
+static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum, uint64_t *native_off, int *native_fd, uint32_t *ji_flags) JL_CANSAFEPOINT
 {
     ios_t s;
     size_t size;
@@ -4138,6 +4162,16 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
     if (jl_read_verify_header(&s, &flags, &checksum, &dataendpos, &datastartpos) == 0) {
         if (heap_checksum)
             *heap_checksum = checksum;
+        if (ji_flags)
+            *ji_flags = flags;
+        if (!handle && (flags & JI_FLAG_COMPRESSED))
+            use_mmap = 0;
+        // the word after the heap is where the native code section starts
+        if (native_off && (flags & JI_FLAG_NATIVE_EMBEDDED)) {
+            *native_off = UINT64_MAX; // not found
+            if (ios_seek(&s, dataendpos) == 0)
+                *native_off = read_uint64(&s);
+        }
         // without a native image, only an image that was written without code can be restored
         if (!handle && !(flags & JI_FLAG_NO_NATIVE)) {
             ios_close(&s);
@@ -4206,6 +4240,13 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
             goto error;
     }
 
+    if (native_off && *native_off != 0 && *native_off != UINT64_MAX) {
+#ifdef _OS_WINDOWS_
+        *native_fd = _dup(s.fd);
+#else
+        *native_fd = fcntl(s.fd, F_DUPFD_CLOEXEC, 0); // not for a process spawned meanwhile
+#endif
+    }
     ios_close(&s);
     return size;
 
@@ -4248,7 +4289,7 @@ static intptr_t jl_image_base(const void *addr) JL_NOTSAFEPOINT
 }
 
 // From a shared library handle, verify consistency and return a jl_image_buf_t
-static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOINT
+static jl_image_buf_t get_image_buf(void *handle) JL_NOTSAFEPOINT
 {
     jl_image_buf_t image = {
         .kind = JL_IMAGE_KIND_SO,
@@ -4260,9 +4301,7 @@ static jl_image_buf_t get_image_buf(void *handle, int is_pkgimage) JL_NOTSAFEPOI
     };
 
 #ifdef JL_LIBRARY_STATIC
-    // `handle` is ignored: the sysimage is linked in (see JL_IMAGE_SYM) and
-    // pkgimages cannot be loaded into a static libjulia-internal
-    assert(!is_pkgimage);
+    // `handle` is ignored: the sysimage is linked in (see JL_IMAGE_SYM)
     (*jl_image_unpack)(NULL, &image);
 #else
     // verify that the linker resolved the symbols in this image against ourselves (libjulia-internal)
@@ -4299,7 +4338,7 @@ JL_DLLEXPORT jl_image_buf_t jl_set_sysimg_so(void *handle)
     if (path != NULL)
         jl_options.image_file = path;
 #endif
-    jl_sysimage_buf = get_image_buf(handle, /* is_pkgimage */ 0);
+    jl_sysimage_buf = get_image_buf(handle);
     return jl_sysimage_buf;
 }
 
@@ -5214,28 +5253,43 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     JL_SIGATOMIC_END();
 }
 
-// `fname` is the native image, or the .ji itself for a package image without code
+// `fname` is the .ji of a package image, which holds its native code, if it has any
 JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native) JL_CANSAFEPOINT
 {
-    void *pkgimg_handle = NULL;
     jl_image_buf_t buf = {.kind = JL_IMAGE_KIND_JI, .is_split = 1};
-    size_t len = strlen(fname);
-    if (len > 3 && strcmp(fname + len - 3, ".ji") == 0) {
-        buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum);
-    }
-    else {
-        pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
-        buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
-    }
-    if (buf.data == NULL) {
-        if (!pkgimg_handle)
-            return jl_get_exceptionf(jl_errorexception_type,
-                "Cache file \"%s\" is missing, or has native code it needs to be loaded with.", fname);
-        // unload it, so that a recompiled image at the same path is not served this handle
-        jl_dlclose(pkgimg_handle);
+    uint64_t native_off = 0;
+    int native_fd = -1;
+    uint32_t ji_flags = 0;
+    buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum, &native_off, &native_fd, &ji_flags);
+    int compressed = (ji_flags & JI_FLAG_COMPRESSED) != 0;
+    if (buf.data == NULL)
         return jl_get_exceptionf(jl_errorexception_type,
-            "Image checksum mismatch: the heap image (.ji) was not "
-            "compiled for use with \"%s\".", fname);
+            "Cache file \"%s\" is missing, or is not a package image.", fname);
+    if (native_off != 0) {
+        const char *err = "the native code section is missing";
+        jl_native_image_t *native = native_fd == -1 ? NULL : jl_native_image_load(fname, native_fd, native_off, &err);
+        if (native == NULL) {
+            if (compressed)
+                free((void*)buf.data);
+            else
+#ifdef _OS_WINDOWS_
+                UnmapViewOfFile(buf.data);
+#else
+                munmap((void*)buf.data, buf.size);
+#endif
+            return jl_get_exceptionf(jl_errorexception_type,
+                "Cache file \"%s\": %s.", fname, err);
+        }
+        buf.kind = JL_IMAGE_KIND_SO;
+        buf.pointers = native->base + native->hdr->image_pointers;
+        buf.base = (uintptr_t)native->base;
+        if (native->hdr->image_coverage)
+            buf.coverage = native->base + native->hdr->image_coverage;
+    }
+    if (compressed) {
+        char *comp_data = (char*)buf.data;
+        jl_image_decompress(&buf, comp_data, buf.size);
+        free(comp_data);
     }
 
     jl_gc_notify_image_load(buf.data, buf.size);

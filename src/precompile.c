@@ -9,6 +9,7 @@
 
 #include "julia.h"
 #include "julia_internal.h"
+#include "jinative.h"
 #include "julia_assert.h"
 #include "serialize.h"
 
@@ -129,7 +130,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
 
     void *native_code = NULL;
 
-    bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
+    bool_t emit_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm ||
+                         jl_embed_native_code();
 
     const char *outputji = jl_options.outputji;
 
@@ -170,9 +172,27 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
+        ios_t native;
+        jl_emission_params_t params = {1, NULL};
+        int embed = emit_split && jl_options.incremental && jl_embed_native_code();
+        if (embed) {
+            ios_mem(&native, 0);
+            params.native_image = &native;
+        }
         jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
                        jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
-                       checksum, unpack_func, NULL);
+                       checksum, unpack_func, &params);
+        if (embed) {
+            // The native code section follows the heap, on a page boundary.
+            // The word after the heap says where.
+            int64_t pos = ios_pos(&f) + sizeof(uint64_t);
+            int64_t start = LLT_ALIGN(pos, ((jl_native_header_t*)native.buf)->page_size);
+            write_uint64(&f, start);
+            for (int64_t i = pos; i < start; i++)
+                ios_putc(0, &f);
+            ios_write(&f, native.buf, native.size);
+            ios_close(&native);
+        }
         jl_postoutput_hook();
     }
 
