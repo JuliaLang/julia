@@ -267,13 +267,10 @@ end
 #             and the key would be inserted at pos
 #     sh::UInt8 - short hash (7 highest hash bits)
 # This version is for use by setindex! and get!
-function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
+# It is inlined into its callers; the rare paths that grow the table are kept out of line.
+@inline function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
     sz = length(h.keys)
-    if sz == 0 # if Dict was empty resize and then return location to insert
-        rehash!(h, 4)
-        index, sh = hashindex(key, length(h.keys))
-        return -index, sh
-    end
+    sz == 0 && return ht_keyindex2_empty!(h, key)
     iter = 0
     maxprobe = h.maxprobe
     index, sh = hashindex(key, sz)
@@ -305,6 +302,18 @@ function ht_keyindex2_shorthash!(h::Dict{K,V}, key) where V where K
 
     avail < 0 && return avail, sh
 
+    return ht_keyindex2_probe_further!(h, key, index, iter, sh)
+end
+
+# if Dict was empty resize and then return location to insert
+@noinline function ht_keyindex2_empty!(h::Dict, key)
+    rehash!(h, 4)
+    index, sh = hashindex(key, length(h.keys))
+    return -index, sh
+end
+
+@noinline function ht_keyindex2_probe_further!(h::Dict, key, index::Int, iter::Int, sh::UInt8)
+    sz = length(h.keys)
     maxallowed = max(maxallowedprobe, sz>>maxprobeshift)
     # Check if key is not present, may need to keep searching to find slot
     @inbounds while iter < maxallowed
@@ -457,7 +466,7 @@ end
 function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
     index, sh = ht_keyindex2_shorthash!(h, key)
 
-    index > 0 && return h.vals[index]
+    index > 0 && return @inbounds h.vals[index]
 
     age0 = h.age
     v = default()
@@ -465,7 +474,7 @@ function get!(default::Callable, h::Dict{K,V}, key::K) where V where K
         v = convert(V, v)::V
     end
     if h.age != age0
-        index, sh = ht_keyindex2_shorthash!(h, key)
+        index, sh = @noinline ht_keyindex2_shorthash!(h, key)
     end
     if index > 0
         h.age += 1
