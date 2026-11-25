@@ -1457,6 +1457,12 @@ function handle_call!(todo::Vector{Pair{Int,Any}},
     cases = compute_inlining_cases(info, flag, sig, state)
     cases === nothing && return nothing
     cases, handled_all_cases, fully_covered, joint_effects = cases
+    if fully_covered && handled_all_cases && length(cases) == 1
+        # only a union split needs the signature type itself
+        is_valid_argtypes(sig.argtypes) || return nothing # accidentally actually unreachable
+        handle_single_case!(todo, ir, idx, stmt, cases[1].item)
+        return nothing
+    end
     atype = argtypes_to_type(sig.argtypes)
     atype === Union{} && return nothing # accidentally actually unreachable
     handle_cases!(todo, ir, idx, stmt, atype, cases, handled_all_cases, fully_covered, joint_effects)

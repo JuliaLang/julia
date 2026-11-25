@@ -61,6 +61,16 @@ function argtypes_to_type(argtypes::Vector{Any})
     return ccall(:jl_apply_tuple_type_v, Any, (Ptr{Any}, Csize_t), types, nt)
 end
 
+# whether `argtypes_to_type(argtypes) !== Bottom`, without constructing the type
+function is_valid_argtypes(argtypes::Vector{Any})
+    for i = 1:length(argtypes)
+        a = argtypes[i]
+        isvarargtype(a) && continue
+        valid_as_lattice(widenconst_split(a), true) || return false
+    end
+    return true
+end
+
 function isknownlength(t::DataType)
     isvatuple(t) || return true
     va = t.parameters[end]
