@@ -292,8 +292,7 @@ typedef struct {
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
     jl_array_t *buildid_depmods_idxs; // image index => dependency index
-    htable_t object_imports;    // symbol, or object written as a record => bind to its import
-    htable_t import_set;        // the imports, by value (keys and values are 2 + import index)
+    htable_t object_imports;    // object => bind
     jl_array_t *method_roots_list;
     htable_t method_roots_index;
     uint64_t worklist_key;
@@ -1217,51 +1216,32 @@ static void write_fptr(ios_t *s, int32_t id, uintptr_t v) JL_NOTSAFEPOINT
     write_uint(s, v);
 }
 
-#include "support/htable.inc"
-
-static import_t get_import(ios_t *imports, size_t i) JL_NOTSAFEPOINT
-{
-    return jl_load_unaligned_i64(imports->buf + i * sizeof(import_t));
-}
-
-static uint_t import_hash(uintptr_t key, void *imports) JL_NOTSAFEPOINT
-{
-    return (uint_t)int64hash(get_import((ios_t*)imports, key - 2));
-}
-
-static int import_eq(void *a, void *b, void *imports) JL_NOTSAFEPOINT
-{
-    assert((uintptr_t)a - 2 < ((ios_t*)imports)->size / sizeof(import_t) &&
-           (uintptr_t)b - 2 < ((ios_t*)imports)->size / sizeof(import_t));
-    return get_import((ios_t*)imports, (uintptr_t)a - 2) == get_import((ios_t*)imports, (uintptr_t)b - 2);
-}
-
-static void **importset_lookup_bp_r_impl(htable_t *h, void *key, void *ctx, int key_owned) JL_NOTSAFEPOINT;
-static void **importset_lookup_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
-static void **importset_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEPOINT;
-HTPROT_R(importset, static JL_UNUSED)
-HTIMPL_R(importset, import_hash, import_eq, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
-
 static uintptr_t add_import(jl_serializer_state *s, import_t imp) JL_NOTSAFEPOINT
 {
-    size_t n = s->imports->size / sizeof(import_t);
-    write_uint64(s->imports, imp); // tentatively, so that it can be looked up
-    void **bp = importset_bp_r(&s->import_set, (void*)(n + 2), s->imports);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)(n + 2);
-    else
-        ios_trunc(s->imports, n * sizeof(import_t));
-    size_t idx = (uintptr_t)*bp - 2;
+    size_t idx = s->imports->size / sizeof(import_t);
     if (idx >= BIND_BIT >> BIND_LOW_BITS) {
         jl_safe_printf("ERROR: too many imports\n");
         abort();
     }
+    write_uint64(s->imports, imp);
     return BIND_BIT | idx << BIND_LOW_BITS;
+}
+
+// Return the bind for the import `imp`.  Adds the import to the imports table
+// if it is not already there (deduplicated by `key`).
+static uintptr_t add_keyed_import(jl_serializer_state *s, const void *key, import_t imp) JL_NOTSAFEPOINT
+{
+    void **bp = ptrhash_bp(&s->object_imports, (void*)key);
+    if (*bp == HT_NOTFOUND)
+        *bp = (void*)add_import(s, imp);
+    return (uintptr_t)*bp;
 }
 
 static uintptr_t add_function_import(jl_serializer_state *s, function_kind_t kind, size_t idx) JL_NOTSAFEPOINT
 {
-    return add_import(s, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx));
+    const void *f = kind == FUNCTION_BUILTIN ? (const void*)jl_builtin_f_addrs[idx] :
+                                               (const void*)jl_invoke_api_callptr((jl_invoke_api_t)idx);
+    return add_keyed_import(s, f, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx));
 }
 
 // The dependency reference to `addr`, which is in the image described by `meta`
@@ -1278,7 +1258,7 @@ static uint64_t depref(jl_serializer_state *s, image_metadata_t *meta, const voi
 
 static uintptr_t add_image_bind(jl_serializer_state *s, image_metadata_t *meta, const void *addr) JL_NOTSAFEPOINT
 {
-    return add_import(s, IMPORT_ENCODE(IMPORT_IMAGE, depref(s, meta, addr)));
+    return add_keyed_import(s, addr, IMPORT_ENCODE(IMPORT_IMAGE, depref(s, meta, addr)));
 }
 
 // The object that is written in place of `v`: `v` if it is queued, and otherwise the object
@@ -1340,23 +1320,22 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
 {
     assert(v != NULL && "cannot get backref to NULL object");
     if (s->incremental && jl_is_symbol(v) && !jl_object_in_image(v)) {
-        void **bp = ptrhash_bp(&s->object_imports, v);
-        if (*bp == HT_NOTFOUND) {
-            size_t pos = s->symbols->size;
-            ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), strlen(jl_symbol_name((jl_sym_t*)v)) + 1);
-            *bp = (void*)add_import(s, IMPORT_ENCODE(IMPORT_SYMBOL, pos));
-        }
-        return (uintptr_t)*bp;
+        void *bind = ptrhash_get(&s->object_imports, v);
+        if (bind != HT_NOTFOUND)
+            return (uintptr_t)bind;
+        size_t pos = s->symbols->size;
+        ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), strlen(jl_symbol_name((jl_sym_t*)v)) + 1);
+        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SYMBOL, pos));
     }
     if (v == (jl_value_t*)s->ptls->root_task)
-        return add_import(s, IMPORT_ENCODE(IMPORT_SPECIAL, 0));
+        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SPECIAL, 0));
     if (s->incremental && jl_object_in_image(v))
         return add_image_bind(s, external_blob_metadata(v), v);
     if (s->incremental && jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(v)) && needs_uniquing(v, s->query_cache)) {
         uintptr_t dt = backref_id(s, jl_typeof(v));
-        assert((dt & BIND_BIT) && IMPORT_TYPE(get_import(s->imports, BIND_PAYLOAD(dt))) == IMPORT_DATATYPE &&
+        assert((dt & BIND_BIT) && IMPORT_TYPE(jl_load_unaligned_i64(s->imports->buf + BIND_PAYLOAD(dt) * sizeof(import_t))) == IMPORT_DATATYPE &&
                "the type of a uniqued singleton has a record");
-        return add_import(s, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)));
+        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)));
     }
     jl_value_t *w = written_copy(v);
     void *idx = ptrhash_get(&serialization_order, w);
@@ -1369,15 +1348,15 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
     assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
     if (s->incremental && needs_uniquing(v, s->query_cache)) {
         // the first reference to an object that is written as a record places its record
-        void **bp = ptrhash_bp(&s->object_imports, w);
-        if (*bp == HT_NOTFOUND) {
-            import_type_t type = jl_is_datatype(w) ? IMPORT_DATATYPE : jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE : IMPORT_BINDING;
-            *bp = (void*)add_import(s, IMPORT_ENCODE(type, s->auxdata_size));
-            s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
-                            jl_is_binding(w) ? sizeof(jl_binding_record_t) : sizeof(jl_mi_record_t);
-            arraylist_push(&s->uniquing_records, w);
-        }
-        return (uintptr_t)*bp;
+        void *bind = ptrhash_get(&s->object_imports, w);
+        if (bind != HT_NOTFOUND)
+            return (uintptr_t)bind;
+        import_type_t type = jl_is_datatype(w) ? IMPORT_DATATYPE : jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE : IMPORT_BINDING;
+        uintptr_t b = add_keyed_import(s, w, IMPORT_ENCODE(type, s->auxdata_size));
+        s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
+                        jl_is_binding(w) ? sizeof(jl_binding_record_t) : sizeof(jl_mi_record_t);
+        arraylist_push(&s->uniquing_records, w);
+        return b;
     }
     return from_seroder_entry(idx);
 }
@@ -2411,7 +2390,7 @@ static size_t write_gvars(jl_serializer_state *s, ios_t *f, arraylist_t *globals
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
         assert(ci && (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_SPECPTR_SPECIALIZED));
         uint64_t ref = depref(s, external_blob_metadata((jl_value_t*)ci), ci);
-        write_uint(f, add_import(s, IMPORT_ENCODE(IMPORT_SPECPTR, ref)));
+        write_uint(f, add_keyed_import(s, &ci->specptr, IMPORT_ENCODE(IMPORT_SPECPTR, ref)));
     }
     return globals->len;
 }
@@ -3178,7 +3157,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
     htable_new(&s.method_roots_index, 0);
     htable_new(&s.object_imports, 0);
     arraylist_new(&s.uniquing_records, 0);
-    htable_new(&s.import_set, 0);
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
         s.worklist_key = jl_worklist_key(worklist);
@@ -3431,7 +3409,6 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
     arraylist_free(&gvars);
     arraylist_free(&external_fns);
     htable_free(&s.object_imports);
-    htable_free(&s.import_set);
     htable_free(&s.method_roots_index);
     htable_free(&field_replace);
     htable_free(&bits_replace);
