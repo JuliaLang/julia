@@ -83,7 +83,7 @@ struct IntegerCodeUnits{T<:Integer} <: AbstractVector{UInt8}
 
     function IntegerCodeUnits(x::T) where {T<:Integer}
         # Calculate number of bytes needed (always pad to full byte)
-        u = abs(x)
+        u = abs(x) # n.b.: typemin(IntN) works even though abs overflows, since `>>>` is logical
         num_bytes = max(cld(top_set_bit(u), 8), 1)
         return new{T}(u, num_bytes)
     end
@@ -94,6 +94,46 @@ length(units::IntegerCodeUnits) = units.num_bytes
 @inline load_le_array(::Type{UInt64}, units::IntegerCodeUnits, idx) = (units.uvalue >>> (8 * (idx - 1))) % UInt64
 @inline load_le_array(::Type{UInt32}, units::IntegerCodeUnits, idx) = (units.uvalue >>> (8 * (idx - 1))) % UInt32
 
+
+# ShiftedIntegerCodeUnits provides the little-endian bytes of abs(x) >>> shift without computing
+# it, which would allocate for x::BigInt, and for a left shift (negative `shift`) would need
+# `widen` to not overflow.
+# It is separate from IntegerCodeUnits so that the common unshifted case avoids the shifting.
+struct ShiftedIntegerCodeUnits{T<:Integer} <: AbstractVector{UInt8}
+    # An integer with the same magnitude as x: abs(x) by default, or x itself for types
+    # with a method of load_shifted that reads the magnitude directly (such as BigInt).
+    value::T
+    shift::Int
+    num_bytes::Int
+end
+# Types for which abs allocates (such as BigInt) can add a method that stores x itself.
+function ShiftedIntegerCodeUnits(x::Integer, shift::Int)
+    u = abs(x) # n.b.: as in IntegerCodeUnits, typemin(IntN) works since `>>>` is logical
+    # Calculate number of bytes needed (always pad to full byte, and use at least one byte)
+    num_bytes = max(cld(top_set_bit(u) - shift, 8), 1)
+    return ShiftedIntegerCodeUnits(u, shift, num_bytes)
+end
+size(units::ShiftedIntegerCodeUnits) = (units.num_bytes,)
+length(units::ShiftedIntegerCodeUnits) = units.num_bytes
+# Load a `U` from the bytes of abs(x) >> shift, starting at byte `i`. This is
+# (abs(big(x)) >> (shift + 8 * (i - 1))) % U
+@inline function load_shifted(::Type{U}, units::ShiftedIntegerCodeUnits, i) where {U<:Union{UInt8, UInt32, UInt64}}
+    bitpos = units.shift + 8 * (i - 1)
+    if bitpos < 0
+        # Widen to U first to avoid overflow
+        # if value is too narrow
+        (units.value % U) << -bitpos
+    else
+        (units.value >>> bitpos) % U
+    end
+end
+@inline function getindex(units::ShiftedIntegerCodeUnits, i::Int)
+    @boundscheck checkbounds(units, i)
+    return load_shifted(UInt8, units, i)
+end
+# load_le_array specialized for faster hash_bytes
+@inline load_le_array(::Type{UInt64}, units::ShiftedIntegerCodeUnits, idx) = load_shifted(UInt64, units, idx)
+@inline load_le_array(::Type{UInt32}, units::ShiftedIntegerCodeUnits, idx) = load_shifted(UInt32, units, idx)
 
 # Main interface function to get little-endian byte representation of integers
 codeunits(x::Integer) = IntegerCodeUnits(x)
@@ -144,19 +184,26 @@ function iterate(units::UTF8Units, state)
     return first_byte, (new_char_state, remaining_bytes)
 end
 
-hash_integer(x::Integer, h::UInt) = _hash_integer(x, UInt64(h)) % UInt
-function _hash_integer(
-        x::Integer,
-        seed::UInt64,
-        secret::NTuple{4, UInt64} = HASH_SECRET
-    )
-    # Handle sign by XOR-ing with seed
-    seed ⊻= (x < 0)
-    # Get little-endian byte representation of absolute value
-    # and hash using the new safe hash_bytes function
-    u = abs(x) # n.b.: this hashes typemin(IntN) correctly even if abs fails
-    return hash_bytes(codeunits(u), seed, secret)
+hash_integer(x::Integer, h::UInt) = hash_shifted_integer(x, 0, signbit(x), h)
+
+# The helpers below take the magnitude of x and its sign separately, and shift lazily, so that
+# `hash(::Real)` never computes a negated or shifted copy of an integer returned by `decompose`
+# (which would allocate for `BigInt`), and never mutates it. A negative `shift` shifts left,
+# as if `x` were widened first so nothing overflows.
+# GMP specializes ShiftedIntegerCodeUnits and shifted_abs_uint64 to read the limbs of a `BigInt`.
+
+# Hash the integer with magnitude abs(x) >> shift, and sign bit `negative`: the sign is XOR-ed
+# into the seed, and the little-endian bytes of the magnitude are hashed with hash_bytes.
+@inline function hash_shifted_integer(x::Integer, shift::Int, negative::Bool, h::UInt)
+    seed = UInt64(h) ⊻ negative
+    # codeunits is IntegerCodeUnits, which avoids the shifting in the common unshifted case
+    shift == 0 && return hash_bytes(codeunits(x), seed, HASH_SECRET) % UInt
+    return hash_bytes(ShiftedIntegerCodeUnits(x, shift), seed, HASH_SECRET) % UInt
 end
+
+# `(abs(x) >> shift) % UInt64`, the low 64 bits of the magnitude of x shifted right by `shift >= 0`.
+# n.b.: as in IntegerCodeUnits, typemin(IntN) works even though abs overflows, since `>>>` is logical
+shifted_abs_uint64(x::Integer, shift::Int) = (abs(x) >>> shift) % UInt64
 
 
 ## efficient value-based hashing of floats ##
@@ -204,25 +251,28 @@ function hash(x::Real, h::UInt)
     den = _den isa Bool ? Int8(_den) : _den
 
     # handle special values
-    num == 0 && den == 0 && return hash(NaN, h)
-    num == 0 && return hash(ifelse(den > 0, 0.0, -0.0), h)
-    den == 0 && return hash(ifelse(num > 0, Inf, -Inf), h)
+    iszero(num) && iszero(den) && return hash(NaN, h)
+    iszero(num) && return hash(ifelse(den > 0, 0.0, -0.0), h)
+    iszero(den) && return hash(ifelse(num > 0, Inf, -Inf), h)
 
-    # normalize decomposition: num*2^pow/den with den odd, and num odd once shifted by num_z.
-    # num is shifted lazily, so that the generic path below can fold the shift into one operation.
+    # normalize decomposition: x == (num >> num_z) * 2^pow / (den >> den_z), where both shifted
+    # values are odd. num and den are never actually shifted, and must not be mutated since
+    # decompose may return internal state (e.g. `BigInt`s). Instead num_z and den_z are passed to
+    # shifted_abs_uint64 and hash_shifted_integer, so no new integers need to be allocated.
     num_z::Int = trailing_zeros(num)
     den_z::Int = trailing_zeros(den)
     # effective pow for hashing purposes is defined as pow%Int64
     pow::Int64 = _pow%Int64 +% num_z%Int64 -% den_z%Int64
-    den >>= den_z
     num_signbit = signbit(num)
     den_signbit = signbit(den)
     x_signbit = num_signbit ⊻ den_signbit
     # The sign is not normalized: num may be unsigned, and negating a BigInt allocates.
-    # hash_integer folds the sign in as `seed ⊻= (x < 0)`, so do the same for the sign of den below.
+    # Instead the sign of x is passed separately, with the magnitudes of num and den: the hash
+    # treats den as positive, and num as having the sign of x.
     # If the real can be represented as an Int64, UInt64, or Float64, hash as those types.
     # To be an Integer the denominator must be 1 and the power must be non-negative.
-    if den == 1 || den == -1
+    # den >> den_z is 1 or -1 exactly when abs(den) == 2^den_z, i.e. when its only set bit is bit den_z
+    if exponent(den) == den_z
         num_sig_dig = exponent(num) + 1 - num_z
         # 2^-1074 is the minimum Float64 so if the power is smaller, not a Float64
         if -1074 <= pow
@@ -230,32 +280,31 @@ function hash(x::Real, h::UInt)
                 # Int64 and UInt64 hash by their 64-bit pattern, so compute the pattern of
                 # num*2^pow modulo 2^64. It is exact when the value fits in Int64 or UInt64.
                 if pow <= 64 - x_signbit - num_sig_dig
-                    unum = (num >> num_z) % UInt64
-                    return hash(ifelse(den_signbit, -unum, unum) << Int(pow), h)
+                    unum = shifted_abs_uint64(num, num_z)
+                    return hash(ifelse(x_signbit, -unum, unum) << Int(pow), h)
                 end
             end # typemin(Int64) handled by Float64 case
             # 2^1024 is the maximum Float64 so if the power is greater, not a Float64
             # Float64s have 53 mantissa bits (including implicit bit)
             if pow <= 1024 - num_sig_dig && num_sig_dig <= 53
-                fnum = Float64((num >> num_z) % Int64) # exact: abs(num >> num_z) has at most 53 bits here
-                return hash(ldexp(ifelse(den_signbit, -fnum, fnum), Int(pow)), h)
+                # exact: abs(num) >> num_z has at most 53 bits here, so the conversion from
+                # Int64 (cheaper than from UInt64) is exact too
+                fnum = Float64(shifted_abs_uint64(num, num_z) % Int64)
+                return hash(ldexp(ifelse(x_signbit, -fnum, fnum), Int(pow)), h)
             end
         end
     else
-        h = hash_integer(den, h ⊻ den_signbit)
+        h = hash_shifted_integer(den, den_z, false, h)
     end
     # handle generic rational values
-    h = hash_integer(pow, h) ⊻ den_signbit
+    h = hash_integer(pow, h)
 
-    # trimming only whole bytes of trailing zeros simplifies greatly
-    # some specializations for memory-backed bitintegers
+    # Hash the odd part of num, shifted back left by pow % 8 when pow > 0. For an integer this
+    # trims only whole bytes of trailing zeros, which simplifies greatly some specializations
+    # for memory-backed bitintegers, such as `hash(::BigInt)`, and `hash(::Rational{<:BitInteger64})`.
+    # The two shifts are folded into net_shift, which may be negative (a left shift by up to 7 bits).
     net_shift = num_z - ((pow > 0) ? Int(pow % 8) : 0)
-    h = if net_shift < 0
-        hash_integer(widen(num) << (-net_shift), h)
-    else
-        hash_integer(num >> net_shift, h)
-    end
-    return h
+    return hash_shifted_integer(num, net_shift, x_signbit, h)
 end
 
 

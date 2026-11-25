@@ -595,10 +595,29 @@ Number of ones in the binary representation of abs(x).
 """
 count_ones_abs(x::BigInt) = iszero(x) ? 0 : MPZ.mpn_popcount(x)
 
-# all uses of _bit_magnitude MUST ensure at callsite that `x` is nonzero, otherwise it is UB
+# The number of limbs in abs(x); the sign of a BigInt is stored separately in the sign of x.size.
+nlimbs(x::BigInt) = Int(abs(x.size))
+
+# The `i`-th limb of abs(x), least significant first, or zero if `i` is outside `1:nlimbs(x)`.
+# This is a safe read-only accessor: it never writes to x and never reads out of bounds.
+function getlimb(x::BigInt, i::Int)
+    1 <= i <= nlimbs(x) || return zero(Limb)
+    return GC.@preserve x unsafe_load(x.d, i)
+end
+
+# The `i`-th 64-bit word of abs(x), least significant first, or zero past the end, so that code
+# can work with 64-bit words whether GMP uses 32-bit or 64-bit limbs.
+if Limb === UInt64
+    getlimb64(x::BigInt, i::Int) = getlimb(x, i)
+else
+    @inline getlimb64(x::BigInt, i::Int) = UInt64(getlimb(x, 2i - 1)) | UInt64(getlimb(x, 2i)) << 32
+end
+
+# top_set_bit(abs(x)): the number of significant bits in the magnitude of x, or 0 for zero
 function _bit_magnitude(x::BigInt)
-    n = abs(x.size)
-    return n * sizeof(Limb) << 3 - leading_zeros(GC.@preserve x unsafe_load(x.d, n))
+    n = nlimbs(x)
+    n == 0 && return 0
+    return n * BITS_PER_LIMB - leading_zeros(getlimb(x, n))
 end
 
 function exponent(x::BigInt)
@@ -608,7 +627,6 @@ end
 
 function top_set_bit(x::BigInt)
     isnegative(x) && throw(DomainError(x, "top_set_bit only supports negative arguments when they have type BitSigned."))
-    iszero(x) && return 0
     return _bit_magnitude(x)
 end
 
@@ -852,96 +870,57 @@ Base.checked_pow(x::BigInt, p::BigInt) = x^p
 
 Base.deepcopy_internal(x::BigInt, stackdict::IdDict) = get!(() -> MPZ.set(x), stackdict, x)::BigInt
 
-if Limb === UInt64 === UInt
-    # On 64 bit systems we can define
-    # an optimized version for BigInt of hash_integer (used e.g. for Rational{BigInt}),
-    # and of hash
+# Optimized versions for BigInt of hash, and of the integer hashing helpers used by hash_integer
+# and the generic hash(::Real) (e.g. for Rational{BigInt}), which read the limbs directly instead
+# of allocating new BigInts.
 
-    using .Base: HASH_SECRET, hash_bytes
+using .Base: hash_shifted_integer
+import .Base: ShiftedIntegerCodeUnits, load_shifted, shifted_abs_uint64, codeunits
 
-    # UnsafeLimbView provides a safe iterator interface to BigInt limb data
-    struct UnsafeLimbView <: AbstractVector{UInt8}
-        bigint::BigInt
-        start_byte::Int
-        num_bytes::Int
+# The 64 bits of abs(x) starting at bit `bitpos`, i.e. (abs(x) >> bitpos) % UInt64, without
+# allocating. `bitpos` may be negative for a left shift; bits below 0 or above the most
+# significant limb read as zero (and Julia's `<<` by 64 or more gives zero).
+@inline function load_abs_bits(x::BigInt, bitpos::Int)
+    bitpos < 0 && return getlimb64(x, 1) << -bitpos
+    idx, off = divrem(bitpos, 64)
+    lo = getlimb64(x, idx + 1)
+    off == 0 && return lo
+    return lo >> off | getlimb64(x, idx + 2) << (64 - off)
+end
+
+# Store x itself instead of abs(x), which would allocate for negative x;
+# load_shifted then reads the magnitude from the limbs.
+function ShiftedIntegerCodeUnits(x::BigInt, shift::Int)
+    num_bytes = max(cld(_bit_magnitude(x) - shift, 8), 1)
+    return ShiftedIntegerCodeUnits(x, shift, num_bytes)
+end
+@inline load_shifted(::Type{U}, units::ShiftedIntegerCodeUnits{BigInt}, i) where {U<:Union{UInt8, UInt32, UInt64}} =
+    load_abs_bits(units.value, units.shift + 8 * (i - 1)) % U
+
+# The generic IntegerCodeUnits would allocate in abs(x), and in every load;
+# the bytes of abs(x) >> 0 are the same.
+codeunits(x::BigInt) = ShiftedIntegerCodeUnits(x, 0)
+
+shifted_abs_uint64(x::BigInt, shift::Int) = load_abs_bits(x, shift)
+
+function hash(x::BigInt, h::UInt)
+    iszero(x) && return hash(0, h)
+    if nlimbs(x) * BITS_PER_LIMB <= 64 # abs(x) fits in one 64-bit word
+        word = getlimb64(x, 1)
+        isnegative(x) || return hash(word, h)
+        word <= typemin(Int64) % UInt64 && return hash(-%(word % Int64), h)
     end
-
-    function Base.size(view::UnsafeLimbView)
-        return (view.num_bytes,)
+    pow = trailing_zeros(x)
+    nd = _bit_magnitude(x)
+    word = load_abs_bits(x, pow)
+    if nd <= 1024 && nd - pow <= 53
+        # word has at most 53 bits here, so the conversion from Int64 (cheaper than from UInt64) is exact
+        return hash(ldexp(flipsign(Float64(word % Int64), x.size), pow), h)
     end
-
-    function Base.getindex(view::UnsafeLimbView, i::Int)
-        @boundscheck checkbounds(view, i)
-        GC.@preserve view begin
-            limb_index = div(view.start_byte + i - 2, 8) + 1
-            byte_in_limb = (view.start_byte + i - 2) % 8
-            limb = unsafe_load(view.bigint.d, limb_index)
-            return UInt8((limb >> (8 * byte_in_limb)) & 0xff)
-        end
-    end
-
-    function Base.iterate(view::UnsafeLimbView, state::Int = 1)
-        state > view.num_bytes && return nothing
-        return @inbounds(view[state]), state + 1
-    end
-
-    function Base.length(view::UnsafeLimbView)
-        return view.num_bytes
-    end
-
-    function hash_integer(n::BigInt, h::UInt)
-        iszero(n) && return hash_integer(0, h)
-        s = n.size
-        h ⊻= (s < 0)
-
-        us = abs(s)
-        leading_zero_bytes = div(leading_zeros(unsafe_load(n.d, us)), 8)
-        num_bytes = 8 * us - leading_zero_bytes
-
-        # Use UnsafeLimbView for safe iterator-based access
-        limb_view = UnsafeLimbView(n, 1, num_bytes)
-        return hash_bytes(limb_view, h, HASH_SECRET)
-    end
-
-    function hash(x::BigInt, h::UInt)
-        GC.@preserve x begin
-            sz = x.size
-            sz == 0 && return hash(0, h)
-            ptr = Ptr{UInt64}(x.d)
-            if sz == 1
-                return hash(unsafe_load(ptr), h)
-            elseif sz == -1
-                limb = unsafe_load(ptr)
-                limb <= typemin(Int) % UInt && return hash(-%(limb % Int), h)
-            end
-            pow = trailing_zeros(x)
-            nd = Base.ndigits0z(x, 2)
-            idx = (pow >>> 6) + 1
-            shift = (pow & 63) % UInt
-            upshift = BITS_PER_LIMB - shift
-            asz = abs(sz)
-            if shift == 0
-                limb = unsafe_load(ptr, idx)
-            else
-                limb1 = unsafe_load(ptr, idx)
-                limb2 = idx < asz ? unsafe_load(ptr, idx+1) : UInt(0)
-                limb = limb2 << upshift | limb1 >> shift
-            end
-            if nd <= 1024 && nd - pow <= 53
-                return hash(ldexp(flipsign(Float64(limb), sz), pow), h)
-            end
-            h = hash_integer(pow, h)
-
-            h ⊻= (sz < 0)
-            leading_zero_bytes = div(leading_zeros(unsafe_load(x.d, asz)), 8)
-            trailing_zero_bytes = div(pow, 8)
-            num_bytes = 8 * asz - (leading_zero_bytes + trailing_zero_bytes)
-
-            # Use UnsafeLimbView for safe iterator-based access
-            limb_view = UnsafeLimbView(x, trailing_zero_bytes + 1, num_bytes)
-            return hash_bytes(limb_view, h, HASH_SECRET)
-        end
-    end
+    h = hash_integer(pow, h)
+    # like hash(::Real), trim only whole bytes of trailing zeros: there net_shift == 8 * div(pow, 8),
+    # which is pow & ~7 since pow >= 0
+    return hash_shifted_integer(x, pow & ~7, isnegative(x), h)
 end
 
 module MPQ

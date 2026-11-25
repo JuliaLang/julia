@@ -452,11 +452,16 @@ Base.decompose(x::DecomposedReal) = (x.num, x.pow, x.den)
         @test hash(D(big(-40), 0, big(7)), h) == hash(-40 // 7, h)
         @test hash(D(big(3), 5, big(7)), h) == hash(96 // 7, h)
         @test hash(D(typemax(Int128), 5, Int128(7)), h) == hash((32*(big(2)^127-1)) // 7, h)
+        # BigInt operands with trailing zeros, shifted across limbs or left by pow % 8
+        @test hash(D(-(big(3)^20 << 9), 13, big(-8)), h) == hash(big(3)^20 << 19, h)
+        @test hash(D(big(3)^30 << 9, -3, big(1) << 7), h) == hash(3.0^30 / 2, h)
+        @test hash(D(big(3)^200 << 70, -10, big(5)^90 << 64), h) == hash(big(3)^200 // (big(5)^90 << 4), h)
+        @test hash(D(-big(3)^200, 3, big(1)), h) == hash(-(big(3)^200 << 3), h)
     end
-    # a BigInt numerator must not be mutated by hashing
-    let x = D(big(3), 5, big(7))
+    # BigInt operands must not be mutated by hashing
+    let x = D(big(3) << 70, 5, big(5) << 64)
         @test hash(x) == hash(x)
-        @test x.num == 3
+        @test x.num == big(3) << 70 && x.den == big(5) << 64
     end
     # BigFloat carries its sign in the denominator of its decomposition
     @test hash(BigFloat(-0.5)) == hash(-1 // 2)
