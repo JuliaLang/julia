@@ -1596,7 +1596,41 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
     already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
-    if stmt === nothing
+    if isa(stmt, Expr) # the most common statement, so checked first
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
+        if isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        end
+        typ = inst[:type]
+        if isa(typ, Const) && is_inlineable_constant(typ.val)
+            ssa_rename[idx] = quoted(typ.val)
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+        end
+        result[result_idx][:stmt] = stmt
+        result_idx += 1
+    elseif stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
@@ -1677,40 +1711,6 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result[result_idx][:stmt] = stmt
         end
         ssa_rename[idx] = SSAValue(result_idx)
-        result_idx += 1
-    elseif isa(stmt, Expr)
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
-        if isexpr(stmt, :throw_undef_if_not)
-            cond = stmt.args[2]
-            if isa(cond, Bool) && cond === true
-                # cond was folded to true - this statement
-                # is dead.
-                ssa_rename[idx] = nothing
-                return result_idx
-            end
-        elseif isexpr(stmt, :leave)
-            let i = 1
-                while i <= length(stmt.args)
-                    if stmt.args[i] === nothing
-                        deleteat!(stmt.args, i)
-                    else
-                        i += 1
-                    end
-                end
-            end
-            if isempty(stmt.args)
-                # This :leave is dead
-                ssa_rename[idx] = nothing
-                return result_idx
-            end
-        end
-        typ = inst[:type]
-        if isa(typ, Const) && is_inlineable_constant(typ.val)
-            ssa_rename[idx] = quoted(typ.val)
-        else
-            ssa_rename[idx] = SSAValue(result_idx)
-        end
-        result[result_idx][:stmt] = stmt
         result_idx += 1
     elseif isa(stmt, PiNode)
         # As an optimization, we eliminate any trivial pinodes. For performance, we use ===
