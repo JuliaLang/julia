@@ -4800,8 +4800,9 @@ f(x) = yt(x)
               x)))
       (define (actually-return x)
         (let* ((x (begin0 (emit- x)
-                          ;; if we are adding an implicit return then mark it as having no location
-                          (if (not (eq? tail 'explicit))
+                          ;; if we are adding an implicit return of `nothing` then mark it as having no location,
+                          ;; since the last location might not have run; a returned value keeps its line
+                          (if (and (not (eq? tail 'explicit)) (equal? x '(null)))
                               (emit '(line #f)))))
                (x (if rett
                       (compile (convert-for-type-decl x rett #t lam) '() #t #f)

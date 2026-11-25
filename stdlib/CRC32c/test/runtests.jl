@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, Random
+using Random, Test
 using CRC32c
 
 const BASE_TEST_PATH = joinpath(Sys.BINDIR, Base.DATAROOTDIR, "julia", "test")
@@ -50,10 +50,11 @@ function test_crc32c(crc32c)
                 @test crc32c(io, 16) == crc32c(a[17:32])
                 @test crc32c(io) == crc32c(a[33:end])
                 @test crc32c(io, 1000) == 0x00000000
+                @test crc32c(seek(io, 1000)) == 0x00000000
             end
-            a = rand(UInt8, 30000)
-            write(f, a)
-            @test open(crc32c, f) == crc32c(a) == open(io -> crc32c(io, 10^6), f)
+            b = rand(UInt8, 30000)
+            write(f, b)
+            @test open(crc32c, f) == crc32c(b) == open(io -> crc32c(io, 10^6), f)
         finally
             rm(f, force=true)
         end
@@ -81,6 +82,7 @@ function test_crc32c(crc32c)
     ]
     for a in weird_vectors
         @test crc32c(a) == crc32c(collect(a))
+        @test crc32c(a, crc_256) == crc32c(collect(a), crc_256)
     end
 end
 unsafe_crc32c_sw(a, n, crc) =
@@ -93,7 +95,7 @@ function crc32c_sw(s::Union{String, SubString{String}}, crc::UInt32=0x00000000)
 end
 
 crc32c_sw(a::AbstractVector{UInt8}, crc::UInt32=0x00000000) =
-    crc32c_sw(copyto!(Vector{UInt8}(undef, length(a)), a))
+    crc32c_sw(copyto!(Vector{UInt8}(undef, length(a)), a), crc)
 function crc32c_sw(io::IO, nb::Integer, crc::UInt32=0x00000000)
     nb < 0 && throw(ArgumentError("number of bytes to checksum must be ≥ 0"))
     buf = Vector{UInt8}(undef, min(nb, 24576))

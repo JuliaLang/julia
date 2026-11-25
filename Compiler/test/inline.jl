@@ -296,7 +296,7 @@ end
 function foo_apply_apply_type_svec()
     A = (Tuple, Float32)
     B = Tuple{Float32, Float32}
-    Core.apply_type(A..., B.types...)
+    Core.apply_type(A..., B.parameters...)
 end
 @test fully_eliminated(foo_apply_apply_type_svec, Tuple{}; retval=NTuple{3, Float32})
 
@@ -1712,13 +1712,15 @@ using .Compiler: is_declared_inline, is_declared_noinline
         @test Compiler.is_no_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
     end
     # @nospecialize
+    nospecialized(m::Method, i::Int) = m.nospecialize & (1 << (i-1)) != 0
+    nospecialized(m::Method) = [nospecialized(m, i) for i in 1:m.nargs-1]
     let f(@nospecialize(A::Any); x::Int=1) = 2x
-        @test only(methods(f)).nospecialize == 1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == 4
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [false, false, true]
     end
     let f(::Any; x::Int=1) = (@nospecialize; 2x)
-        @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [true, true, true]
     end
     # Base.@assume_effects
     let Base.@assume_effects :notaskstate f(::Any; x::Int=1) = 2x
@@ -1731,8 +1733,8 @@ using .Compiler: is_declared_inline, is_declared_noinline
         @test Compiler.is_aggressive_constprop(only(methods(f)))
         @test is_declared_inline(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
         @test Compiler.is_aggressive_constprop(only(methods(Core.kwcall, (Any, typeof(f), Vararg))))
-        @test only(methods(f)).nospecialize == -1
-        @test only(methods(Core.kwcall, (Any, typeof(f), Vararg))).nospecialize == -1
+        @test nospecialized(only(methods(f))) == [true]
+        @test nospecialized(only(methods(Core.kwcall, (Any, typeof(f), Vararg)))) == [true, true, true]
         @test Compiler.decode_effects_override(only(methods(f)).purity).notaskstate
         @test Compiler.decode_effects_override(only(methods(Core.kwcall, (Any, typeof(f), Vararg))).purity).notaskstate
     end
@@ -2168,6 +2170,49 @@ let buf = FastReadBuffer62001()
     end
     buf.position[] = 0
     @test Base.allocated(read_byte62001, buf, UInt8) == 0
+end
+
+# A method that declares a concrete `Type{X}` slot has one compiled specialization,
+# shared by runtime dispatch and inferred calls (#63611)
+struct SharedCtor63611
+    n::Int
+end
+@noinline SharedCtor63611(s::String) = SharedCtor63611(length(s))
+@noinline shared_ctor_caller63611(s::String) = SharedCtor63611(s)
+let m = only(methods(SharedCtor63611, (String,)))
+    @test Base.invokelatest(SharedCtor63611, "abc").n == 3
+    @test Base.invokelatest(shared_ctor_caller63611, "abc").n == 3
+    compiled = Any[mi.specTypes for mi in Base.specializations(m)
+                   if isdefined(mi, :cache) && mi.cache.invoke != C_NULL]
+    @test compiled == Any[Tuple{Core.TypeEgal{SharedCtor63611}, String}]
+end
+
+# Non-inlined constructor calls honor `@nospecialize`
+struct NoSpecializeCtor63611
+    a::Any
+end
+NoSpecializeCtor63611(@nospecialize(a), i::Int) = (@noinline; NoSpecializeCtor63611(a))
+let src = code_typed1((Vector{Float32},)) do v
+        NoSpecializeCtor63611(v, 1)
+    end
+    @test count(src.code) do @nospecialize x
+        Meta.isexpr(x, :invoke) &&
+        (x.args[1]::Core.CodeInstance).def.specTypes ==
+            Tuple{Core.TypeEgal{NoSpecializeCtor63611}, Any, Int}
+    end == 1
+end
+
+# A callee that takes a type in an unspecialized slot is compiled once
+struct TypeArgWrapper63611{S} end
+@noinline type_arg_nparams63611(T, w) = length(T.parameters) + w
+type_arg_outer63611(::Type{TypeArgWrapper63611{S}}, w) where {S} = type_arg_nparams63611(S, w)
+let types = (Tuple{Int}, Tuple{Float64}, Tuple{Int,Int}, Tuple{String})
+    for T in types
+        @test Base.invokelatest(type_arg_outer63611, TypeArgWrapper63611{T}, 1) == length(T.parameters) + 1
+    end
+    @test count(Base.specializations(only(methods(type_arg_nparams63611)))) do mi
+        isdefined(mi, :cache) && mi.cache.invoke != C_NULL
+    end == 1
 end
 
 # Test that irinterp can make use of constant results even if they're big

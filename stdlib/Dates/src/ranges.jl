@@ -2,7 +2,7 @@
 
 # Date/DateTime Ranges
 
-StepRange{<:Dates.DatePeriod,<:Real}(start, step, stop) =
+StepRange{<:Dates.DatePeriod,<:Real}(_start, _step, _stop) =
     throw(ArgumentError("must specify step as a Period when constructing Dates ranges"))
 Base.:(:)(a::T, b::T) where {T<:Date} = (:)(a, Day(1), b)
 

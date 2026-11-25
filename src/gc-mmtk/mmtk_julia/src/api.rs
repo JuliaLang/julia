@@ -359,6 +359,16 @@ pub extern "C" fn mmtk_is_mapped_address(address: Address) -> bool {
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread, collection: u8) {
     let _errno = PreserveErrno::new();
+    // If another thread already requested a pause (e.g. an allocation hit the heap target), wait
+    // for it like the stock GC does, without marking it user-triggered: the heap target is only
+    // updated after automatic collections, so a thread calling `GC.gc()` in a loop would
+    // otherwise keep it from ever growing, and every allocation would collect again.
+    // Read the epoch first, so that a pause ending in between is not waited for twice.
+    let epoch = mmtk_gc_epoch();
+    if SINGLETON.get_gc_status() == GcStatus::PauseRequested {
+        crate::collection::wait_for_pause(epoch);
+        return;
+    }
     AtomicIsize::fetch_add(&USER_TRIGGERED_GC, 1, Ordering::SeqCst);
     if !memory_manager::is_collection_enabled(&SINGLETON) {
         AtomicIsize::fetch_add(&USER_TRIGGERED_GC, -1, Ordering::SeqCst);

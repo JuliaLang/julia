@@ -1,10 +1,12 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 """
-Utilities for capturing, filtering and presenting streams of log events.
-Normally you don't need to import `Logging` to create log events; for this
-the standard logging macros such as `@info` are already exported by `Base`
-and available by default.
+    Logging
+
+Capturing, filtering and presenting streams of log events. The logging macros such as
+`@info` are exported by `Base`, so this module is only needed to change where log events
+go, with loggers such as [`ConsoleLogger`](@ref) and functions such as
+[`with_logger`](@ref) and [`global_logger`](@ref).
 """
 module Logging
 

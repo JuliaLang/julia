@@ -39,6 +39,11 @@ recognize a variable, it uses a limited set of characters (greatly extended by
 Unicode). `isidentifier()` makes it possible to query the parser directly
 whether a symbol contains valid characters.
 
+!!! compat "Julia 1.15"
+    For a `Symbol`, the spelling must also match Julia's
+    [identifier normalization](@ref man-allowed-variable-names). Strings may
+    use spellings that Julia normalizes when parsing.
+
 # Examples
 ```jldoctest
 julia> Meta.isidentifier(:x), Meta.isidentifier("1x")
@@ -53,7 +58,17 @@ function isidentifier(s::AbstractString)
     is_id_start_char(c) || return false
     return all(is_id_char, rest)
 end
-isidentifier(s::Symbol) = isidentifier(string(s))
+function isidentifier(s::Symbol)
+    str = string(s)
+    isidentifier(str) || return false
+    isascii(str) && return true
+    # Map Julia-specific characters before NFC, without a utf8proc callback during bootstrap.
+    mapped = map(str) do c
+        codepoint = UInt32(c)
+        Char(get(Base.Unicode._julia_charmap, codepoint, codepoint))
+    end
+    return str == Base.Unicode.normalize(mapped, :NFC)
+end
 
 is_op_suffix_char(c::AbstractChar) = isvalid(c) && ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
 
@@ -306,10 +321,10 @@ end
 ParseError(msg::AbstractString) = ParseError(msg, nothing)
 
 function parser_for_module(mod::Union{Module, Nothing})
-    if mod isa Module && invokelatest(isdefined, mod, Symbol("#_internal_julia_parse"))
-        invokelatest(getglobal, mod, Symbol("#_internal_julia_parse"))
+    if mod isa Module
+        Base.VersionedParse(Core.get_edition(mod))
     else
-        Base.VersionedParse(Base.LATEST_STABLE_EDITION)
+        Base.VersionedParse(Base.OLDEST_EDITION)
     end
 end
 

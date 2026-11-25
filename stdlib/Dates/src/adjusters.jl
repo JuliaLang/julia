@@ -1,28 +1,28 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 ### truncation
-Base.trunc(dt::Date, p::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
-Base.trunc(dt::Date, p::Type{Quarter}) = firstdayofquarter(dt)
-Base.trunc(dt::Date, p::Type{Month}) = firstdayofmonth(dt)
-Base.trunc(dt::Date, p::Type{Day}) = dt
+Base.trunc(dt::Date, ::Type{Year}) = Date(UTD(totaldays(year(dt), 1, 1)))
+Base.trunc(dt::Date, ::Type{Quarter}) = firstdayofquarter(dt)
+Base.trunc(dt::Date, ::Type{Month}) = firstdayofmonth(dt)
+Base.trunc(dt::Date, ::Type{Day}) = dt
 
-Base.trunc(dt::DateTime, p::Type{Year}) = DateTime(trunc(Date(dt), Year))
-Base.trunc(dt::DateTime, p::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
-Base.trunc(dt::DateTime, p::Type{Month}) = DateTime(trunc(Date(dt), Month))
-Base.trunc(dt::DateTime, p::Type{Day}) = DateTime(Date(dt))
-Base.trunc(dt::DateTime, p::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Second}) = dt - Millisecond(dt)
-Base.trunc(dt::DateTime, p::Type{Millisecond}) = dt
+Base.trunc(dt::DateTime, ::Type{Year}) = DateTime(trunc(Date(dt), Year))
+Base.trunc(dt::DateTime, ::Type{Quarter}) = DateTime(trunc(Date(dt), Quarter))
+Base.trunc(dt::DateTime, ::Type{Month}) = DateTime(trunc(Date(dt), Month))
+Base.trunc(dt::DateTime, ::Type{Day}) = DateTime(Date(dt))
+Base.trunc(dt::DateTime, ::Type{Hour}) = dt - Minute(dt) - Second(dt) - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Minute}) = dt - Second(dt) - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Second}) = dt - Millisecond(dt)
+Base.trunc(dt::DateTime, ::Type{Millisecond}) = dt
 
 Base.trunc(dt::Timestamp, ::Type{T}) where {T<:Period} = floor(dt, oneunit(T))
 
-Base.trunc(t::Time, p::Type{Hour}) = Time(Hour(t))
-Base.trunc(t::Time, p::Type{Minute}) = Time(Hour(t), Minute(t))
-Base.trunc(t::Time, p::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
-Base.trunc(t::Time, p::Type{Millisecond}) = t - Microsecond(t) - Nanosecond(t)
-Base.trunc(t::Time, p::Type{Microsecond}) = t - Nanosecond(t)
-Base.trunc(t::Time, p::Type{Nanosecond})  = t
+Base.trunc(t::Time, ::Type{Hour}) = Time(Hour(t))
+Base.trunc(t::Time, ::Type{Minute}) = Time(Hour(t), Minute(t))
+Base.trunc(t::Time, ::Type{Second}) = Time(Hour(t), Minute(t), Second(t))
+Base.trunc(t::Time, ::Type{Millisecond}) = t - Microsecond(t) - Nanosecond(t)
+Base.trunc(t::Time, ::Type{Microsecond}) = t - Nanosecond(t)
+Base.trunc(t::Time, ::Type{Nanosecond})  = t
 
 """
     trunc(dt::TimeType, ::Type{Period})::TimeType
@@ -199,7 +199,7 @@ Base.show(io::IO, df::DateFunction) = println(io, df.f)
 
 # Core adjuster
 function adjust(df::DateFunction, start, step, limit)
-    for i = 1:limit
+    for _ = 1:limit
         df.f(start) && return start
         start += step
     end

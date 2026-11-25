@@ -290,13 +290,7 @@ function lookup_binding_partition(world::UInt, b::Core.Binding, previous_partiti
     ccall(:jl_get_binding_partition_with_hint, Ref{Core.BindingPartition}, (Any, Any, UInt), b, previous_partition, world)
 end
 
-function convert(::Type{Core.Binding}, gr::Core.GlobalRef)
-    if isdefined(gr, :binding)
-        return gr.binding
-    else
-        return ccall(:jl_get_module_binding, Ref{Core.Binding}, (Any, Any, Cint), gr.mod, gr.name, true)
-    end
-end
+convert(::Type{Core.Binding}, gr::Core.GlobalRef) = gr.binding
 
 function lookup_binding_partition(world::UInt, gr::Core.GlobalRef)
     b = convert(Core.Binding, gr)
@@ -860,6 +854,11 @@ end
 
 ismutabletypename(tn::Core.TypeName) = tn.flags & 0x2 == 0x2
 
+# instances hold data that the Julia-visible fields do not describe (C-only fields after
+# them, an opaque layout, or trailing variable-sized data), so only the runtime can allocate
+# them (`Expr(:new)` throws)
+datatype_hashiddenfields(dt::DataType) = (@_total_meta; dt.name.flags & 0x8 == 0x8)
+
 """
     isstructtype(T)::Bool
 
@@ -1386,12 +1385,12 @@ function datatype_fieldcount(t::DataType)
     elseif isabstracttype(t)
         return nothing
     end
+    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
+    # to be forced to compute it (nor can inference assume it is defined).
     if t.name === Tuple.name
         isvatuple(t) && return nothing
-        return length(t.types)
+        return length(t.parameters)
     end
-    # Equivalent to length(t.types), but `t.types` is lazy and we do not want
-    # to be forced to compute it.
     return length(t.name.names)
 end
 
@@ -1735,6 +1734,11 @@ end
 
 Return the method table for `f`.
 
+The returned methods correspond to calls to the callable object `f` itself.
+For a type, these are its constructor methods. For example, `methods(T)` and
+`methods(T{Int})` list the constructors for `T` and `T{Int}`, respectively.
+See [Methods](@ref) and [Constructors](@ref man-constructors).
+
 If `types` is specified, return an array of methods whose types match.
 If `module` is specified, return an array of methods defined in that module.
 A list of modules can also be specified as an array or set.
@@ -1815,7 +1819,7 @@ function _uncompressed_ir(m::Method)
 end
 
 _uncompressed_ir(codeinst::CodeInstance, s::String) =
-    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), codeinst.def.def::Method, codeinst, s)
+    ccall(:jl_uncompress_ir, Ref{CodeInfo}, (Any, Any, Any), get_ci_mi(codeinst).def::Method, codeinst, s)
 
 function get_ci_mi(codeinst::CodeInstance)
     def = codeinst.def
@@ -2010,47 +2014,58 @@ hasintersect(@nospecialize(a), @nospecialize(b)) = typeintersect(a, b) !== Botto
 
 # high-level, more convenient method lookup functions
 
-function visit(f, mt::Core.MethodTable)
-    mt.defs !== nothing && visit(f, mt.defs)
+function visit(f::F, mt::Core.MethodTable) where F
+    defs = mt.defs
+    defs === nothing || visit_typemap(f, defs)
     nothing
 end
-function visit(f, mc::Core.TypeMapLevel)
-    function avisit(f, e::Memory{Any})
-        # slot 1 holds the smallintset index; key/value pairs follow, so values
-        # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
-        for i in 3:2:length(e)
-            isassigned(e, i) || continue
-            ei = e[i]
-            if ei isa Memory{Any}
-                for j in 3:2:length(ei)
-                    isassigned(ei, j) || continue
-                    visit(f, ei[j])
-                end
-            else
-                visit(f, ei)
+# a typemap node is either a `TypeMapEntry` list or a `TypeMapLevel`
+function visit_typemap(f::F, @nospecialize(node)) where F
+    if node isa Core.TypeMapEntry
+        visit(f, node)
+    else
+        visit(f, node::Core.TypeMapLevel)
+    end
+    nothing
+end
+function visit_typemap_table(f::F, e::Memory{Any}) where F
+    # slot 1 holds the smallintset index; key/value pairs follow, so values
+    # live on the odd slots starting at 3 (see mtcache layout in src/typemap.c)
+    for i in 3:2:length(e)
+        isassigned(e, i) || continue
+        ei = e[i]
+        if ei isa Memory{Any}
+            for j in 3:2:length(ei)
+                isassigned(ei, j) || continue
+                visit_typemap(f, ei[j])
             end
+        else
+            visit_typemap(f, ei)
         end
     end
-    if mc.targ !== nothing
-        avisit(f, mc.targ::Memory{Any})
-    end
-    if mc.arg1 !== nothing
-        avisit(f, mc.arg1::Memory{Any})
-    end
-    if mc.tname !== nothing
-        avisit(f, mc.tname::Memory{Any})
-    end
-    if mc.name1 !== nothing
-        avisit(f, mc.name1::Memory{Any})
-    end
-    mc.list !== nothing && visit(f, mc.list)
-    mc.any !== nothing && visit(f, mc.any)
     nothing
 end
-function visit(f, d::Core.TypeMapEntry)
-    while d !== nothing
+function visit(f::F, mc::Core.TypeMapLevel) where F
+    targ = mc.targ
+    targ === nothing || visit_typemap_table(f, targ::Memory{Any})
+    arg1 = mc.arg1
+    arg1 === nothing || visit_typemap_table(f, arg1::Memory{Any})
+    tname = mc.tname
+    tname === nothing || visit_typemap_table(f, tname::Memory{Any})
+    name1 = mc.name1
+    name1 === nothing || visit_typemap_table(f, name1::Memory{Any})
+    list = mc.list
+    list === nothing || visit(f, list::Core.TypeMapEntry)
+    any = mc.any
+    any === nothing || visit_typemap(f, any)
+    nothing
+end
+function visit(f::F, d::Core.TypeMapEntry) where F
+    while true
         f(d.func)
-        d = d.next
+        next = d.next
+        next === nothing && break
+        d = next::Core.TypeMapEntry
     end
     nothing
 end

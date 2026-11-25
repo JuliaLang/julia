@@ -172,7 +172,6 @@ function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(spec
     # we already handled the last element of `cache_argtypes` (and decremented `nargs` so that
     # we don't overwrite the result of that work here).
     tail_index = min(nargtypes, nargs)
-    local lastatype
     for i = 1:nargtypes
         atyp = mi_argtypes[i]
         wasva = false
@@ -191,12 +190,12 @@ function most_general_argtypes(method::Union{Method,Nothing}, @nospecialize(spec
         end
         mi_argtypes[i] = atyp
         if wasva
-            lastatype = atyp
+            # the vararg also covers the positional arguments after it
+            for j = (tail_index+1):(nargs-1)
+                mi_argtypes[j] = atyp
+            end
             mi_argtypes[end] = Vararg{widenconst(atyp)}
         end
-    end
-    for i = (tail_index+1):(nargs-1)
-        mi_argtypes[i] = lastatype
     end
     return mi_argtypes
 end

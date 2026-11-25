@@ -13,7 +13,6 @@ declare i64 @external_call({} addrspace(10)*)
 define {} addrspace(10)* @gc_alloc_ptr_offsets_single({}** %current_task) {
 ; CHECK-LABEL: @gc_alloc_ptr_offsets_single
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
 ; CHECK: store ptr addrspace(10) null, ptr addrspace(11) [[PTR]], align 8
@@ -26,7 +25,6 @@ define {} addrspace(10)* @gc_alloc_ptr_offsets_single({}** %current_task) {
 define {} addrspace(10)* @gc_alloc_ptr_offsets_multiple({}** %current_task) {
 ; CHECK-LABEL: @gc_alloc_ptr_offsets_multiple
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR0:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 0
 ; CHECK: store ptr addrspace(10) null, ptr addrspace(11) [[PTR0]], align 8
@@ -43,7 +41,6 @@ define {} addrspace(10)* @gc_alloc_ptr_offsets_multiple({}** %current_task) {
 define {} addrspace(10)* @gc_alloc_zeroinit({}** %current_task) {
 ; CHECK-LABEL: @gc_alloc_zeroinit
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 16
 ; CHECK: call void @llvm.memset.p11.i64(ptr addrspace(11) align 8 [[PTR]], i8 0, i64 32, i1 false)
@@ -56,7 +53,6 @@ define {} addrspace(10)* @gc_alloc_zeroinit({}** %current_task) {
 define {} addrspace(10)* @gc_alloc_zeroing_before_safepoint({}** %current_task, {} addrspace(10)* %input) {
 ; CHECK-LABEL: @gc_alloc_zeroing_before_safepoint
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
 ; CHECK: [[PTR:%.*]] = getelementptr inbounds i8, ptr addrspace(11) [[DERIVED]], i64 8
 ; CHECK: store ptr addrspace(10) null, ptr addrspace(11) [[PTR]], align 8
@@ -71,7 +67,6 @@ define {} addrspace(10)* @gc_alloc_zeroing_before_safepoint({}** %current_task, 
 define {} addrspace(10)* @gc_alloc_zeroinit_zero_size({}** %current_task) {
 ; CHECK-LABEL: @gc_alloc_zeroinit_zero_size
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK-NOT: call void @llvm.memset
 ; CHECK: ret ptr addrspace(10) %v
     %v = call noalias {} addrspace(10)* @julia.gc_alloc_obj({}** %current_task, i64 16, {} addrspace(10)* @tag) [ "julia.gc_alloc_zeroinit"(i64 16, i64 0) ]
@@ -82,7 +77,6 @@ define {} addrspace(10)* @gc_alloc_zeroinit_zero_size({}** %current_task) {
 define {} addrspace(10)* @gc_alloc_no_bundles({}** %current_task) {
 ; CHECK-LABEL: @gc_alloc_no_bundles
 ; CHECK: %v = call noalias nonnull ptr addrspace(10) @julia.gc_alloc_bytes
-; CHECK: store atomic ptr addrspace(10) @tag
 ; CHECK-NOT: store ptr addrspace(10) null
 ; CHECK-NOT: call void @llvm.memset
 ; CHECK: ret ptr addrspace(10) %v

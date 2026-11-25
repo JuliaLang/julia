@@ -10,7 +10,6 @@
 
 ; CHECK-LABEL: @inline_zeroed
 ; CHECK: %mem = call noalias nonnull dereferenceable(48) ptr addrspace(10) @julia.gc_alloc_bytes(ptr %ptls_load, i64 48,
-; CHECK: store atomic ptr {{.*}}@tag
 ; CHECK: [[DERIVED:%.*]] = addrspacecast ptr addrspace(10) %mem to ptr addrspace(11)
 ; CHECK: [[OBJ:%.*]] = addrspacecast ptr addrspace(11) [[DERIVED]] to ptr
 ; CHECK: [[DATA:%.*]] = getelementptr inbounds i8, ptr [[OBJ]], i64 16

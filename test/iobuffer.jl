@@ -177,6 +177,14 @@ end
     copyline(b, a; keep=false)
     Base.shred!(a)
     @test take!(b) == b"xxabcdexxx"
+
+    # Only the copied line's own newline is removed, never earlier bytes of `out`
+    s = Base.BufferStream(); closewrite(s)
+    b = IOBuffer(); write(b, "a\n")
+    @test take!(copyline(b, s)) == b"a\n"
+    s = Base.BufferStream(); write(s, "\n"); closewrite(s)
+    b = IOBuffer(); write(b, "ab\r")
+    @test take!(copyline(b, s)) == b"ab\r"
 end
 
 @testset "take!" begin
@@ -321,6 +329,16 @@ end
     @test close(io) === nothing
     @test_throws ArgumentError write(io, UInt8[0])
     @test_throws ArgumentError seek(io, 0)
+end
+
+@testset "line reading from a non-readable IOBuffer throws" begin
+    io = IOBuffer(read=false, write=true)
+    write(io, "ab\ncd")
+    seekstart(io)
+    @test_throws ArgumentError readuntil(io, 0x0a)
+    @test_throws ArgumentError readline(io)
+    @test_throws ArgumentError copyline(IOBuffer(), io)
+    @test position(io) == 0
 end
 
 @testset "takestring!" begin

@@ -678,19 +678,21 @@ function realpath(path::AbstractString)
     end
 end
 
+# The current user's passwd entry, or `nothing` if it cannot be looked up.
+function _current_passwd()
+    try
+        return Libc.getpw()
+    catch err
+        err isa IOError || rethrow()
+        return nothing
+    end
+end
+
 if Sys.iswindows()
 
 function homedir(username::AbstractString)
-    # For the current user, just return homedir().
-    current_user = try
-        Sys.username()
-    catch err
-        err isa IOError || rethrow()
-        nothing
-    end
-    if username == current_user
-        return homedir()
-    end
+    current = _current_passwd()
+    current !== nothing && username == current.username && return current.homedir
     # Look up the user's SID, then query the registry for their profile path.
     # This is the same approach Go uses (os/user.Lookup on Windows).
     home = _win_profile_from_registry(username)
@@ -698,9 +700,8 @@ function homedir(username::AbstractString)
     # Fallback: assume profiles are siblings in the same parent directory,
     # but only if the current user's home follows the <parent>/<username>
     # convention. If not, we can't guess reliably.
-    userhome = homedir()
-    if current_user !== nothing && basename(userhome) == current_user
-        home = joinpath(dirname(userhome), username)
+    if current !== nothing && basename(current.homedir) == current.username
+        home = joinpath(dirname(current.homedir), username)
         isdir(home) && return home
     end
     return nothing
@@ -757,28 +758,46 @@ function contractuser(path::Union{String, SubString{String}})::String
     # Walk prefixes of path, checking if any matches homedir() via inode.
     # Only checks the current user's home (no ~username on Windows).
     # Preserves the original path string after the matched prefix verbatim.
-    home_st = stat(homedir())
+    home_st = try
+        stat(homedir())
+    catch e
+        e isa IOError || rethrow()
+        return path
+    end
     ispath(home_st) || return path
-    # check the full path (home directory itself, no trailing separator)
-    samefile(stat(path), home_st) && return "~"
     # scan for separators; start after the first one to skip the root
     m = findnext(path_separator_re, path, firstindex(path))
-    m === nothing && return path
+    last_sep = m === nothing ? firstindex(path) : nextind(path, last(m))
     while true
-        m = findnext(path_separator_re, path, nextind(path, last(m)))
-        m === nothing && return path
-        prefix = SubString(path, 1, prevind(path, first(m)))
-        st = stat(prefix)
+        m = findnext(path_separator_re, path, last_sep)
+        if m === nothing
+            prefix = path
+            rest = ""
+        else
+            prefix = SubString(path, 1, prevind(path, first(m)))
+            rest = SubString(path, first(m))
+            last_sep = nextind(path, last(m))
+        end
+        st = try
+            stat(prefix)
+        catch e
+            e isa IOError || rethrow()
+            return path
+        end
         ispath(st) || return path
         if samefile(st, home_st)
-            return "~" * SubString(path, first(m))
+            return isempty(rest) ? "~" : "~" * rest
         end
+        m === nothing && break
     end
+    return path
 end
 
 else # !Sys.iswindows()
 
 function homedir(username::AbstractString)
+    current = _current_passwd()
+    current !== nothing && username == current.username && return current.homedir
     # Thread-safe user lookup via getpwnam_r.
     # pwd_storage holds the struct passwd; 256 bytes is a generous upper bound
     # for all supported platforms (Linux x86-64: ~56 bytes, macOS arm64: ~80 bytes).
@@ -792,7 +811,7 @@ function homedir(username::AbstractString)
         ret = ccall(:getpwnam_r, Cint,
                     (Cstring, Ptr{Cvoid}, Ptr{UInt8}, Csize_t, Ptr{Ptr{Cvoid}}),
                     username, pwd_storage, str_buf, Csize_t(buflen), result)
-        if ret == 34  # ERANGE: string buffer too small, retry with more space
+        if ret == Libc.ERANGE  # string buffer too small, retry with more space
             buflen *= 2
         elseif ret == 0 && result[] != C_NULL
             # pw_uid sits at offset 2*sizeof(Ptr) in struct passwd on all supported
@@ -811,25 +830,39 @@ function contractuser(path::Union{String, SubString{String}})::String
     # check against the current user's home first, then the directory owner's
     # home via inode comparison. This handles symlinks transparently.
     # Preserves the original path string after the matched prefix verbatim.
-    home_st = stat(homedir())
+    home_st = try
+        stat(homedir())
+    catch e
+        e isa IOError || rethrow()
+        return path
+    end
     ispath(home_st) || return path
     cache_uid = ccall(:getuid, Cuint, ())
     cache_uname = nothing
     cache_home_st = nothing
-    # Check the full path (home directory itself, no trailing separator)
-    samefile(stat(path), home_st) && return "~"
+
     # Scan for separators; start after the first one to skip the root
     m = findnext(path_separator_re, path, firstindex(path))
-    m === nothing && return path
+    last_sep = m === nothing ? firstindex(path) : nextind(path, last(m))
     while true
-        m = findnext(path_separator_re, path, nextind(path, last(m)))
-        m === nothing && return path
-        prefix = SubString(path, 1, prevind(path, first(m)))
-        st = stat(prefix)
+        m = findnext(path_separator_re, path, last_sep)
+        if m === nothing
+            prefix = path
+            rest = ""
+        else
+            prefix = SubString(path, 1, prevind(path, first(m)))
+            rest = SubString(path, first(m))
+            last_sep = nextind(path, last(m))
+        end
+        st = try
+            stat(prefix)
+        catch e
+            e isa IOError || rethrow()
+            return path
+        end
         ispath(st) || return path
-        rest = SubString(path, first(m))
         if samefile(st, home_st)
-            return "~" * rest
+            return isempty(rest) ? "~" : "~" * rest
         end
         uid = st.uid
         if uid != cache_uid
@@ -838,15 +871,17 @@ function contractuser(path::Union{String, SubString{String}})::String
             cache_uname = pd !== nothing && !isempty(pd.username) ? pd.username : nothing
             if cache_uname !== nothing
                 pw_home = homedir(cache_uname)
-                cache_home_st = pw_home !== nothing ? stat(pw_home) : nothing
+                cache_home_st = pw_home !== nothing ? (try stat(pw_home) catch e; e isa IOError || rethrow(); nothing; end) : nothing
             else
                 cache_home_st = nothing
             end
         end
         if cache_home_st !== nothing && ispath(cache_home_st) && samefile(st, cache_home_st)
-            return "~$(cache_uname)" * rest
+            return isempty(rest) ? "~$(cache_uname)" : "~$(cache_uname)" * rest
         end
+        m === nothing && break
     end
+    return path
 end
 
 end # if Sys.iswindows()

@@ -145,6 +145,9 @@ elseif Sys.iswindows()
             ""
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
+        # an empty clipboard, or one without text (e.g. an image), reads as "". GetClipboardData's
+        # error for that case differs between Windows versions, so check for the format instead.
+        ccall((:IsClipboardFormatAvailable, "user32"), stdcall, Cint, (Cuint,), 13) == 0 && return cleanup(:success) # CF_UNICODETEXT
         ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0) # allow distinguishing if the clipboard simply didn't have text
         pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint,), 13) # CF_UNICODETEXT
         pdata == C_NULL && return cleanup(:GetClipboardData)
@@ -168,7 +171,7 @@ elseif Sys.iswindows()
 
 else
     has_system_clipboard() = false
-    clipboard(x="") = error("`clipboard` function not implemented for $(Sys.KERNEL)")
+    clipboard(_="") = error("`clipboard` function not implemented for $(Sys.KERNEL)")
 end
 
 

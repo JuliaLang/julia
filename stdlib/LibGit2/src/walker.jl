@@ -26,7 +26,7 @@ function GitRevWalker(repo::GitRepo)
     return GitRevWalker(repo, w_ptr[])
 end
 
-function Base.iterate(w::GitRevWalker, state=nothing)
+function Base.iterate(w::GitRevWalker, _state=nothing)
     ensure_initialized()
     id_ptr = Ref(GitHash())
     err = ccall((:git_revwalk_next, libgit2), Cint,

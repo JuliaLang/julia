@@ -256,6 +256,12 @@ using Random
     end
 end
 
+@testset "mktemp in a missing directory" begin
+    mktempdir() do d
+        @test_throws Union{Base.IOError,SystemError} mktemp(joinpath(d, "missing"))
+    end
+end
+
 @testset "tempname with parent" begin
     t = tempname()
     @test dirname(t) == tempdir()
@@ -395,6 +401,21 @@ end
         @test length(TEMP_CLEANUP) == n′′
         @test TEMP_CLEANUP_MAX[] == n
     end
+end
+
+@testset "mktemp/dir cleanup at exit" begin
+    # Only Windows needs a GC before deleting, to close files that are still open.
+    # Count explicit collections in a fresh process: other collections can happen anytime.
+    script = """
+        const collections = Ref(0)
+        GC.gc(full::Bool=true) = (collections[] += 1; nothing)
+        path, io = mktemp()
+        close(io)
+        Base.Filesystem.temp_cleanup_purge_all()
+        print(ispath(path), " ", collections[])
+        """
+    @test read(`$(Base.julia_cmd()) --startup-file=no -e $script`, String) ==
+          "false $(Int(Sys.iswindows()))"
 end
 
 no_error_logging(f::Function) =
@@ -2046,6 +2067,16 @@ end
             out = joinpath(q, "link", "..", "out")
             @test cp(q, out) == out
             @test isfile(joinpath(dir, "elsewhere", "out", "f"))
+        end
+        if Sys.islinux()
+            # a source that exists but cannot be resolved (#64807)
+            p = Pipe()
+            Base.link_pipe!(p)
+            close(p.in)
+            out = joinpath(dir, "frompipe")
+            @test cp("/proc/self/fd/$(reinterpret(Cint, Base._fd(p.out)))", out; follow_symlinks=true) == out
+            @test isfile(out)
+            close(p)
         end
     end
 end

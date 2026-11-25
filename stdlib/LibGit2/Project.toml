@@ -9,7 +9,6 @@ julia_version = "1.14"
 LibGit2_jll = "e37daf67-58a4-590a-8e99-b0245dd2ffc5"
 NetworkOptions = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
-SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 
 [extras]
 Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"

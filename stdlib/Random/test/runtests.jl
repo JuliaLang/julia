@@ -13,7 +13,7 @@ using .Main.OffsetArrays
 
 using Random.DSFMT
 
-using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL, MT_CACHE_F, MT_CACHE_I
+using Random: default_rng, Sampler, SamplerRangeFast, SamplerRangeInt, SamplerRangeNDL
 using Random: jump_128, jump_192, jump_128!, jump_192!, SeedHasher
 
 import SHA
@@ -122,7 +122,7 @@ for T in [UInt32, UInt64, UInt128, Int128]
     @test typeof(r) == Matrix{BigInt}
     guardseed() do
         Random.seed!(0)
-        r = rand(s)
+        local r = rand(s)
         Random.seed!(0)
         @test rand(s) == r
     end
@@ -221,14 +221,14 @@ end
     mt = MersenneTwister(rand(UInt128))
     A128 = UInt128[]
     @test length(rand!(mt, A128)) == 0
-    for (i, n) in enumerate([1, 3, 5, 6, 10, 11, 30])
+    for n in [1, 3, 5, 6, 10, 11, 30]
         resize!(A128, n)
         rand!(mt, A128)
         @test length(A128) == n
         test_uniform(A128)
     end
 
-    for (i, T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
+    for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32]
         A = Vector{T}(undef, 16)
         B = Vector{T}(undef, 31)
         rand!(mt, A)
@@ -273,7 +273,7 @@ let mt = MersenneTwister(0)
 end
 
 # make sure reading 128-bit ints from RandomDevice works
-let a = [rand(RandomDevice(), UInt128) for i=1:10]
+let a = [rand(RandomDevice(), UInt128) for _=1:10]
     @test reduce(|, a)>>>64 != 0
 end
 
@@ -419,6 +419,8 @@ for rng in ([], [MersenneTwister(0)], [RandomDevice()], [Xoshiro(0)], [SeedHashe
     @test size(z2) == (2, 3)
     z3 = bitrand(rng..., b2, u3)        ::BitArray{2}
     @test size(z3) == (b2, u3)
+    @test size(bitrand(rng..., (2, 3))::BitArray{2}) == (2, 3)
+    @test size(randn(rng..., (2, 3))::Matrix{Float64}) == (2, 3)
     z4 = rand!(rng..., BitVector(undef, 5))     ::BitArray{1}
     @test size(z4) == (5,)
     z5 = rand!(rng..., BitMatrix(undef, 2, 3))  ::BitArray{2}
@@ -466,7 +468,7 @@ end
             counts = hist(rand(rng, T, 2000), 4)
             @test minimum(counts) > 300 # should fail with proba < 1e-26
             # scalar version
-            counts = hist([rand(rng, T) for i in 1:2000], 4)
+            counts = hist([rand(rng, T) for _ in 1:2000], 4)
             @test minimum(counts) > 300
         end
     end
@@ -593,7 +595,7 @@ end
     # test PRNG jump
 
     function randjumpvec(m, steps, len) # old version of randjump
-        mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
+        local mts = accumulate(Future.randjump, fill(steps, len-1); init=m)
         pushfirst!(mts, m)
         mts
     end
@@ -601,7 +603,7 @@ end
     mts = randjumpvec(mta, 25000, size)
     @test length(mts) == 4
 
-    for x in (rand(mts[k], Float64) for j=1:step, k=1:size)
+    for x in (rand(mts[k], Float64) for _=1:step, k=1:size)
         @test rand(mtb, Float64) == x
     end
 
@@ -622,7 +624,7 @@ end
         @test s == r == t && s !== r
         @test hash(s) == hash(r)
         skip, len = rand(0:2000, 2)
-        for j=1:skip
+        for _=1:skip
             rand(r)
             @test r != s
             @test hash(r) != hash(s)
@@ -706,6 +708,7 @@ let b = ['0':'9';'A':'Z';'a':'z']
     for rng = [[], [MersenneTwister(0)]]
         @test length(randstring(rng...)) == 8
         @test length(randstring(rng..., 20)) == 20
+        @test length(randstring(rng..., 'a':'c', Int8(5))) == 5
         @test issubset(randstring(rng...), b)
         for c = ['a':'z', "qwèrtï", Set(codeunits("gcat"))],
                 len = [8, 20]
@@ -764,7 +767,7 @@ end
         push!(seeds, rand(UInt64, rand(1:4)))
     end
     for seed=seeds
-        m = RNG(seed)
+        local m = RNG(seed)
         a = [rand(m) for _=1:100]
         Random.seed!(m, seed)
         @test a == [rand(m) for _=1:100]
@@ -812,7 +815,7 @@ end
     end
     for S in (identity, SamplerRangeInt, SamplerRangeFast, SamplerRangeNDL)
         if T === Int32 && RNG isa MersenneTwister
-            @test minimum([rand(RNG, T(1):T(7^7)) for i = 1:100000]) > 0
+            @test minimum([rand(RNG, T(1):T(7^7)) for _ = 1:100000]) > 0
         end
 
         (S == SamplerRangeNDL || S == identity) && sizeof(T) > 8 && continue
@@ -908,6 +911,23 @@ end
     @test shuffle!(a) === a
     a = rand(Int, 1)
     @test shuffle(a) == a
+    @test sort(shuffle(Xoshiro(1), Base.OneTo(5))) == 1:5
+    # long vectors need wider indices
+    @test sort(shuffle(Xoshiro(1), collect(1:70000))) == 1:70000
+end
+
+@testset "bulk Float16 and Float32 from Xoshiro" begin
+    for T in (Float16, Float32)
+        A = rand!(Xoshiro(1), zeros(T, 1000))
+        @test all(x -> 0 <= x < 1, A)
+        @test length(unique(A)) > 100
+    end
+end
+
+@testset "default RNG arguments" begin
+    @test TaskLocalRNG(nothing) === TaskLocalRNG()
+    S = Int[]
+    @test randsubseq!(S, 1:10, 1.0) === S == 1:10
 end
 
 struct ZeroWords <: AbstractRNG end
@@ -995,12 +1015,10 @@ end
     @test rand!(GLOBAL_RNG, vA, I1) === vA
     rand!(xo, vB, I1)
     @test A == B
-    for T in (Float16, Float32)
-        B = fill!(B, 1.0)
-        @test rand!(GLOBAL_RNG, A, I2) === A == rand!(xo, B, I2) === B
-        B = fill!(B, 1.0)
-        @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
-    end
+    B = fill!(B, 1.0)
+    @test rand!(GLOBAL_RNG, A, I2) === A == rand!(xo, B, I2) === B
+    B = fill!(B, 1.0)
+    @test rand!(GLOBAL_RNG, A, I1) === A == rand!(xo, B, I1) === B
     for T in Base.BitInteger_types
         x = Random.SamplerType{T}()
         B = fill!(B, 1.0)
@@ -1086,7 +1104,7 @@ end
 
         # rebuilding the state has to replay many refills of the caches
         for (nf1, ni, nf2) in ((5000, 0, 0), (0, 1000, 0), (5000, 3, 0), (1, 700, 4000), (3000, 1, 3000))
-            m = MersenneTwister(42)
+            local m = MersenneTwister(42)
             foreach(_ -> rand(m), 1:nf1)
             foreach(_ -> rand(m, Int64), 1:ni)
             foreach(_ -> rand(m), 1:nf2)
@@ -1130,17 +1148,17 @@ end
     y = rand!(rng, x, s)
     @test y === x
     @test 0 <= x < 1
-    s = Random.Sampler(MersenneTwister, Random.CloseOpen12(BigFloat))
-    y = rand!(rng, x, s)
+    s12 = Random.Sampler(MersenneTwister, Random.CloseOpen12(BigFloat))
+    y = rand!(rng, x, s12)
     @test y === x
     @test 1 <= x < 2
 
     old_prec = precision(BigFloat)
     setprecision(100) do
-        x = rand(s) # should use precision of s
+        local x = rand(s12) # should use precision of s12
         @test precision(x) == old_prec
         x = BigFloat()
-        @test_throws ArgumentError rand!(rng, x, s) # incompatible precision
+        @test_throws ArgumentError rand!(rng, x, s12) # incompatible precision
     end
     s = setprecision(100) do
         Random.Sampler(MersenneTwister, Random.CloseOpen01(BigFloat))
@@ -1230,24 +1248,25 @@ guardseed() do
     end
 end
 
-@testset "TaskLocalRNG: stream collision smoke test" begin
-    # spawn a trinary tree of tasks:
-    # - spawn three recursive child tasks in each
-    # - generate a random UInt64 in each before, after and between
-    # - collect and count all the generated random values
-    # these should all be distinct across all tasks
-    function gen(d)
-        r = rand(UInt64)
-        vals = [r]
-        if d ≥ 0
-            append!(vals, gent(d - 1))
-            isodd(r) && append!(vals, gent(d - 1))
-            push!(vals, rand(UInt64))
-            iseven(r) && append!(vals, gent(d - 1))
-        end
+# spawn a trinary tree of tasks:
+# - spawn three recursive child tasks in each
+# - generate a random UInt64 in each before, after and between
+# - collect and count all the generated random values
+# these should all be distinct across all tasks
+function gen(d)
+    r = rand(UInt64)
+    vals = [r]
+    if d ≥ 0
+        append!(vals, gent(d - 1))
+        isodd(r) && append!(vals, gent(d - 1))
         push!(vals, rand(UInt64))
+        iseven(r) && append!(vals, gent(d - 1))
     end
-    gent(d) = fetch(@async gen(d))
+    push!(vals, rand(UInt64))
+end
+gent(d) = fetch(@async gen(d))
+
+@testset "TaskLocalRNG: stream collision smoke test" begin
     seeds = rand(RandomDevice(), UInt64, 5)
     for seed in seeds
         Random.seed!(seed)

@@ -513,6 +513,9 @@ variables defined inside modules.
 
 In general, `a.b` calls `getproperty(a, :b)` (see [`getproperty`](@ref Base.getproperty)).
 
+The dot also denotes [broadcasting](@ref man-vectorized). For example, `f.(xs)`
+broadcasts `f` over `xs`, and `xs .+ ys` broadcasts `+` over `xs` and `ys`.
+
 # Examples
 ```jldoctest
 julia> z = 1 + 2im; z.im
@@ -702,11 +705,13 @@ A multi-line comment begins with `#=` and ends with `=#`, and may be nested.
 kw"#=", kw"=#"
 
 """
-    ;
+    `
 
-Semicolons are used as statement separators and mark the beginning of keyword arguments in function declarations or calls.
+Surround a command with backticks, as in ``` `echo hello` ```, to construct a
+[`Cmd`](@ref) object. Pass the object to [`run`](@ref) to execute the command.
+See [Running External Programs](@ref Running-External-Programs).
 """
-kw";"
+kw"`"
 
 """
     Expr(head::Symbol, args...)
@@ -2350,7 +2355,7 @@ Abstract supertype for all integers (e.g. [`Signed`](@ref), [`Unsigned`](@ref), 
 See also [`isinteger`](@ref), [`trunc`](@ref), [`div`](@ref).
 
 # Examples
-```
+```jldoctest
 julia> 42 isa Integer
 true
 
@@ -2379,7 +2384,7 @@ Built-in unsigned integers are printed in hexadecimal, with prefix `0x`,
 and can be entered in the same way.
 
 # Examples
-```
+```jldoctest
 julia> typemax(UInt8)
 0xff
 

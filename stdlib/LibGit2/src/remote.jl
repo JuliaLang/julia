@@ -340,6 +340,12 @@ The keyword arguments are:
 function push(rmt::GitRemote, refspecs::Vector{<:AbstractString};
               force::Bool = false, options::PushOptions = PushOptions())
     ensure_initialized()
+    if force
+        # a refspec with a leading `+` updates the remote reference even if the update is
+        # not a fast-forward; without `refspecs`, the configured push refspecs are used
+        refspecs = [startswith(refspec, '+') ? refspec : "+" * refspec
+                    for refspec in (isempty(refspecs) ? push_refspecs(rmt) : refspecs)]
+    end
     @check ccall((:git_remote_push, libgit2), Cint,
                  (Ptr{Cvoid}, Ptr{StrArrayStruct}, Ptr{PushOptions}),
                  rmt, isempty(refspecs) ? C_NULL : refspecs, Ref(options))

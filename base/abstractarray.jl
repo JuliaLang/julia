@@ -624,27 +624,6 @@ function isstored(A::AbstractArray{<:Any,N}, I::Vararg{Integer,N}) where {N}
     return true
 end
 
-# used to compute "end" for last index
-function trailingsize(A, n)
-    s = 1
-    for i=n:ndims(A)
-        s *= size(A,i)
-    end
-    return s
-end
-function trailingsize(inds::Indices, n)
-    s = 1
-    for i=n:length(inds)
-        s *= length(inds[i])
-    end
-    return s
-end
-# This version is type-stable even if inds is heterogeneous
-function trailingsize(inds::Indices)
-    @inline
-    prod(map(length, inds))
-end
-
 ## Bounds checking ##
 
 # The overall hierarchy is
@@ -1080,11 +1059,11 @@ julia> y
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
     isempty(src) && return dest
+    src′ = unalias(dest, src)
     if dest isa BitArray
         # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
+        return _copyto_bitarray!(dest, src′)
     end
-    src′ = unalias(dest, src)
     copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
 
@@ -1752,10 +1731,15 @@ vcat(V::AbstractVector{T}...) where {T} = typed_vcat(T, V...)
 AbstractVecOrTuple{T} = Union{AbstractVector{<:T}, Tuple{Vararg{T}}}
 
 _typed_vcat_similar(V, ::Type{T}, n) where T = similar(first(V), T, n)
-_typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T =
-    _typed_vcat!(_typed_vcat_similar(V, T, sum(map(length, V))), V)
+function _typed_vcat(::Type{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+    n = 0
+    for Vk in V
+        n += Int(length(Vk))::Int
+    end
+    return _typed_vcat!(_typed_vcat_similar(V, T, n), V)
+end
 
-function _typed_vcat!(a::AbstractVector{T}, V::AbstractVecOrTuple{AbstractVector}) where T
+function _typed_vcat!(a::AbstractArray{T}, V::AbstractVecOrTuple{AbstractArray}) where T
     pos = 1
     for Vk in V
         p1 = pos + Int(length(Vk))::Int - 1
@@ -1781,31 +1765,13 @@ hcat(A::AbstractVecOrMat{T}...) where {T} = typed_hcat(T, A...)
 function _typed_hcat(::Type{T}, A::AbstractVecOrTuple{AbstractVecOrMat}) where T
     nrows = size(first(A), 1)
     ncols = 0
-    dense = true
     for Aj in A
         if size(Aj, 1) != nrows
-            throw(DimensionMismatch("number of rows of each array must match (got $(map(x->size(x,1), A)))"))
+            throw(DimensionMismatch("number of rows of each array must match (got $nrows and $(size(Aj, 1)))"))
         end
-        dense &= isa(Aj,Array)
-        nd = ndims(Aj)
-        ncols += (nd==2 ? size(Aj,2) : 1)
+        ncols += size(Aj, 2)
     end
-    B = similar(first(A), T, nrows, ncols)
-    pos = 1
-    if dense
-        for Ak in A
-            n = length(Ak)
-            copyto!(B, pos, Ak, 1, n)
-            pos += n
-        end
-    else
-        for Ak in A
-            p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
-            B[:, pos:p1] = Ak
-            pos = p1+1
-        end
-    end
-    return B
+    return _typed_vcat!(similar(first(A), T, nrows, ncols), A)
 end
 
 vcat(A::AbstractVecOrMat...) = typed_vcat(promote_eltype(A...), A...)
@@ -1906,7 +1872,9 @@ function dims2cat(dims)
     ntuple(in(dims), maximum(dims))
 end
 
-_cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
+# `_cat` and `__cat` are inlined so that a call with few arguments reaches `__cat_offset!`
+# with concrete types: on their own they would be compiled for `Vararg{Any}`
+@inline _cat(dims, X...) = _cat_t(dims, promote_eltypeof(X...), X...)
 
 @inline function _cat_t(dims, ::Type{T}, X...) where {T}
     catdims = dims2cat(dims)
@@ -1922,7 +1890,8 @@ end
 @inline cat_t(::Type{T}, X...; dims) where {T} = _cat_t(dims, T, X...)
 
 # Why isn't this called `__cat!`?
-__cat(A, shape, catdims, X...) = __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
+@inline __cat(A, shape, catdims, X...) =
+    __cat_offset!(A, shape, catdims, ntuple(Returns(0), length(shape)), X...)
 
 function __cat_offset!(A, shape, catdims, offsets, x, X...)
     # splitting the "work" on x from X... may reduce latency (fewer costly specializations)
@@ -2134,7 +2103,7 @@ julia> cat([1 2; 3 4], [pi, pi], fill(10, 2,3,1); dims=2)  # same as hcat
 ```
 
 Construct a block diagonal matrix:
-```
+```jldoctest
 julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
 4×7 Matrix{Bool}:
  1  0  0  0  0  0  0
@@ -2143,7 +2112,7 @@ julia> cat(true, trues(2,2), trues(4)', dims=(1,2))  # block-diagonal
  0  0  0  1  1  1  1
 ```
 
-```
+```jldoctest
 julia> cat(1, [2], [3;;]; dims=Val(2))
 1×3 Matrix{Int64}:
  1  2  3
@@ -2172,7 +2141,7 @@ julia> a * b
 """
 @inline cat(A...; dims) = _cat(dims, A...)
 # `@constprop :aggressive` allows `catdims` to be propagated as constant improving return type inference
-@constprop :aggressive _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
+@constprop :aggressive @inline _cat(catdims, A::AbstractArray{T}...) where {T} = _cat_t(catdims, T, A...)
 
 # The specializations for 1 and 2 inputs are important
 # especially when running with --inline=no, see #11158
@@ -2641,86 +2610,40 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
+    nblocks = Core.checked_dims(dims...)
+    length(as) == nblocks ||
+        throw(ArgumentError("argument count does not match specified shape (expected $nblocks, got $(length(as)))"))
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
     outdims = zeros(Int, N)
-
-    # validate shapes for lowest level of concatenation
-    d = findfirst(>(1), dims)
-    if d !== nothing # all dims are 1
-        if row_first && d < 3
-            d = d == 1 ? 2 : 1
-        end
-        nblocks = length(as) ÷ dims[d]
-        for b ∈ 1:nblocks
-            offset = ((b - 1) * dims[d])
-            startelementi = offset + 1
-            for i ∈ offset .+ (2:dims[d])
-                for dd ∈ 1:N
-                    dd == d && continue
-                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
-                        throw(DimensionMismatch("incompatible shape in element $i"))
-                    end
-                end
-            end
-        end
-    end
-
-    # discover number of rows or columns
-    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
-    for i ∈ 1:dims[d1]
-        outdims[d1] = checked_add(outdims[d1], cat_size(as[i], d1))
-    end
-
-    # adjustment to handle 0-length arrays
-    first_dim_zero = outdims[d1] == 0
-    if first_dim_zero
-        outdims[d1] = dims[d1]
-    end
-
     currentdims = zeros(Int, N)
-    blockcount = 0
-    elementcount = 0
+    closed = N
+    prev = as[1]
     for i ∈ eachindex(as)
-        elementcount = checked_add(elementcount, cat_length(as[i]))
-        currentdims[d1] = checked_add(currentdims[d1], first_dim_zero ? 1 : cat_size(as[i], d1))
-        if currentdims[d1] == outdims[d1]
-            currentdims[d1] = 0
-            for d ∈ (d2, 3:N...)
-                currentdims[d] = checked_add(currentdims[d], cat_size(as[i], d))
-                if outdims[d] == 0 # unfixed dimension
-                    blockcount += 1
-                    if blockcount == dims[d]
-                        outdims[d] = currentdims[d]
-                        currentdims[d] = 0
-                        blockcount = 0
-                    else
-                        break
-                    end
-                else # fixed dimension
-                    if currentdims[d] == outdims[d] # end of dimension
-                        currentdims[d] = 0
-                    elseif currentdims[d] < outdims[d] # dimension in progress
-                        break
-                    else # exceeded dimension
-                        throw(DimensionMismatch("argument $i has too many elements along axis $d"))
-                    end
-                end
+        a = as[i]
+        for k ∈ closed+2:N
+            d = k == 2 ? d2 : k
+            cat_size(a, d) == cat_size(prev, d) ||
+                throw(DimensionMismatch("incompatible shape in element $i"))
+        end
+        prev = a
+        closed = 0
+        n = i
+        for d ∈ (d1, d2, 3:N...)
+            currentdims[d] = checked_add(currentdims[d], cat_size(a, d))
+            n % dims[d] == 0 || break
+            n ÷= dims[d]
+            if n == 1
+                outdims[d] = currentdims[d]
+            elseif currentdims[d] != outdims[d]
+                throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $d"))
             end
-        elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
+            currentdims[d] = 0
+            closed += 1
         end
     end
-    # restore 0-length adjustment
-    if first_dim_zero
-        outdims[d1] = 0
-    end
-
-    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
-    elementcount == outlen ||
-        throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))
@@ -3674,7 +3597,7 @@ they must all have the same [`axes`](@ref), and the answer will too.
 See also [`broadcast`](@ref), which allows mismatched sizes.
 
 # Examples
-```
+```julia-repl
 julia> map(//, [1 2; 3 4], [4 3; 2 1])
 2×2 Matrix{Rational{$Int}}:
  1//4  2//3

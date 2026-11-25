@@ -121,7 +121,61 @@ L6:
   unreachable
 }
 
+; Moving a body must preserve debug locations and uses of values defined in later blocks.
+; CHECK-LABEL: define ptr @moved_body(ptr %p)
+define ptr addrspace(10) @moved_body(ptr addrspace(10) %p) !dbg !4 {
+entry:
+; CHECK: #dbg_value(ptr %p,
+  #dbg_value(ptr addrspace(10) %p, !7, !DIExpression(), !8)
+; CHECK: %a = alloca [2 x ptr]
+  %a = alloca [2 x ptr addrspace(10)]
+; CHECK: %g = getelementptr [2 x ptr], ptr %a, i64 0, i64 1
+  %g = getelementptr [2 x ptr addrspace(10)], ptr %a, i64 0, i64 1
+  store ptr addrspace(10) %p, ptr %g
+  br label %def
+
+use:
+; CHECK: use:
+; CHECK-NOT: addrspacecast
+; CHECK: #dbg_value(ptr %v,
+  %c = addrspacecast ptr addrspace(10) %v to ptr addrspace(11)
+  #dbg_value(ptr addrspace(11) %c, !7, !DIExpression(), !8)
+; CHECK-NOT: addrspacecast
+; CHECK: ret ptr %v
+  %r = addrspacecast ptr addrspace(11) %c to ptr addrspace(10)
+  ret ptr addrspace(10) %r, !dbg !8
+
+def:
+; CHECK: %v = load ptr, ptr %g
+  %v = load ptr addrspace(10), ptr %g
+  br label %use
+}
+
+; Functions with address-taken blocks continue to use the cloning path.
+; CHECK-LABEL: define ptr @address_taken(ptr %p)
+define ptr addrspace(10) @address_taken(ptr addrspace(10) %p) {
+entry:
+; CHECK: indirectbr ptr blockaddress(@address_taken, %dest), [label %dest]
+  indirectbr ptr blockaddress(@address_taken, %dest), [label %dest]
+dest:
+; CHECK: ret ptr %p
+  ret ptr addrspace(10) %p
+}
+
 ; COM: check that function attributes are preserved on declarations too
 declare void @convergent_function() #0
 attributes #0 = { convergent }
 ; CHECK: attributes #0 = { convergent }
+
+!llvm.dbg.cu = !{!0}
+!llvm.module.flags = !{!2, !3}
+!0 = distinct !DICompileUnit(language: DW_LANG_C99, file: !1, producer: "test", isOptimized: false, runtimeVersion: 0, emissionKind: FullDebug)
+!1 = !DIFile(filename: "remove-addrspaces.ll", directory: "/")
+!2 = !{i32 2, !"Dwarf Version", i32 4}
+!3 = !{i32 2, !"Debug Info Version", i32 3}
+!4 = distinct !DISubprogram(name: "moved_body", scope: !1, file: !1, line: 1, type: !5, scopeLine: 1, spFlags: DISPFlagDefinition, unit: !0, retainedNodes: !6)
+!5 = !DISubroutineType(types: !6)
+!6 = !{}
+!7 = !DILocalVariable(name: "p", arg: 1, scope: !4, file: !1, line: 1, type: !9)
+!8 = !DILocation(line: 1, column: 1, scope: !4)
+!9 = !DIDerivedType(tag: DW_TAG_pointer_type, baseType: null, size: 64)

@@ -1071,6 +1071,18 @@ end
     end
     @test _bitcast_trigger(1) === Ptr{Nothing}(0)
     @test _bitcast_trigger(3) === Ptr{Nothing}(0)
+
+@testset "bitcast float <-> pointer" begin
+    # issue #63218: codegen used to emit inttoptr on a float operand and
+    # abort in the LLVM verifier; coerce through an integer like the runtime does
+    ptrbits = 8 * sizeof(Ptr{Cvoid})
+    FT = ptrbits == 64 ? Float64 : Float32
+    UIT = ptrbits == 64 ? UInt64 : UInt32
+    x = Core.bitcast(FT, one(UIT))
+    p = Core.bitcast(Core.LLVMPtr{UInt8,1}, x)
+    y = Core.bitcast(FT, p)
+    @test y === x
+end
 end
 
 # Test unsafe_store! on union values with inline_roots (split representation)
@@ -1097,6 +1109,33 @@ end
         return r1.a, r1.b, r2.a, r2.b
     end
     @test _pointerset_trigger(0) == (Int[1,2,3], 42, Int[1,2,3], 42)
+end
+
+# unsafe_load of inline immutables that hold only references, so no bits
+# remain beside the inline_roots
+@testset "pointerref of all-pointer structs" begin
+    struct PointerrefOneRef
+        x::Any
+    end
+    struct PointerrefThreeRefs
+        a::String
+        b::Any
+        c::Vector{Int}
+    end
+    struct PointerrefRefAndBits
+        a::Vector{Int}
+        b::Int
+    end
+    _pointerref_load(v, i) = GC.@preserve v unsafe_load(pointer(v), i)
+    for v in ([PointerrefOneRef("a"), PointerrefOneRef([1])],
+              [PointerrefThreeRefs("a", 1, [1]), PointerrefThreeRefs("b", :c, [2, 3])],
+              [("a",), ("b",)],
+              [PointerrefRefAndBits([1], 2), PointerrefRefAndBits([3], 4)])
+        @test Base.allocatedinline(eltype(v))
+        for i in eachindex(v)
+            @test _pointerref_load(v, i) === v[i]
+        end
+    end
 end
 
 # https://github.com/JuliaLang/julia/issues/61436

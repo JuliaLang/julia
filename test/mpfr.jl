@@ -430,6 +430,7 @@ end
     @test convert(Bool, BigFloat(0.0)) == false
     @test convert(Bool, BigFloat(1.0)) == true
     @test_throws InexactError convert(Bool, BigFloat(0.1))
+    @test Rational{BigInt}(BigFloat(3//2 + 1//big(2)^301, precision=1000)) == 3//2 + 1//big(2)^301
 
     @test signbit(Float64(BigFloat(NaN))) == 0
     @test signbit(Float64(-BigFloat(NaN))) == 1
@@ -484,6 +485,18 @@ end
 
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
+
+@testset "negative base to a non-integer power" begin
+    @test_throws DomainError BigFloat(-8)^BigFloat(1/3)
+    @test_throws DomainError BigFloat(-8)^(1/3)
+    @test_throws DomainError BigFloat(-1)^0.5
+    @test BigFloat(-8)^BigFloat(2) == 64
+    @test isnan(BigFloat(NaN)^BigFloat(0.5))
+    @test isnan(BigFloat(-8)^BigFloat(NaN))
+    @test_throws DomainError BigFloat(-Inf)^BigFloat(0.5)
+    @test_throws DomainError BigFloat(-Inf)^BigFloat(-0.5)
+    @test BigFloat(-Inf)^BigFloat(3) == -Inf
+end
 
 @testset "setprecision" begin
     old_precision = precision(BigFloat)
@@ -569,6 +582,11 @@ end
 
     @test !isequal(BigFloat(0.0),BigFloat(-0.0))
     @test isequal(z, BigFloat(NaN))
+    v = BigFloat(big(2)^300 + 1, precision=301)
+    @test v == (big(2)^300 + 1)//1
+    @test v != big(2)^300//1
+    @test BigFloat((big(2)^300 + 1)//2, precision=301) == (big(2)^300 + 1)//2
+    @test !isequal(BigFloat(3//2 + 1//big(2)^301, precision=1000), 3//2)
 
     # total ordering
     @test isless(big(-0.0), big(0.0))
@@ -815,6 +833,10 @@ end
         @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
         @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
     end
+    setprecision(2) do
+        @test ldexp(BigFloat(1), Int128(5)) == 32
+    end
+    @test ldexp(BigFloat(0), big(2)^70) == 0
 end
 @testset "ceil / floor / trunc" begin
     x = BigFloat(12.042)

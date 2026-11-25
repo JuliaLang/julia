@@ -192,6 +192,8 @@ $(DEPOT_PATH[1])/logs/repl_history.jl
 ### [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@id JULIA_MAX_NUM_PRECOMPILE_FILES)
 
 Sets the maximum number of different instances of a single package that are to be stored in the precompile cache (default = 10).
+Cache files that a running session has loaded are not removed, so a package can have more files
+than this while those sessions run.
 
 ### [`JULIA_OBJCACHE`](@id JULIA_OBJCACHE)
 
@@ -333,17 +335,6 @@ Specify hosts whose identity should or should not be verified for specific trans
 Specify the file or directory containing the certificate authority roots. See [`NetworkOptions.ca_roots`](https://github.com/JuliaLang/NetworkOptions.jl#ca_roots)
 
 ## External applications
-
-### [`JULIA_SHELL`](@id JULIA_SHELL)
-
-The absolute path of the shell with which Julia should execute external commands
-(via `Base.repl_cmd()`). Defaults to the environment variable `$SHELL`, and
-falls back to `/bin/sh` if `$SHELL` is unset.
-
-!!! note
-
-    On Windows, this environment variable is ignored, and external commands are
-    executed directly.
 
 ### [`JULIA_EDITOR`](@id JULIA_EDITOR)
 

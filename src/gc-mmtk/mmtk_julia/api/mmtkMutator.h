@@ -1,6 +1,9 @@
 #ifndef MMTK_JULIA_MMTK_MUTATOR_H
 #define MMTK_JULIA_MMTK_MUTATOR_H
 
+#include <stddef.h>
+#include <stdint.h>
+
 // mmtk_julia_types.h refers to the types in this file.
 // So if this file is updated, make sure you regenerate Rust types for mmtk_julia_types.h.
 

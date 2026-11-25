@@ -357,17 +357,32 @@ static bool removeAddrspaces(Module &M, AddrspaceRemapFunction ASRemapper)
             VMap[&*I] = &*DestI++;
         }
 
-        SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
-        CloneFunctionInto(
-                NF,
-                F,
-                VMap,
-                CloneFunctionChangeType::GlobalChanges,
-                Returns,
-                "",
-                nullptr,
-                &TypeRemapper,
-                &Materializer);
+        if (llvm::any_of(*F, [](BasicBlock &BB) { return BB.hasAddressTaken(); })) {
+            SmallVector<ReturnInst *, 8> Returns; // Ignore returns cloned.
+            CloneFunctionInto(
+                    NF,
+                    F,
+                    VMap,
+                    CloneFunctionChangeType::GlobalChanges,
+                    Returns,
+                    "",
+                    nullptr,
+                    &TypeRemapper,
+                    &Materializer);
+        } else {
+            // Moved locals are absent from VMap and keep their identity.
+            const RemapFlags Flags = RF_ReuseAndMutateDistinctMDs | RF_IgnoreMissingLocals;
+            // A DILocation only refers to scopes, which are distinct and mutated in place.
+            MetadataPredicate IdentityMD = [](const Metadata *MD) { return isa<DILocation>(MD); };
+            CloneFunctionAttributesInto(NF, F, VMap, true, &TypeRemapper, &Materializer);
+            CloneFunctionMetadataInto(*NF, *F, VMap, Flags, &TypeRemapper, &Materializer);
+            NF->splice(NF->begin(), F);
+            ValueMapper Mapper(VMap, Flags, &TypeRemapper, &Materializer, &IdentityMD);
+            for (Instruction &I : instructions(NF)) {
+                Mapper.remapInstruction(I);
+                Mapper.remapDbgRecordRange(&M, I.getDbgRecordRange());
+            }
+        }
 
         // Update function attributes that contain types
         AttributeList Attrs = F->getAttributes();

@@ -1079,7 +1079,7 @@ function setindex!(A::Array{T}, X::Array{T}, I::AbstractUnitRange{Int}) where T
     lI = length(I)
     setindex_shape_check(X, lI)
     if lI > 0
-        unsafe_copyto!(A, first(I), X, 1, lI)
+        @inbounds copyto!(A, first(I), X, 1, lI)
     end
     return A
 end
@@ -2403,32 +2403,18 @@ vcat() = Vector{Any}()
 hcat() = Vector{Any}()
 
 function hcat(V::Vector{T}...) where T
+    isconcretetype(T) && return @inline _typed_hcat(T, V)
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height
             throw(DimensionMismatch("vectors must have same lengths"))
         end
     end
-    return [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+    return [ v[i]::T for i=1:height, v in V ]
 end
-hcat(A::Vector...) = cat(A...; dims=Val(2)) # more special than SparseArrays's hcat
+hcat(A::Vector...) = _typed_hcat(promote_eltype(A...), A) # more special than SparseArrays's hcat
 
-function vcat(arrays::Vector{T}...) where T
-    n = 0
-    for a in arrays
-        n += length(a)
-    end
-    arr = Vector{T}(undef, n)
-    nd = 1
-    for a in arrays
-        na = length(a)
-        @assert nd + na <= 1 + length(arr) "Concurrent modification of arrays?"
-        unsafe_copyto!(arr, nd, a, 1, na)
-        nd += na
-    end
-    return arr
-end
-vcat(A::Vector...) = cat(A...; dims=Val(1)) # more special than SparseArrays's vcat
+vcat(A::Vector...) = @inline _typed_vcat(promote_eltype(A...), A) # more special than SparseArrays's vcat
 
 _cat(n::Integer, x::Integer...) = reshape([x...], (ntuple(Returns(1), n-1)..., length(x)))
 

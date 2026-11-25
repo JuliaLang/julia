@@ -3,6 +3,8 @@
 #ifndef JL_ARRAYLIST_H
 #define JL_ARRAYLIST_H
 
+#include "dtypes.h"
+
 #define AL_N_INLINE 29
 
 #define SMALL_AL_N_INLINE 5

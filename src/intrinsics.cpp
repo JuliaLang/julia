@@ -655,11 +655,16 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         } else if (vxt->isIntegerTy(1) && llvmt->isIntegerTy(8)) {
             vx = ctx.builder.CreateZExt(vx, llvmt);
         } else if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-            vx = ctx.builder.CreatePtrToInt(vx, llvmt);
+            Type *int_t = llvmt->isIntegerTy() ? llvmt : Type::getIntNTy(ctx.builder.getContext(), nbits);
+            vx = ctx.builder.CreatePtrToInt(vx, int_t);
+            if (vx->getType() != llvmt)
+                vx = emit_bitcast(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // CreatePtrToInt may undo an IntToPtr
                 setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+            if (!vxt->isIntegerTy())
+                vx = emit_bitcast(ctx, vx, Type::getIntNTy(ctx.builder.getContext(), nbits));
             vx = emit_inttoptr(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // emit_inttoptr may undo an PtrToInt
@@ -893,7 +898,8 @@ static jl_cgval_t emit_pointerref(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
             Value *thePtr = emit_unbox(ctx, PointerType::getUnqual(ptrty->getContext()), e);
             thePtr = ctx.builder.CreateInBoundsGEP(ptrty, thePtr, im1);
             auto load = typed_load(ctx, thePtr, nullptr, ety, ctx.alias().data, nullptr, isboxed, AtomicOrdering::NotAtomic, false, align_nb);
-            setName(ctx.emission_context, load.V, "pointerref");
+            if (load.V) // null when ety has no bits beside its inline_roots
+                setName(ctx.emission_context, load.V, "pointerref");
             return load;
         }
         else {
@@ -1376,10 +1382,10 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             }
             Value *tindex;
             if (!x_tindex && x.constant) {
-                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), t1));
+                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), t1));
             }
             if (!y_tindex && y.constant) {
-                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), t1));
+                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), t1));
             }
             if (x_tindex && y_tindex) {
                 tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
@@ -1403,7 +1409,6 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     ctx.builder.SetInsertPoint(compute);
                     tindex = compute_tindex_unboxed(ctx, x, t1);
                 }
-                tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
                 compute = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(post);
                 ret->addIncoming(tindex, compute);
@@ -1888,7 +1893,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         }
         if (cy) {
             APInt iy = cy->getValue();
-            return iy.isNonNegative() ? x : ctx.builder.CreateSub(ConstantInt::get(t, 0), x);
+            return iy.isNonNegative() ? x : ctx.builder.CreateNeg(x);
         }
         Value *tmp = ctx.builder.CreateAShr(y, ConstantInt::get(t, cast<IntegerType>(t)->getBitWidth() - 1));
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);

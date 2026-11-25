@@ -87,14 +87,16 @@ following meanings:
   behavior. Note that this currently implies `noyield` as well, since
   yielding modifies the state of the current task, though this may be split
   in the future.
-- `inaccessiblememonly::UInt8`:
-  * `ALWAYS_TRUE`: this method does not access or modify externally accessible mutable memory.
-    This state corresponds to LLVM's `inaccessiblememonly` function attribute.
-  * `ALWAYS_FALSE`: this method may access or modify externally accessible mutable memory.
-  * `INACCESSIBLEMEM_OR_ARGMEMONLY`: this method does not access or modify externally accessible mutable memory,
-    except that it may access or modify mutable memory pointed to by its call arguments.
+- `inaccessiblememonly::UInt8`: which mutable memory this method can reach, either by accessing it
+  or by obtaining a reference to it (e.g. loading a constant binding or a literal in the code, while
+  the result of concrete evaluation keeps the taint of the call). Unlike the LLVM attributes of the
+  same names, a reference that is obtained but not accessed still counts, since the refinement below
+  only looks at argument types.
+  * `ALWAYS_TRUE`: this method reaches no externally accessible mutable memory.
+  * `ALWAYS_FALSE`: this method may reach externally accessible mutable memory.
+  * `INACCESSIBLEMEM_OR_ARGMEMONLY`: this method reaches no externally accessible mutable memory,
+    except for mutable memory pointed to by its call arguments.
     This may later be refined to `ALWAYS_TRUE` in a case when call arguments are known to be immutable.
-    This state corresponds to LLVM's `inaccessiblemem_or_argmemonly` function attribute.
 - `noub::UInt8`:
   * `ALWAYS_TRUE`: this method is guaranteed to not execute any undefined behavior (for any input).
   * `ALWAYS_FALSE`: this method may execute undefined behavior.

@@ -174,6 +174,8 @@ JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native
 
 JL_DLLEXPORT void jl_free_native_fallback(void *native_code) UNAVAILABLE
 
+JL_DLLEXPORT int jl_native_code_is_empty_fallback(void *native_code) UNAVAILABLE
+
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_struct_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE

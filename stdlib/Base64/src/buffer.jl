@@ -15,7 +15,7 @@ end
 Base.empty!(buffer::Buffer) = buffer.size = 0
 Base.getindex(buffer::Buffer, i::Integer) = buffer.data[buffer.offset + i]
 Base.setindex!(buffer::Buffer, v::UInt8, i::Integer) = buffer.data[buffer.offset + i] = v
-Base.firstindex(buffer::Buffer) = 1
+Base.firstindex(::Buffer) = 1
 Base.lastindex(buffer::Buffer) = buffer.size
 Base.pointer(buffer::Buffer) = pointer(buffer.data) + buffer.offset
 capacity(buffer::Buffer) = length(buffer.data) - buffer.offset
@@ -31,7 +31,7 @@ function read_to_buffer(io::IO, buffer::Buffer)
     copyto!(buffer.data, 1, buffer.data, offset + 1, buffer.size)
     buffer.offset = 0
     if !eof(io)
-        n = min(bytesavailable(io), capacity(buffer) - buffer.size)
+        n = min(max(1, bytesavailable(io)), capacity(buffer) - buffer.size)
         unsafe_read(io, pointer(buffer) + buffer.size, n)
         buffer.size += n
     end

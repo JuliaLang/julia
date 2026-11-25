@@ -1,5 +1,0 @@
-framework module Julia [extern_c] [system] {
-  umbrella header "Julia.h"
-  export *
-  module * { export * }
-}

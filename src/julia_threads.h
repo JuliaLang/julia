@@ -310,6 +310,8 @@ typedef struct _jl_tls_states_t {
 #ifdef JL_LIBRARY_EXPORTS
     uv_mutex_t sleep_lock;
     uv_cond_t wake_signal;
+    // nonzero while jl_task_get_next takes, waits on or holds sleep_lock
+    _Atomic(int8_t) sleep_parked;
 #endif
 } jl_tls_states_t;
 
@@ -562,6 +564,8 @@ typedef struct JL_GC_TRACKED_TYPE _jl_task_t {
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
     size_t world_age;
+    // saved floating-point control state
+    uint64_t fpctrl;
     // quick lookup for current ptls
     jl_ptls_t ptls; // == jl_all_tls_states[tid]
 #ifdef USE_TRACY

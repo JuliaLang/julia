@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, FileWatching
-using Base: uv_error, Experimental
+using FileWatching, Test
+using Base: Experimental, uv_error
 using Base.Filesystem: StatStruct
 
 @test isempty(Test.detect_closure_boxes(FileWatching))
@@ -19,6 +19,11 @@ using Base.Filesystem: StatStruct
 n = 20
 intvls = [2, .2, .1, .005, .00001]
 pipe_fds = fill((Base.INVALID_OS_HANDLE, Base.INVALID_OS_HANDLE), n)
+# Earlier tests on this worker may leave fds open on purpose, such as locks on loaded cache files.
+fd_base = Sys.iswindows() ? 0 : let fd = ccall(:dup, Cint, (Cint,), 0)
+    ccall(:close, Cint, (Cint,), fd)
+    max(Int(fd), 0)
+end
 
 for i in 1:n
     if Sys.iswindows() || i > n ÷ 2
@@ -27,7 +32,7 @@ for i in 1:n
         uv_error("pipe", ccall(:uv_pipe, Cint, (Ptr{NTuple{2, Base.OS_HANDLE}}, Cint, Cint), Ref(pipe_fds, i), 0, 0))
     end
     Ctype = Sys.iswindows() ? Ptr{Cvoid} : Cint
-    FDmax = Sys.iswindows() ? typemax(Int32) : (n + 60 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
+    FDmax = Sys.iswindows() ? typemax(Int32) : (fd_base + 2n + 20 + (isdefined(Main, :Revise) * 30)) # expectations on reasonable values
     fd_in_limits =
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][1])) <= FDmax &&
         0 <= Int(Base.cconvert(Ctype, pipe_fds[i][2])) <= FDmax
@@ -160,6 +165,12 @@ test_12992()
 test2_12992()
 test2_12992()
 test2_12992()
+
+# `stat` gives the result of the latest poll, which the constructor has already done
+let pfw = PollingFileWatcher(@__FILE__, 5.007)
+    @test stat(pfw) == stat(@__FILE__)
+    close(pfw)
+end
 
 #######################################################################
 # This section tests file watchers.                                   #
@@ -362,7 +373,7 @@ function test_monitor_wait_poll()
         end
         (old, new) = wait(pfw)
         close(pfw)
-        @test new.mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
+        @test (new::StatStruct).mtime - old.mtime > 2.5 - 1.5 # mtime may only have second-level accuracy (plus add some hysteresis)
     end
 end
 

@@ -46,34 +46,20 @@ const UnsignedInt = Union{UInt8,UInt16,UInt32,UInt64,UInt128}
 # Note: As far as this code has been tested, most checked_* functions are
 # working fine in LLVM. (Note that division is still handled via `base/int.jl`,
 # which always checks for overflow, and which provides its own sets of
-# workarounds for LLVM codegen bugs.) However, the comments in `base/int.jl`
-# and in issue #4905 are more pessimistic. For the time being, we thus retain
-# the ability to handle codegen bugs in LLVM, until the code here has been
-# tested on more systems and architectures. It also seems that things depend on
-# which compiler that was used to build LLVM (i.e. either gcc or clang).
-
-# These unions are used for most checked functions:
-#     BrokenSignedInt
-#     BrokenUnsignedInt
-# These unions are used for checked_{mul,div,rem}:
+# workarounds for LLVM codegen bugs.) Only multiplication still needs
+# workarounds, for the types in these unions:
 #     BrokenSignedIntMul
 #     BrokenUnsignedIntMul
 
-brokenSignedInt = Union{}
-brokenUnsignedInt = Union{}
 brokenSignedIntMul = Int128
 brokenUnsignedIntMul = UInt128
 if Core.sizeof(Ptr{Cvoid}) == 4
     brokenSignedIntMul = Union{brokenSignedIntMul, Int64}
     brokenUnsignedIntMul = Union{brokenUnsignedIntMul, UInt64}
 end
-const BrokenSignedInt = brokenSignedInt
-const BrokenUnsignedInt = brokenUnsignedInt
 const BrokenSignedIntMul = brokenSignedIntMul
 const BrokenUnsignedIntMul = brokenUnsignedIntMul
 # Use these definitions to test the non-LLVM implementations
-# const BrokenSignedInt = SignedInt
-# const BrokenUnsignedInt = UnsignedInt
 # const BrokenSignedIntMul = SignedInt
 # const BrokenUnsignedIntMul = UnsignedInt
 
@@ -91,19 +77,6 @@ function checked_neg(x::T) where T<:Integer
 end
 throw_overflowerr_negation(x) = (@noinline;
     throw(OverflowError(Base.invokelatest(string, "checked arithmetic: cannot compute -x for x = ", x, "::", typeof(x)))))
-if BrokenSignedInt != Union{}
-function checked_neg(x::BrokenSignedInt)
-    r = -%(x)
-    (x<0) & (r<0) && throw_overflowerr_negation(x)
-    r
-end
-end
-if BrokenUnsignedInt != Union{}
-function checked_neg(x::T) where T<:BrokenUnsignedInt
-    x != 0 && throw_overflowerr_negation(x)
-    T(0)
-end
-end
 
 """
     Base.checked_abs(x::Integer)
@@ -137,22 +110,6 @@ function add_with_overflow end
 add_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_sadd_int(x, y)
 add_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_uadd_int(x, y)
 add_with_overflow(x::Bool, y::Bool) = (x +% y, false)
-
-if BrokenSignedInt != Union{}
-function add_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x +% y
-    # x and y have the same sign, and the result has a different sign
-    f = (x<0) == (y<0) != (r<0)
-    r, f
-end
-end
-if BrokenUnsignedInt != Union{}
-function add_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
-    # x + y > typemax(T)
-    # Note: ~y == -y-1
-    x +% y, x > ~y
-end
-end
 
 throw_overflowerr_binaryop(op, x, y) = (@noinline;
     throw(OverflowError(LazyString(x, " ", op, " ", y, " overflowed for type ", typeof(x)))))
@@ -213,21 +170,6 @@ function sub_with_overflow end
 sub_with_overflow(x::T, y::T) where {T<:SignedInt}   = checked_ssub_int(x, y)
 sub_with_overflow(x::T, y::T) where {T<:UnsignedInt} = checked_usub_int(x, y)
 sub_with_overflow(x::Bool, y::Bool) = (x-y, false)
-
-if BrokenSignedInt != Union{}
-function sub_with_overflow(x::T, y::T) where T<:BrokenSignedInt
-    r = x -% y
-    # x and y have different signs, and the result has a different sign than x
-    f = (x<0) != (y<0) == (r<0)
-    r, f
-end
-end
-if BrokenUnsignedInt != Union{}
-function sub_with_overflow(x::T, y::T) where T<:BrokenUnsignedInt
-    # x - y < 0
-    x -% y, x < y
-end
-end
 
 """
     Base.checked_sub(x::Integer, y::Integer)

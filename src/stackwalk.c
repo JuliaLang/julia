@@ -512,6 +512,16 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     }
     return SymGetModuleBase64(hProcess, dwAddr);
 }
+
+// StackWalkEx (dbghelp 6.3, Windows 8.1) is not declared by the mingw-w64 headers
+typedef BOOL (WINAPI *jl_StackWalkEx_t)(DWORD, HANDLE, HANDLE, LPSTACKFRAME_EX, PVOID,
+                                        PREAD_PROCESS_MEMORY_ROUTINE64,
+                                        PFUNCTION_TABLE_ACCESS_ROUTINE64,
+                                        PGET_MODULE_BASE_ROUTINE64,
+                                        PTRANSLATE_ADDRESS_ROUTINE64, DWORD);
+#define JL_SYM_STKWALK_DEFAULT 0x00000000
+#define JL_SYM_STKWALK_FORCE_FRAMEPTR 0x00000001
+static jl_StackWalkEx_t pStackWalkEx;
 #endif
 
 // Might be called from unmanaged thread.
@@ -655,6 +665,9 @@ void jl_init_stackwalk(void)
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_IGNORE_CVREC);
     if (!SymInitialize(GetCurrentProcess(), "", 1))
         jl_safe_printf("WARNING: failed to initialize stack walk info\n");
+#if !defined(_CPU_X86_64_)
+    pStackWalkEx = (jl_StackWalkEx_t)GetProcAddress(GetModuleHandleW(L"dbghelp.dll"), "StackWalkEx");
+#endif
     LdrRegisterDllNotification(0, dll_notification_callback, NULL, &dll_notification_cookie);
 }
 
@@ -713,6 +726,41 @@ STATIC_INLINE int profile_abort_window_close(_Atomic(int) *abort_ptr) JL_NOTSAFE
     return 1;
 }
 
+#if !defined(_CPU_X86_64_)
+// Without FPO data, which dbghelp has for none of our code, StackWalk64 follows the
+// EBP chain but also searches the stack for return addresses. That search sometimes
+// reports a stack slot as a return address and drops real frames (#55900), even
+// though all Julia code keeps frame pointers. So we ask StackWalkEx to follow the
+// frame pointer, and only redo a step with the default heuristics when that gives an
+// implausible frame, as with foreign code that uses EBP as a general register (the
+// libuv in libjulia-internal does). The caller holds jl_in_stackwalk.
+static BOOL jl_stackwalk_x86(bt_cursor_t *cursor, int force_frameptr) JL_NOTSAFEPOINT
+{
+    HANDLE hProcess = GetCurrentProcess();
+    if (!pStackWalkEx)
+        return StackWalk64(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread,
+                           (LPSTACKFRAME64)&cursor->stackframe, &cursor->context, NULL,
+                           JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    if (force_frameptr) {
+        STACKFRAME_EX frame = cursor->stackframe;
+        CONTEXT context = cursor->context;
+        if (pStackWalkEx(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread, &cursor->stackframe,
+                         &cursor->context, NULL, JuliaFunctionTableAccess64,
+                         JuliaGetModuleBase64, NULL, JL_SYM_STKWALK_FORCE_FRAMEPTR)) {
+            DWORD64 pc = cursor->stackframe.AddrPC.Offset;
+            if (pc != 0 && cursor->stackframe.AddrStack.Offset > frame.AddrStack.Offset &&
+                JuliaGetModuleBase64(hProcess, pc - 1) != 0)
+                return TRUE;
+        }
+        cursor->stackframe = frame;
+        cursor->context = context;
+    }
+    return pStackWalkEx(IMAGE_FILE_MACHINE_I386, hProcess, hMainThread, &cursor->stackframe,
+                        &cursor->context, NULL, JuliaFunctionTableAccess64,
+                        JuliaGetModuleBase64, NULL, JL_SYM_STKWALK_DEFAULT);
+}
+#endif
+
 static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_signal_handler)
 {
     int result;
@@ -726,14 +774,14 @@ static int jl_unw_init(bt_cursor_t *cursor, bt_context_t *Context, int from_sign
     cursor->stackframe.AddrPC.Mode = AddrModeFlat;
     cursor->stackframe.AddrStack.Mode = AddrModeFlat;
     cursor->stackframe.AddrFrame.Mode = AddrModeFlat;
+    cursor->stackframe.StackFrameSize = sizeof(cursor->stackframe);
+    cursor->stackframe.InlineFrameContext = INLINE_FRAME_CONTEXT_IGNORE;
     cursor->context = *Context;
     _Atomic(int) *abort_ptr;
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-            &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64,
-            JuliaGetModuleBase64, NULL);
+    result = jl_stackwalk_x86(cursor, 0);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!profile_abort_window_close(abort_ptr))
         return 0;
@@ -776,8 +824,8 @@ static int jl_unw_step(bt_cursor_t *cursor, int from_signal_handler, uintptr_t *
     if (!profile_abort_window_open(&abort_ptr))
         return 0;
     uv_mutex_lock(&jl_in_stackwalk);
-    BOOL result = StackWalk64(IMAGE_FILE_MACHINE_I386, GetCurrentProcess(), hMainThread,
-        &cursor->stackframe, &cursor->context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
+    // A sample can land in a prologue, where EBP is still the caller's.
+    BOOL result = jl_stackwalk_x86(cursor, !from_signal_handler);
     uv_mutex_unlock(&jl_in_stackwalk);
     if (!profile_abort_window_close(abort_ptr))
         return 0;
@@ -1126,13 +1174,25 @@ static uintptr_t rotate_left(uintptr_t p, unsigned n) JL_NOTSAFEPOINT
 static NOINLINE uintptr_t probe_mangled_sp(uintptr_t *sp) JL_NOTSAFEPOINT
 {
     jmp_buf env;
+#if defined(_CPU_X86_)
+    // _setjmp saves the stack pointer as it is when the call returns. On i686
+    // its argument is on the stack until the caller pops it, so read the stack
+    // pointer before that.
+    int (*setjmp_fn)(struct __jmp_buf_tag*) = _setjmp;
+    asm volatile ("pushl %1\n\t"
+                  "call *%2\n\t"
+                  "movl %%esp, %0\n\t"
+                  "addl $4, %%esp"
+                  : "=r" (*sp)
+                  : "r" (env), "r" (setjmp_fn)
+                  : "eax", "ecx", "edx", "memory", "cc");
+#else
     _setjmp(env);
 #if defined(_CPU_AARCH64_) || defined(_CPU_ARM_)
     asm volatile ("mov %0, sp" : "=r" (*sp));
-#elif defined(_CPU_X86_64_)
-    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
 #else
-    asm volatile ("movl %%esp, %0" : "=r" (*sp));
+    asm volatile ("movq %%rsp, %0" : "=r" (*sp));
+#endif
 #endif
     return ((uintptr_t*)&env)[LONG_JMP_SP_ENV_SLOT];
 }

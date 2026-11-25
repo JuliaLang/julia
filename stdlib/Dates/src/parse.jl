@@ -7,7 +7,7 @@ _directives(::Type{DateFormat{S,T}}) where {S,T} = T.parameters
 character_codes(df::Type{DateFormat{S,T}}) where {S,T} = character_codes(_directives(df))
 function character_codes(directives::Core.SimpleVector)
     letters = sizehint!(Char[], length(directives))
-    for (i, directive) in enumerate(directives)
+    for directive in directives
         if directive <: DatePart
             letter = first(directive.parameters)
             push!(letters, letter)
@@ -216,7 +216,7 @@ end
     end
 end
 
-@inline function tryparsenext_word(str::AbstractString, i, len, locale, maxchars=0)
+@inline function tryparsenext_word(str::AbstractString, i, len, _locale, maxchars=0)
     word_start, word_end = i, 0
     max_pos = maxchars <= 0 ? len : min(len, nextind(str, i, maxchars-1))
     @inbounds while i <= max_pos
@@ -235,7 +235,7 @@ end
     end
 end
 
-function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
+function Base.parse(::Type{DateTime}, s::AbstractString, ::typeof(ISODateTimeFormat))
     i, end_pos = firstindex(s), lastindex(s)
     i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
 
@@ -330,7 +330,7 @@ function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_forma
     pos > len && throw(ArgumentError("Cannot parse an empty string as a Date or Time"))
     val = tryparsenext_internal(T, str, pos, len, df, true)
     @assert val !== nothing
-    values, endpos = val
+    values, _endpos = val
     return T(values...)::T
 end
 
@@ -339,7 +339,7 @@ function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_fo
     pos > len && return nothing
     res = tryparsenext_internal(T, str, pos, len, df, false)
     res === nothing && return nothing
-    values, endpos = res
+    values, _endpos = res
     if validargs(T, values...) === nothing
         # TODO: validargs gets called twice, since it's called again in the T constructor
         return T(values...)::T

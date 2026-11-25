@@ -470,7 +470,7 @@ end
 # a \n b    ==>  (block a b)
 #
 # flisp: parse-block
-function parse_block(ps::ParseState, down=parse_eq, mark=position(ps))
+function parse_block(ps::ParseState, down::F=parse_eq, mark=position(ps)) where {F}
     parse_block_inner(ps::ParseState, down)
     emit(ps, mark, K"block")
 end

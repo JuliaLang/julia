@@ -234,6 +234,20 @@ let
     @test any(edge -> edge === binding, ci.edges)
 end
 
+let
+    interp = Compiler.NativeInterpreter(Base.get_world_counter())
+    mi = Base.method_instance(LimitedSrcTombstoneProof62338.entry, ())
+    frame = Compiler.InferenceState(
+        Compiler.InferenceResult(mi, Compiler.typeinf_lattice(interp)), Compiler.CACHE_MODE_LOCAL, interp)
+    out = mktemp() do path, io
+        redirect_stdout(() -> Compiler.print_callstack(frame), io)
+        close(io)
+        read(path, String)
+    end
+    @test startswith(out, "=================== Callstack: ==================\n*[0] MethodInstance entry() from entry()")
+    @test endswith(out, "================= End callstack ==================\n")
+end
+
 # Local constant inference keeps its dependency proof separate from the executable target.
 module LocalProofConstpropCache
     const SINK = Ref{Any}()
@@ -1591,6 +1605,24 @@ struct ShiftTri{A,B,C} end
 shift_tri(::Type{ShiftTri{A,B,C}}, n::Int) where {A,B,C} = n == 0 ? Val(A) : shift_tri(ShiftTri{B,C,C}, n - 1)
 @test only(Base.return_types(n -> shift_tri(ShiftTri{Int8,Int16,Vector{Int}}, n), (Int,))) ==
     Union{Val{Int8}, Val{Int16}, Val{Vector{Int}}}
+
+abstract type RootSelfSuper{T} end
+abstract type SelfSuper{T} <: RootSelfSuper{SelfSuper{T}} end
+grow_self_super(::Type{SelfSuper{T}}) where {T} = grow_self_super(SelfSuper{supertype(SelfSuper{T})})
+@test only(Base.return_types(() -> grow_self_super(SelfSuper{Int}), ())) === Union{}
+
+grow_vector_super(::Type{Vector{T}}) where {T} = grow_vector_super(Vector{supertype(Vector{T})})
+@test only(Base.return_types(() -> grow_vector_super(Vector{Int}), ())) === Union{}
+
+walk_super_chain(::Type{AbstractArray{T,N}}, n::Int) where {T,N} = Val(N)
+walk_super_chain(::Type{T}, n::Int) where {T} = n == 0 ? Val(:fallback) : walk_super_chain(supertype(T), n - 1)
+@test only(Base.return_types(n -> walk_super_chain(UnitRange{Int}, n), (Int,))) == Union{Val{1}, Val{:fallback}}
+
+abstract type RootCycleSuper{T} end
+abstract type MidCycleSuper{T} <: RootCycleSuper{Int} end
+struct LeafCycleSuper{T} <: MidCycleSuper{RootCycleSuper{T}} end
+@test Compiler.limit_type_size(Tuple{RootCycleSuper{Int}}, Tuple{LeafCycleSuper{Int}}, Tuple{LeafCycleSuper{Int}}, 100, 100) ==
+    Tuple{RootCycleSuper{Int}}
 
 @testset "type inference error #19322" begin
     Y_19322 = reshape(round.(Int, abs.(randn(5*1000))) .+ 1, 1000, 5)
@@ -6871,6 +6903,8 @@ fapplicable(; x) = x
 @test only(Base.return_types(gapplicable, (Int,))) === Val{true}
 @test only(Base.return_types(()) do; applicable(); end) === Union{}
 @test only(Base.return_types((Any,)) do x; Val(applicable(x...)); end) == Val
+# an argument type that no object has forms no signature
+@test only(Base.return_types((Some{Union{}},)) do x; applicable(sin, x); end) === Union{}
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, x...)); end) == Val # could be improved to Val{true}
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, 3, x...)); end) === Val{true}
 @test only(Base.return_types((Int,)) do x; Val(applicable(+, 1, x)); end) === Val{true}
@@ -7123,6 +7157,11 @@ indirect31485(arr) = f31485(arr)
 f31485(arr::AbstractArray{T, N}) where {T, N} = indirect31485(view(arr, 1, ntuple(i -> :, Val(N-1))...))
 @test @inferred(f31485(zeros(3,3,3,3,3),)) == fill(0.0)
 
+props_walk_names(x::NamedTuple) = x
+props_walk_names(x::String) = (;)
+walk_names(x) = map(walk_names, props_walk_names(x))
+@test only(Base.return_types(walk_names, (@NamedTuple{d::String},))) === @NamedTuple{d::@NamedTuple{}}
+
 # override const-prop' return type with the concrete-eval result
 # if concrete-eval returns non-inlineable constant
 Base.@assume_effects :foldable function continue_const_prop(i, j)
@@ -7170,7 +7209,7 @@ end |> only == Val{true}
 
 # https://github.com/JuliaLang/julia/issues/51310
 @test code_typed() do
-    b{c} = d...
+    b = UnionAll(TypeVar(:c), d...)
 end |> only |> first isa Core.CodeInfo
 
 abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)
@@ -7899,6 +7938,13 @@ g55916(x) = f55916(x)
 end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
+end === Union{}
+# a `TypeVar` call with a wrong number of arguments throws a `MethodError`
+@test Base.infer_return_type() do
+    TypeVar()
+end === Union{}
+@test Base.infer_return_type((Symbol,Any,Any,Any)) do name, lb, ub, x
+    TypeVar(name, lb, ub, x)
 end === Union{}
 
 @test Base.infer_return_type((Nothing,)) do x
@@ -8641,6 +8687,8 @@ end == Type
     Compiler.return_type(Tuple)
 end == Type
 
+@test Compiler._return_type(Compiler.NativeInterpreter(), Tuple{typeof(Core.current_scope)}) === Any
+
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")
 @test Base.infer_return_type((typeof(task_returner),)) do f
@@ -8723,5 +8771,12 @@ const SPLAT_SVEC_NAMES = ntuple(i -> Symbol(:a, i), 33)
 @inline splat_svec_outer(names, vals::Tuple) = splat_svec_inner(names, vals...)
 splat_svec_caller(vals) = splat_svec_outer(SPLAT_SVEC_NAMES, vals)
 @test Base.infer_return_type(splat_svec_caller, (NTuple{33,Int},)) === NamedTuple{SPLAT_SVEC_NAMES, NTuple{33,Int}}
+
+# a reference at a non-constant index of a constant `MemoryRef` is not that constant
+const memoryref_at_const = Core.memoryrefnew(Memory{Int}(undef, 4))
+memoryref_at_offset(i::Int) = Core.memoryrefoffset(Core.memoryrefnew(memoryref_at_const, i, true))
+@test Compiler.builtin_tfunction(Compiler.NativeInterpreter(), Core.memoryrefnew,
+    Any[Core.Const(memoryref_at_const), Int, Core.Const(true)], nothing) === MemoryRef{Int}
+@test memoryref_at_offset(3) == 3
 
 end # module inference

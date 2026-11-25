@@ -183,11 +183,19 @@ end
 # Complete method collection implementation
 function collect_all_method_defs(newmodules, mod_array)
     allmeths = Any[]
+    worklist = newmodules === nothing ? nothing : newmodules::Vector{Any}
 
-    function method_visitor(method)
+    function method_visitor(@nospecialize(method))
         method = method::Method
-        if newmodules !== nothing
-            method.module in newmodules || return true
+        if worklist !== nothing
+            found = false
+            for mod in worklist
+                if mod === method.module
+                    found = true
+                    break
+                end
+            end
+            found || return true
         end
         if isdefined(method, :external_mt)
             return true  # Continue iteration
@@ -488,8 +496,6 @@ function add_entrypoint(types::Type)
 end
 
 function add_ccallable_entrypoints!()
-    # Collect all methods with ccallable annotations
-    ccallable_methods = Any[]
     visit(Core.methodtable) do method
         method = method::Method
         if isdefined(method, :ccallable)

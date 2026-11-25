@@ -80,15 +80,9 @@ if Sys.iswindows()
     end
 end
 
-# Simulate what the REPL shell mode does: parse the line, dispatch
-# simple commands through cmd_gen, and call repl_cmd.
-function shell_mode_run(line::String; stdout=nothing)
-    cmd_ex = Base.shell_parse(line)[1]
-    if Meta.isexpr(cmd_ex, :tuple)
-        cmd_ex = :(Base.cmd_gen($cmd_ex))
-    end
-    eval(:(Base.repl_cmd($cmd_ex, $(something(stdout, devnull)))))
-end
+# Run a line as REPL shell mode does.
+shell_mode_run(line::String; stdout=nothing) =
+    eval(Base.shell_mode_expr(line, something(stdout, devnull)))
 
 #### Examples used in the manual ####
 
@@ -391,6 +385,87 @@ end
     @test ret == ""
 end
 
+@testset "/dev/null as a redirect target in a command literal" begin
+    # A literal `/dev/null` is `devnull` on every system, without a portability warning
+    @test `a >/dev/null` == pipeline(`a`, stdout=devnull)
+    @test `a >>/dev/null 2>>/dev/null` == pipeline(pipeline(`a`, stderr=devnull), stdout=devnull)
+    @test `a <"/dev/null"` == pipeline(`a`, stdin=devnull)
+    @test success(@test_logs run(`$echocmd hello >/dev/null`))
+    @test read(`$catcmd </dev/null`, String) == ""
+    # An interpolated path names a file, as with `pipeline` (which warns about it on Unix)
+    let path = "/dev/null"
+        @test @test_logs(match_mode=:any, `a >$path`).handle == Base.FileRedirect(path, false)
+    end
+end
+
+@testset "copying a stream with `N>&M`" begin
+    # As in a shell, the redirects of a command are applied in the order they are written.
+    oe = `$shcmd -c 'echo out; echo err >&2'`
+    function observe(cmd)
+        mktempdir() do dir
+            log = joinpath(dir, "log")
+            err = IOBuffer()
+            out = read(pipeline(cmd(log), stderr=err), String)
+            return out, String(take!(err)), isfile(log) ? read(log, String) : nothing
+        end
+    end
+    @test observe(log -> `$oe >$log 2>&1`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>&1 >$log`) == ("err\n", "", "out\n")
+    @test observe(log -> `$oe 2>&1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>& 1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>&1 >&2`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe >&2 2>&1`) == ("", "out\nerr\n", nothing)
+    @test observe(log -> `$oe 1>&2 2>/dev/null`) == ("", "out\n", nothing)
+    @test observe(log -> `$oe 2<&1`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe >>$log 2>&1`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>&1 | $catcmd`) == ("out\nerr\n", "", nothing)
+    @test observe(log -> `$oe 2>&1 | $catcmd >$log`) == ("", "", "out\nerr\n")
+    @test observe(log -> `$oe 2>$log >&2 | $catcmd`) == ("", "", "out\nerr\n")
+    @test observe(log -> pipeline(`$oe 2>&1`, stdout=log)) == ("", "", "out\nerr\n")
+    # A target given for both stdout and stderr is opened once and shared.
+    @test observe(log -> pipeline(oe, stdout=log, stderr=log)) == ("", "", "out\nerr\n")
+    @test observe(log -> pipeline(oe, stdout=log, stderr=log, append=true)) == ("", "", "out\nerr\n")
+    @test pipeline(`a`, stdout="log", stderr="log") == `a >log 2>&1`
+    @test repr(pipeline(`a`, stdout="log", stderr="log", append=true)) == "`a >> log 2>&1`"
+    let out = Base.PipeEndpoint(), log = @async read(out, String)
+        @test success(run(pipeline(oe, stdout=out, stderr=out)))
+        @test fetch(log) == "out\nerr\n"
+    end
+    # A copy of stdin is useful when stdin can be written too, like a file opened read-write
+    # or, as inetd does it, a socket.
+    reply = `$shcmd -c 'read x; echo "got $x"; echo "err $x" >&2'`
+    let path = tempname()
+        write(path, "abc\ndef\n")
+        open(f -> run(pipeline(`$reply 1<&0 2>$devnull`, stdin=f)), path, "r+")
+        @test read(path, String) == "abc\ngot abc\n"
+        rm(path)
+    end
+    if !Sys.iswindows() # a socket can't be a child's stdio on Windows
+        server = listen(ip"127.0.0.1", 0)
+        client = connect(ip"127.0.0.1", getsockname(server)[2])
+        conn = accept(server)
+        p = run(pipeline(`$reply >&0 2>&1`, stdin=conn), wait=false)
+        close(conn)
+        write(client, "hello\n")
+        closewrite(client)
+        @test read(client, String) == "got hello\nerr hello\n"
+        @test success(p)
+        close(client)
+        close(server)
+    end
+    @test read(pipeline(`$catcmd <&0`, stdin=IOBuffer("input\n")), String) == "input\n"
+    @test read(pipeline(`$echocmd piped`, `$catcmd <&0`), String) == "piped\n"
+    sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    @test_throws "`>&` must be followed by a file descriptor number" sp("cat >&log")
+    @test_throws "`>&` must be followed by a file descriptor number" sp("cat >&-")
+    @test_throws "`<&` must be followed by a file descriptor number" sp("cat <&\$x")
+    @test_throws "unsupported fd 3 in redirection" sp("cat >&3")
+    @test_throws "unsupported fd 3 in redirection" sp("cat 3>&1")
+    @test_throws "must be quoted" sp("cat >>&2")
+    @test_throws "redirect operator without filename" sp("cat 2>&1>log")
+    @test_throws "stderr is redirected more than once" sp("cat 2>&1 2>err")
+end
+
 # Test that redirecting an IOStream does not crash the process
 let fname = tempname(), p
     cmd = """
@@ -560,6 +635,13 @@ end
 
 @test Base.shell_split("\"\\\\\"") == ["\\"]
 
+# Line continuation after non-ASCII text in a shifted substring
+@test Base.shell_split("    é\\\n x") == ["éx"]
+let x = "X"
+    @test `ls é $x \
+     --flag`.exec == ["ls", "é", "X", "--flag"]
+end
+
 # Tilde expansion in backtick commands
 @test samepath(only(`~`.exec), homedir())
 @test samepath(only(`~/foo`.exec), joinpath(homedir(), "foo"))
@@ -604,6 +686,168 @@ withenv("OLDPWD" => nothing) do
             shell_mode_run("cd ~")
             @test samefile(pwd(), homedir())
         end
+    end
+end
+
+# Brace expansion in backtick commands
+@test `{a,b,c}` == Cmd(["a", "b", "c"])
+@test `echo {a,b,c}` == Cmd(["echo", "a", "b", "c"])
+@test `{a,b}.txt` == Cmd(["a.txt", "b.txt"])
+@test `echo {a,b}.txt` == Cmd(["echo", "a.txt", "b.txt"])
+@test `{a,b}.{x,y}` == Cmd(["a.x", "a.y", "b.x", "b.y"])
+@test `echo pre{a,b}suf` == Cmd(["echo", "preasuf", "prebsuf"])
+@test `{a,b} {c,d}` == Cmd(["a", "b", "c", "d"])
+@test `{a,,c}` == Cmd(["a", "", "c"])  # empty alternative
+let x = "foo"
+    @test `{$x,bar}` == Cmd(["foo", "bar"])
+    @test `{$x,bar}.txt` == Cmd(["foo.txt", "bar.txt"])
+end
+let xs = "a b"
+    @test `{$xs,c}` == Cmd(["a b", "c"])  # interpolated value is not word-split
+end
+@test `{"hello world",bye}` == Cmd(["hello world", "bye"])  # quoted space in braces ok
+@test_throws "unquoted space inside braces" eval(:(`{a b,c}`))  # unquoted space is an error
+@test `{a\,b,c}` == Cmd(["a,b", "c"])  # escaped comma
+@test `'{a,b}'` == Cmd(["{a,b}"])       # braces in single quotes: no expansion
+@test `"{a,b}"` == Cmd(["{a,b}"])       # braces in double quotes: no expansion
+@test `{a}` == Cmd(["{a}"])             # single item: no expansion (literal)
+@test `{}` == Cmd(["{}"])               # empty braces: no expansion (literal)
+@test `x{y}z` == Cmd(["x{y}z"])        # no comma: literal
+@test `{a,{b,c},d}` == Cmd(["a", "b", "c", "d"])  # nested braces
+@test `a{x,b{c,d}}e` == Cmd(["axe", "abce", "abde"])
+@test `{a,{1..3}}` == Cmd(["a", "1", "2", "3"])
+@test `{a,{b}c}` == Cmd(["a", "{b}c"])  # inner braces without a comma are literal
+@test `{a,{b}` == Cmd(["{a,{b}"])       # no matching `}`: literal
+# the text inside braces follows the same rules as the rest of the command
+@test `{a,$(")")}x` == Cmd(["ax", ")x"])
+@test @cmd("{a,b\\\nc}") == Cmd(["a", "bc"])  # line continuation
+@test `{~,x}` == Cmd([homedir(), "x"])
+let v = ["x", "y"]
+    @test `{a,$v}` == Cmd(["a", "x", "y"])  # an interpolated collection is expanded
+    @test `{a,pre$v}` == Cmd(["a", "prex", "prey"])
+end
+@test_throws "unterminated double quote" Base.shell_parse("{a,\"b\$}")
+@test_throws "unquoted `|` inside braces" eval(:(`{a,b|c}`))
+@test_throws "unquoted `>` inside braces" eval(:(`{a,b>c}`))
+
+# Globbing calls the `glob` function visible where the command appears. This one shows the
+# pattern it is given.
+module GlobTest
+    glob(pattern) = ["<" * pattern * ">"]
+    v = "x*"
+    vs = ["a", "b"]
+    p = "x*/y?"
+end
+module EmptyGlobTest
+    glob(pattern) = String[]
+end
+module NoGlobTest end
+let g(ex) = Core.eval(GlobTest, ex).exec
+    @test g(:(`ls *.txt`)) == ["ls", "<*.txt>"]
+    @test g(:(`ls a/b?`)) == ["ls", "<a/b?>"]
+    @test g(:(`ls [ab]c`)) == ["ls", "<[ab]c>"]
+    @test g(:(`ls *.txt x`)) == ["ls", "<*.txt>", "x"]
+    @test g(:(`ls /tmp/*`)) == ["ls", "</tmp/*>"]
+    @test g(:(`ls ~/*`)) == ["ls", "<" * Base.glob_escape(homedir()) * "/*>"]
+    # quoted, escaped and interpolated text is escaped with bracket expressions
+    @test g(:(`ls "a*"*`)) == ["ls", "<a[*]*>"]
+    @test g(:(`ls 'q?['*`)) == ["ls", "<q[?][[]*>"]
+    @test g(:(`ls a\*b*`)) == ["ls", "<a[*]b*>"]
+    @test g(:(`ls $v*`)) == ["ls", "<x[*]*>"]
+    @test g(:(`ls "$v"/*`)) == ["ls", "<x[*]/*>"]
+    @test g(:(`ls $vs*`)) == ["ls", "<a*>", "<b*>"]
+    # literal text is escaped in every component
+    @test g(:(`ls a*/'b*'/c?`)) == ["ls", "<a*/b[*]/c?>"]
+    @test g(:(`ls /tmp/'x*'/*`)) == ["ls", "</tmp/x[*]/*>"]
+    @test g(:(`ls $p/*`)) == ["ls", "<x[*]/y[?]/*>"]
+    @test g(:(`ls {'a*',b}/*`)) == ["ls", "<a[*]/*>", "<b/*>"]
+    @test g(:(@cmd("ls \"a\\b\"*"))) == ["ls", Sys.iswindows() ? "<a\\b*>" : "<a[\\]b*>"]
+    # brace expansion comes first
+    @test g(:(`ls {a,b}*`)) == ["ls", "<a*>", "<b*>"]
+    @test g(:(`ls {a,$v}/*`)) == ["ls", "<a/*>", "<x[*]/*>"]
+    @test g(:(`ls {*}`)) == ["ls", "<{*}>"]  # not a brace expansion
+    # globs inside braces: each argument is globbed on its own, in order, if it has a glob
+    # character, and is used as it is otherwise
+    @test g(:(`ls {a*,b?}`)) == ["ls", "<a*>", "<b?>"]
+    @test g(:(`ls {b*,a}`)) == ["ls", "<b*>", "a"]
+    @test g(:(`ls {a,a*}`)) == ["ls", "a", "<a*>"]
+    @test g(:(`ls {a,b*}.c`)) == ["ls", "a.c", "<b*.c>"]
+    @test g(:(`ls {*.txt,sub/*}`)) == ["ls", "<*.txt>", "<sub/*>"]
+    @test g(:(`ls {a,{b,c*}}`)) == ["ls", "a", "b", "<c*>"]
+    @test g(:(`ls {a,{1..2}*}`)) == ["ls", "a", "<1*>", "<2*>"]
+    @test g(:(`ls {'a*',b*}`)) == ["ls", "a*", "<b*>"]
+    @test g(:(`ls {$v,y*}`)) == ["ls", "x*", "<y*>"]
+    @test g(:(`ls {$v*,y}`)) == ["ls", "<x[*]*>", "y"]
+    @test g(:(`ls $vs/{c,d*}`)) == ["ls", "a/c", "<a/d*>", "b/c", "<b/d*>"]
+    @test g(:(`ls {a,[bc]}`)) == ["ls", "a", "<[bc]>"]
+    # a `]` is allowed in a glob word, and is literal in an argument without a glob
+    @test g(:(`ls {a],b*}`)) == ["ls", "a]", "<b*>"]
+    @test_throws "must be quoted" g(:(`ls {a],b}`))
+    @test_throws "brace expansion in a redirection target" g(:(`cat > {a,b*}`))
+    # without `*`, `?` or `[`, a word is not a glob
+    @test g(:(`ls '*' "?" \[`)) == ["ls", "*", "?", "["]
+    @test g(:(`ls $(String[])`)) == ["ls"]
+    @test_throws "must be quoted" g(:(`ls a]`))
+    @test_throws "glob in a redirection target" g(:(`cat > *.txt`))
+    @test Core.eval(GlobTest, :(`ls *.txt | cat`)) == pipeline(`ls '<*.txt>'`, `cat`)
+end
+@test_throws "no files match the glob `*.txt`" Core.eval(EmptyGlobTest, :(`ls *.txt`))
+@test_throws "needs a `glob` function" Core.eval(NoGlobTest, :(`ls *.txt`))
+@test_throws "no files match the glob `b*`" Core.eval(EmptyGlobTest, :(`ls {a,b*}`))
+@test_throws "needs a `glob` function" Core.eval(NoGlobTest, :(`ls {a,b*}`))
+# shell_split and a partial parse, for REPL completion, do not glob
+@test Base.shell_split("ls *.txt") == ["ls", "*.txt"]
+@test Base.shell_parse("ls *.t"; partial=true)[1] == :((("ls",), ("*.t",)))
+# brace expansion works through shell mode path
+let echostr = Base.shell_escape(echocmd)
+    mktempdir() do dir
+        f = joinpath(dir, "out.txt")
+        fstr = Base.shell_escape(f)
+        shell_mode_run("$echostr {a,b,c} > $fstr")
+        @test read(f, String) == "a b c\n"
+    end
+end
+
+# Brace range expansion
+@test `{1..5}` == Cmd(["1", "2", "3", "4", "5"])
+@test `{a..e}` == Cmd(["a", "b", "c", "d", "e"])
+@test `{1..10..3}` == Cmd(["1", "4", "7", "10"])      # step
+@test `{a..z..5}` == Cmd(["a", "f", "k", "p", "u", "z"])
+@test `{10..1}` == Cmd(["10", "9", "8", "7", "6", "5", "4", "3", "2", "1"])
+@test `{z..a..5}` == Cmd(["z", "u", "p", "k", "f", "a"])
+@test `{01..05}` == Cmd(["01", "02", "03", "04", "05"])  # zero-padding
+@test `{001..3}` == Cmd(["001", "002", "003"])
+@test `{-2..2}` == Cmd(["-2", "-1", "0", "1", "2"])
+@test `{-03..3}` == Cmd(["-03", "-02", "-01", "000", "001", "002", "003"])
+@test `{-3..03}` == Cmd(["-3", "-2", "-1", "00", "01", "02", "03"])
+@test `{03..-3}` == Cmd(["03", "02", "01", "00", "-1", "-2", "-3"])
+@test `{-03..-1}` == Cmd(["-03", "-02", "-01"])
+@test `{5..1..2}` == Cmd(["5", "3", "1"])
+@test `{3..3}` == Cmd(["3"])
+@test `{1..10..-3}` == Cmd(["1", "4", "7", "10"])  # step sign is ignored, as in bash
+@test `{e..a..-2}` == Cmd(["e", "c", "a"])
+@test `file{1..3}.txt` == Cmd(["file1.txt", "file2.txt", "file3.txt"])
+@test `{1..3}.{a..c}` == Cmd(["1.a", "1.b", "1.c", "2.a", "2.b", "2.c",
+                               "3.a", "3.b", "3.c"])
+@test `{a,b}.{1..3}` == Cmd(["a.1", "a.2", "a.3", "b.1", "b.2", "b.3"])
+@test_throws "invalid brace range expansion" eval(:(`{a..1}`))
+@test_throws "invalid brace range expansion" eval(:(`{a..Z}`))  # cross-case
+@test_throws "invalid brace range expansion" eval(:(`{A..z}`))
+@test `{A..E}` == Cmd(["A", "B", "C", "D", "E"])
+@test `{-2..+3}` == Cmd(["-2", "-1", "+0", "+1", "+2", "+3"])  # plus sign
+@test `{+1..+3}` == Cmd(["+1", "+2", "+3"])
+@test `{+3..-1}` == Cmd(["+3", "+2", "+1", "+0", "-1"])
+@test `{-1..+1}` == Cmd(["-1", "+0", "+1"])
+@test `{-02..+3}` == Cmd(["-02", "-01", "+00", "+01", "+02", "+03"])  # plus with padding
+@test `{-2..+03}` == Cmd(["-02", "-01", "+00", "+01", "+02", "+03"])
+@test `{-2..+4..2}` == Cmd(["-2", "+0", "+2", "+4"])  # plus with step
+# range expansion works through shell mode path
+let echostr = Base.shell_escape(echocmd)
+    mktempdir() do dir
+        f = joinpath(dir, "out.txt")
+        fstr = Base.shell_escape(f)
+        shell_mode_run("$echostr {1..3} > $fstr")
+        @test read(f, String) == "1 2 3\n"
     end
 end
 
@@ -679,9 +923,14 @@ mktempdir() do dir
     run(`$echocmd '2' > $outfile`)
     @test read(outfile, String) == "2\n"
 
+    # Empty quoted word directly before > is still an argument
+    @test (`$echocmd ''>$devnull`).cmd == `$echocmd ''`
+    @test (`$echocmd ""> $devnull`).cmd == `$echocmd ""`
+
     # simple commands still return Cmd (not wrapped in pipeline)
     @test `$echocmd hello` isa Cmd
     @test Meta.isexpr(Base.shell_parse("echo hello")[1], :tuple)
+    @test_throws "redirect operator without filename" Base.shell_parse("echo a > | cat")
 
     # Shell mode end-to-end tests
     # Use shell-escaped commands and paths so that shell_parse handles
@@ -701,9 +950,8 @@ mktempdir() do dir
     # simple command in shell mode still works
     shell_mode_run("$echostr simple > $outstr")
     @test read(outfile, String) == "simple\n"
-    # shell mode preserves a Cmd's env and dir. The redirect is inside the command
-    # because `cmd > file` is a CmdRedirect, which repl_cmd runs without the shell
-    # wrapping under test; `global` is needed as shell_mode_run interpolates via eval.
+    # shell mode preserves a Cmd's env and dir. The redirect is inside the command so that
+    # the command is a plain `Cmd`; `global` is needed as shell_mode_run interpolates via eval.
     if !Sys.iswindows()
         global envcmd = Cmd(`$shcmd -c "echo \$HOWLONG > $outstr"`, env=("HOWLONG" => "ever!",))
         shell_mode_run("\$envcmd")
@@ -712,6 +960,157 @@ mktempdir() do dir
         shell_mode_run("\$dircmd")
         @test samefile(strip(read(outfile, String)), dir)
     end
+end
+
+@testset "shell mode sequences with `&&`, `||` and `;`" begin
+    echostr, truestr, falsestr = Base.shell_escape.((echocmd, truecmd, falsecmd))
+    # parsing: each command with the operator before it
+    sq(s) = Base.shell_parse_sequence(s)
+    @test sq("a b") == [:then => :((("a",), ("b",)))]
+    @test sq("a && b || c; d;") == [:then => :((("a",),)), :and => :((("b",),)),
+                                    :or => :((("c",),)), :then => :((("d",),))]
+    @test sq("a&&b") == sq("a && b")
+    @test sq("a;b") == sq("a ; b") == [:then => :((("a",),)), :then => :((("b",),))]
+    @test sq("a | b || c") == [:then => sq("a | b")[1].second, :or => :((("c",),))]
+    # quoted and escaped operators are part of a word
+    let c = sq("echo 'a;b' \"&&\" \\|\\| 'a&b' \\(x\\)")
+        @test length(c) == 1 && Base.cmd_gen(eval(c[1].second)).exec == ["echo", "a;b", "&&", "||", "a&b", "(x)"]
+    end
+    # characters that command literals reject unquoted are rejected in shell mode too
+    @test_throws "subshells with `( ... )` are not supported in shell mode" sq("(echo hello; echo world) | sort -r")
+    @test_throws "subshells with `( ... )` are not supported" sq("echo (hi)")
+    @test_throws "in the background with `&` is not supported" sq("sleep 10 &")
+    @test_throws "in the background with `&` is not supported" sq("a & b")
+    @test_throws "must be quoted" sq("echo a#b")
+    @test_throws "must be quoted" sq("echo a]")
+    @test sq("echo *.txt")[1].second isa Expr  # globs still work
+    for (s, msg) in ("; a" => "empty command before `;`", "a;; b" => "empty command before `;`",
+                     "&& a" => "empty command before `&&`", "a || || b" => "empty command before `||`",
+                     "a &&" => "no command after `&&`", "a ||" => "no command after `||`",
+                     "a > ; b" => "redirect operator without filename")
+        @test_throws msg sq(s)
+    end
+    @test sq("  ") == [:then => Expr(:tuple, :())]  # as `shell_parse` gives
+    # in `shell_parse`, the operators are ordinary text, and backticks reject them
+    @test Base.shell_parse("a;b && c")[1] == :((("a;b",), ("&&",), ("c",)))
+    # backticks and `shell_parse` say that sequences are only for shell mode
+    for op in (";", "&&", "||")
+        @test_throws "`$op` between commands is only supported in REPL shell mode" eval(Meta.parse("`a $op b`"))
+    end
+    @test_throws "`||` between commands" Base.shell_parse("a || b")
+    @test_throws "`&&` between commands" Base.shell_parse("a&&b"; special=Base.shell_special)
+    @test_throws "must be quoted" Base.shell_parse("a & b"; special=Base.shell_special)
+    @test_throws "must be quoted" Base.shell_parse("{a,b;c}"; special=Base.shell_special)
+    @test Base.shell_parse("a || b"; partial=true)[1] == :((("b",),))  # completion does not throw
+    # running: `&&` and `||` have equal precedence and group to the left
+    mktempdir() do dir
+        f(name) = Base.shell_escape(joinpath(dir, name))
+        ran(name) = isfile(joinpath(dir, name))
+        shell_mode_run("$falsestr && $echostr x > $(f("and_false"))")
+        shell_mode_run("$truestr && $echostr x > $(f("and_true"))")
+        shell_mode_run("$falsestr || $echostr x > $(f("or_false"))")
+        shell_mode_run("$truestr || $echostr x > $(f("or_true"))")
+        shell_mode_run("$falsestr; $echostr x > $(f("then_false"))")
+        shell_mode_run("$truestr && $falsestr || $echostr x > $(f("and_or"))")
+        shell_mode_run("$falsestr && $echostr x > $(f("skipped")) || $echostr x > $(f("left"))")
+        shell_mode_run("$echostr x | $falsestr && $echostr x > $(f("pipe_status"))")
+        @test (ran("and_false"), ran("and_true"), ran("or_false"), ran("or_true")) == (false, true, true, false)
+        @test ran("then_false") && ran("and_or") && !ran("skipped") && ran("left")
+        @test !ran("pipe_status") # a pipeline's status is its last command's
+        # each command is built only when it runs, and a failure building one is a failure
+        shell_mode_run("$falsestr && $echostr \$(error(\"not built\")) > $(f("unbuilt"))")
+        @test !ran("unbuilt")
+        redirect_stderr(devnull) do
+            shell_mode_run("$echostr \$(error(\"build failure\")) || $echostr x > $(f("build_failed"))")
+        end
+        @test ran("build_failed")
+        # `cd` affects the commands after it
+        mkdir(joinpath(dir, "sub"))
+        withenv("OLDPWD" => nothing) do
+            old = pwd()
+            try
+                shell_mode_run("cd $(f("sub")) && $echostr x > in_sub")
+            finally
+                cd(old)
+            end
+        end
+        @test ran(joinpath("sub", "in_sub"))
+    end
+end
+
+@testset "shell mode runs commands directly, with `export` and `unset`" begin
+    withenv("JL_SHELL_MODE_TEST" => nothing, "JL_SHELL_MODE_TEST2" => "x") do
+        shell_mode_run("export JL_SHELL_MODE_TEST='a b' JL_SHELL_MODE_TEST2")
+        @test ENV["JL_SHELL_MODE_TEST"] == "a b"
+        @test ENV["JL_SHELL_MODE_TEST2"] == "x"  # `export NAME` keeps the value
+        if !Sys.iswindows()
+            mktempdir() do dir
+                out = joinpath(dir, "out.txt")
+                # later commands inherit the variable, and no system shell is involved, even
+                # for a command without pipes or redirections
+                withenv("SHELL" => joinpath(dir, "no-such-shell"), "JULIA_SHELL" => nothing) do
+                    shell_mode_run("$(Base.shell_escape(shcmd)) -c 'echo \$JL_SHELL_MODE_TEST > $out'")
+                end
+                @test read(out, String) == "a b\n"
+            end
+        end
+        shell_mode_run("unset JL_SHELL_MODE_TEST JL_SHELL_MODE_TEST2")
+        @test !haskey(ENV, "JL_SHELL_MODE_TEST") && !haskey(ENV, "JL_SHELL_MODE_TEST2")
+        @test occursin("PATH=", uppercase(sprint(io -> shell_mode_run("export"; stdout=io))))
+        @test_throws "is not a valid environment variable name" shell_mode_run("export 1X=2")
+        @test_throws "is not a valid environment variable name" shell_mode_run("export =2")
+        @test_throws "is not a valid environment variable name" shell_mode_run("unset A-B")
+    end
+end
+
+# equality of pipelines and redirections
+let a = pipeline(`a`, `b`), b = pipeline(`a`, `b`)
+    @test a == b && hash(a) == hash(b)
+    @test pipeline(`a`, stdout="f") == pipeline(`a`, stdout="f")
+    @test hash(pipeline(`a`, stdout="f")) == hash(pipeline(`a`, stdout="f"))
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stdout="g")
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stderr="f")
+    @test pipeline(`a`, stdout="f") != pipeline(`a`, stdout=Base.FileRedirect("f", true))
+    @test pipeline(`a`, stdout=`b`) != pipeline(`a`, stderr=`b`)
+    @test (`a` & `b`) == (`a` & `b`) != (`a` & `c`)
+end
+
+# Parsing of pipelines and redirections
+let sp(s) = eval(Base.shell_parse(s; special=Base.shell_special)[1])
+    # a word right before an operator ends like any other word
+    @test sp("cat >a<b") == pipeline(pipeline(`cat`, stdin="b"), stdout="a")
+    @test sp("cat <b>a") == pipeline(`cat`, stdin="b", stdout="a")
+    @test sp("cat \"q\">  x") == pipeline(`cat q`, stdout="x")
+    @test sp("cat ''>f") == pipeline(`cat ''`, stdout="f")  # an empty quoted argument is kept
+    @test sp("cat <in>out") == pipeline(`cat`, stdin="in", stdout="out")
+    @test sp("cat 2>a>b") == pipeline(pipeline(`cat`, stdout="b"), stderr="a")
+    @test sp("cat 2>>e") == pipeline(`cat`, stderr=Base.FileRedirect("e", true))
+    @test sp("a | b >f | c") == pipeline(`a`, pipeline(`b`, stdout="f"), `c`)
+    # an interpolation is not an fd number, and a line continuation is removed
+    @test sp("cat \$(\"2\")>f") == pipeline(`cat 2`, stdout="f")
+    @test sp("cat 2\\\n>f") == pipeline(`cat`, stderr="f")
+    @test sp("cat \\\n>f") == pipeline(`cat`, stdout="f")
+    @test_throws "redirect operator without filename" sp("cat > | wc")
+    @test_throws "redirect operator without filename" sp("cat >>> f")
+    @test_throws "redirect operator without filename" sp("cat < > f")
+    @test_throws "redirect operator without filename" sp("cat >")
+    @test_throws "redirect operator without filename" sp("cat 2>2>a")  # the second `2` is an fd
+    @test_throws "stdout is redirected more than once" sp("cat >a>b")
+    @test_throws "stdout is redirected more than once" sp("cat >a 1>>b")
+    @test_throws "stderr is redirected more than once" sp("cat 2>a 2>b")
+    @test_throws "stdin is redirected more than once" sp("cat <a <b | wc")
+    @test_throws "empty command in pipeline" sp("| wc")
+    @test_throws "empty command in pipeline" sp("cat |")
+    @test_throws "empty command in pipeline" sp("cat | | wc")
+    @test_throws "redirection without a command" sp("> f")
+    @test_throws "brace expansion in a redirection target" sp("cat > {a,b}")
+    # a partial parse, for REPL completion, accepts a command that ends early and returns
+    # the words of the last command, including redirection targets
+    pp(s) = Base.shell_parse(s; partial=true)[1]
+    @test pp("cat |") == Expr(:tuple, Expr(:tuple))
+    @test pp("echo hi | gr") == :((("gr",),))
+    @test pp("cat 2>> lo") == :((("cat",), ("lo",)))
+    @test pp("cat >") == :((("cat",),))
 end
 
 let roundtrip(s) = first(Base.shell_split(Base.shell_escape(s))) == s
@@ -867,6 +1266,10 @@ end
         @test !contains(s, "secret123")
         @test contains(s, "PATH=/usr/bin")
     end
+
+    # names starting with a multi-byte character
+    @test repr(setenv(`env`, "é" => "1")) == "setenv(`env`,[\"é=1\"])"
+    @test repr(setenv(`env`, "é" => "1"), context=:show_env=>:keys) == "setenv(`env`,[\"é\"])"
     # JET.@test_call show(::IOBuffer, ::Cmd)
 end
 
@@ -1148,6 +1551,53 @@ end
 @test repr(Base.CmdRedirect(``, devnull, 1, true)) == "pipeline(``, stdout<Base.DevNull())"
 @test repr(Base.CmdRedirect(``, devnull, 11, true)) == "pipeline(``, 11<Base.DevNull())"
 
+@testset "show pipelines and redirects in backtick syntax" begin
+    @test repr(`echo hello | sort`) == "`echo hello | sort`"
+    @test repr(`a | b | c`) == "`a | b | c`"
+    @test repr(`cat < in.txt`) == "`cat < in.txt`"
+    @test repr(`ls > out.txt`) == "`ls > out.txt`"
+    @test repr(`ls >> out.txt`) == "`ls >> out.txt`"
+    @test repr(`make 2> errs.txt`) == "`make 2> errs.txt`"
+    @test repr(`make 2>> errs.txt`) == "`make 2>> errs.txt`"
+    @test repr(`sort 2> e.txt > o.txt < i.txt`) == "`sort 2> e.txt > o.txt < i.txt`"
+    @test repr(pipeline(`sort`, stdin="i.txt", stdout="o.txt", stderr="e.txt")) == "`sort < i.txt > o.txt 2> e.txt`"
+    @test repr(`sort > o.txt 2>&1`) == "`sort > o.txt 2>&1`"
+    @test repr(`sort 2>& 1 > o.txt`) == "`sort 2>&1 > o.txt`"
+    @test repr(`sort >&2 <&0 2<&1`) == "`sort >&2 <&0 2<&1`"
+    @test repr(`sort 0>&1`) == "`sort 0>&1`"
+    @test repr(`a 2>&1 | b`) == "`a 2>&1 | b`"
+    @test repr(`a < i.txt | b 2> e.txt | c > o.txt`) == "`a < i.txt | b 2> e.txt | c > o.txt`"
+    @test repr(`cat 'a b' > 'c d|e'`) == "`cat 'a b' > 'c d|e'`"
+    @test repr(`cat > '~x'`) == "`cat > '~x'`"
+    @test repr(pipeline(`a`, "out`s")) == "`a > out\\`s`"
+    @test repr(`a 2>/dev/null <'/dev/null' >>/dev/null`) == "`a 2> /dev/null < /dev/null > /dev/null`"
+    @test repr(pipeline(`a`, stdout=devnull)) == "`a > /dev/null`"
+    # A pipeline's stdin is its first command's, and its stdout its last command's.
+    @test repr(pipeline(pipeline(`a`, `b`), stdin="i.txt", stdout="o.txt")) == "`a < i.txt | b > o.txt`"
+    # Redirects are shown in the order they are applied, outermost first.
+    @test repr(pipeline(`a 2>&1`, stdout="o.txt")) == "`a > o.txt 2>&1`"
+    # A stream can be redirected only once in backticks, and `>&` around a pipeline names
+    # a stream outside of it, which backticks cannot express.
+    @test repr(pipeline(pipeline(`a`, stdout="inner.txt"), stdout="outer.txt")) ==
+        "pipeline(`a > inner.txt`, stdout>Base.FileRedirect(\"outer.txt\", false))"
+    @test repr(Base.CmdRedirect(`a | b`, Base.DupRedirect(2), 1, false)) ==
+        "pipeline(`a | b`, stdout>Base.DupRedirect(2))"
+    # Everything else keeps the `pipeline(...)` form.
+    @test repr(pipeline(pipeline(`a`, `b`), stderr="e.txt")) == "pipeline(`a | b`, stderr>Base.FileRedirect(\"e.txt\", false))"
+    @test repr(pipeline(`a`, stderr=`b`)) == "pipeline(`a`, stderr=`b`)"
+    @test repr(pipeline(`a`, stderr="/dev/null")) == "pipeline(`a`, stderr>Base.FileRedirect(\"/dev/null\", false))"
+    @test repr(pipeline(`a`, stdout=IOBuffer())) |> startswith("pipeline(`a`, stdout>")
+    @test repr(pipeline(Cmd(`a`, dir="/tmp"), `b`)) == "pipeline(setenv(`a`; dir=\"/tmp\"), stdout=`b`)"
+    @test repr(pipeline(`a` & `b`, `c`)) == "pipeline(`a` & `b`, stdout=`c`)"
+    @test repr(Base.CmdRedirect(`a`, Base.FileRedirect("", false), 1)) |> startswith("pipeline(")
+    # Shown commands parse back to themselves.
+    for str in ("echo hello | sort", "a < i.txt | b 2>> e.txt | c >> o.txt", "cat '~x' > '~y'",
+                "cat '{a,b}' > 'x|y'")
+        cmd = eval(Meta.parse("`" * str * "`"))
+        @test repr(eval(Meta.parse(repr(cmd)))) == repr(cmd)
+    end
+end
+
 
 # Issue #37070
 @testset "addenv()" begin
@@ -1195,6 +1645,10 @@ end
     @test cmd.env == ["a=b=c"]
     cmd = addenv(cmd, "b"=>"b")
     @test issetequal(cmd.env, ["b=b", "a=b=c"])
+    # names starting with a multi-byte character
+    cmd = addenv(setenv(``, "é" => "1"), "A" => "2"; inherit=false)
+    @test issetequal(cmd.env, ["é=1", "A=2"])
+    @test addenv(``, ["éa=1"], inherit=false).env == ["éa=1"]
 end
 
 @testset "setenv with dir (with tests for #42131)" begin
@@ -1237,6 +1691,8 @@ if isfile(cshcmd)
     end
 end
 
+@test Base.shell_escape_csh() == Base.shell_escape_csh(``) == ""
+
 @testset "shell escaping on Windows" begin
     # Note  argument A can be parsed both as A or "A".
     # We do not test that the parsing satisfies either of these conditions.
@@ -1250,6 +1706,8 @@ end
     @test Base.escape_microsoft_c_args("A") == "A"
 
     @test Base.escape_microsoft_c_args(`A`) == "A"
+
+    @test Base.escape_microsoft_c_args() == Base.escape_microsoft_c_args(``) == ""
 
     # input : hello world
     # output: "hello world"

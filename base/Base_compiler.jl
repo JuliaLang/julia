@@ -6,7 +6,7 @@ Core._import(Base, Core, :_eval_import, :_eval_import, true)
 Core._import(Base, Core, :_eval_using, :_eval_using, true)
 
 using .Core.Intrinsics, .Core.IR
-import .Core: OLDEST_EDITION, LATEST_STABLE_EDITION
+import .Core: JULIA_EDITIONS, OLDEST_EDITION, FLISP_EDITION, EXPERIMENTAL_EDITION
 
 # to start, we're going to use a very simple definition of `include`
 # that doesn't require any function (except what we can get from the `Core` top-module)
@@ -143,24 +143,9 @@ import Core: @doc, @__doc__, WrappedException, @int128_str, @uint128_str, @big_s
 # Export list
 include("exports.jl")
 
-function set_syntax_version end
 _topmod(m::Module) = ccall(:jl_base_relative_to, Any, (Any,), m)::Module
-function _setup_module!(mod::Module, edition)
-    # using Base
-    Core._using(mod, _topmod(mod), UInt8(0))
-    Core.declare_const(mod, :include, IncludeInto(mod))
-    Core.declare_const(mod, :eval, Core.EvalInto(mod))
-    if edition === nothing
-        # two cases: (1) LATEST_STABLE_EDITION is assumed in bootstrap, and (2)
-        # after bootstrap, OLDEST_EDITION module forms have no version
-        if Core._parse === nothing || Core._parse === Base.fl_parse
-            return nothing
-        end
-        edition = OLDEST_EDITION
-    end
-    set_syntax_version(mod, edition)
-    return nothing
-end
+
+function _setup_module! end # Revise/JuliaInterpreter compat
 
 # core docsystem
 include("docs/core.jl")
@@ -316,7 +301,7 @@ struct VersionedParse
 end
 
 function (vp::VersionedParse)(code, filename::String, lineno::Int, offset::Int, options::Symbol)
-    pm = parentmodule(Core._parse)
+    pm = parentmodule(typeof(Core._parse))
     # hack to support old copies of JuliaSyntax
     if !isdefined(pm, :_has_v1_14_version_hooks) && isdefined(pm, :_has_v1_10_hooks)
         invokelatest(Core._parse, code, filename, lineno, offset, options)
@@ -385,6 +370,16 @@ using .Order
 
 include("coreir.jl")
 include("module.jl")
+
+function normalized_edition(v::Tuple{Int, Int})
+    for ed in Iterators.reverse(JULIA_EDITIONS)
+        ed::Tuple{Int,Int} === EXPERIMENTAL_EDITION && continue
+        ed <= v && return ed
+    end
+    return OLDEST_EDITION
+end
+const LATEST_EDITION = normalized_edition(
+    (Int(ccall(:jl_ver_major, Int32, ())), Int(ccall(:jl_ver_minor, Int32, ()))))
 
 BUILDROOT::String = ""
 DATAROOT::String = ""

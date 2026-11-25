@@ -191,9 +191,20 @@ function _stdio_copy(stdios::SpawnIOs, fd::Int, @nospecialize replace)
     return new
 end
 
+# The stream that a redirect of a command sets up, and whether to close it after spawning.
+# `N>&M` makes stream `N` a copy of the command's stream `M` as it is at that point.
+function _setup_redirect(redirect::CmdRedirect, stdios::SpawnIOs)
+    handle = redirect.handle
+    if handle isa DupRedirect
+        fd = handle.fd + 1
+        return (fd <= length(stdios) ? stdios[fd] : devnull), false
+    end
+    return setup_stdio(handle, redirect.readable)
+end
+
 function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, tok::MaybeToken=default_cancel_token())
     fdnum = redirect.stream_no + 1
-    io, close_io = setup_stdio(redirect.handle, redirect.readable)
+    io, close_io = _setup_redirect(redirect, stdios)
     try
         stdios = _stdio_copy(stdios, fdnum, io)
         return _spawn(redirect.cmd, stdios, tok)
@@ -204,7 +215,7 @@ end
 
 function _spawn(redirect::CmdRedirect, stdios::SpawnIOs, chain::ProcessChain, tok::MaybeToken)
     fdnum = redirect.stream_no + 1
-    io, close_io = setup_stdio(redirect.handle, redirect.readable)
+    io, close_io = _setup_redirect(redirect, stdios)
     try
         stdios = _stdio_copy(stdios, fdnum, io)
         return _spawn(redirect.cmd, stdios, chain, tok)
