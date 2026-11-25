@@ -279,7 +279,7 @@ typedef struct {
     ios_t *fptr_record;
     arraylist_t memref_list;    // locations of MemoryRefs to Memory in this image
     arraylist_t symtab;         // the symbols of a system image, sorted by `jl_symbol_order`
-    arraylist_t uniquing_records; // objects we need to write auxdata records for
+    arraylist_t record_objects; // objects we need to write auxdata records for
     size_t auxdata_size;
     size_t bits_start;          // Heap offset of the pointer-free (or "bits") section
     uintptr_t preferred_base;   // the address at which the heap expects to be placed
@@ -301,13 +301,13 @@ typedef struct {
 
 typedef struct {
     image_metadata_t **deps;    // the images that deprefs refer to: the system image, then the dependencies
-    uintptr_t heap_delta;       // how far the heap is from the address its slides were written for
+    uintptr_t slide;            // how far the heap is from its preferred base, added to each slide
     uintptr_t *imports_resolved; // the address each import resolves to (provisional while it is pending)
-    // the words filled from a pending import, as pairs of the word's address and 1 + the index of
-    // the next pair filled from the same import
+    // the words bound to a pending import, as pairs of the word's address and 1 + the index of
+    // the next pair bound to the same import
     arraylist_t waiting;
     size_t *first_waiting;      // for each import, 1 + the index of its latest pair in `waiting`
-    uint8_t *pending;           // whether each import is pending (see jl_fill_bind)
+    uint8_t *pending;           // whether each import is pending (see jl_apply_bind)
 } jl_loader_state;
 
 // The specials of an incremental image
@@ -1293,13 +1293,13 @@ static uintptr_t add_image_bind(jl_serializer_state *s, image_metadata_t *meta, 
     return add_keyed_import(s, addr, IMPORT_ENCODE(IMPORT_IMAGE, depref(s, meta, addr)), NULL);
 }
 
-static jl_value_t *written_copy(jl_value_t *v) JL_NOTSAFEPOINT
+static jl_value_t *written_object(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (ptrhash_get(&serialization_order, v) != HT_NOTFOUND)
         return v;
     jl_value_t *replacement = (jl_value_t*)ptrhash_get(&object_replace, v);
     if (replacement != HT_NOTFOUND)
-        return written_copy(replacement);
+        return written_object(replacement);
     if (dedup_by_content(v, (jl_datatype_t*)jl_typeof(v))) {
         jl_value_t *dup = jl_idset_get(content_dedup_list, content_dedup_keyset, v);
         if (dup != NULL)
@@ -1368,7 +1368,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
                "the type of a uniqued singleton has a record");
         return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)), NULL);
     }
-    jl_value_t *w = written_copy(v);
+    jl_value_t *w = written_object(v);
     void *idx = ptrhash_get(&serialization_order, w);
     if (idx == HT_NOTFOUND) {
         jl_(jl_typeof(v));
@@ -1391,7 +1391,7 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
             s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
                                jl_is_binding(w)  ? sizeof(jl_binding_record_t) :
                                                    sizeof(jl_mi_record_t);
-            arraylist_push(&s->uniquing_records, w);
+            arraylist_push(&s->record_objects, w);
         }
         return b;
     }
@@ -1412,7 +1412,7 @@ static void add_uniquing_imports(jl_serializer_state *s, jl_value_t *v, htable_t
 {
     if (!jl_needs_serialization(s, v))
         return;
-    v = written_copy(v);
+    v = written_object(v);
     void **bp = ptrhash_bp(visited, v);
     if (*bp != HT_NOTFOUND)
         return;
@@ -2240,7 +2240,7 @@ static uintptr_t jl_resolve_import(jl_loader_state *s, import_t imp, const char 
 
 // Replace the bind at `pv` with what it refers to.  If that is a pending import, its value is
 // provisional, and the word is rewritten if it changes when the import is finalized.
-static void jl_fill_bind(jl_loader_state *s, uintptr_t *pv) JL_NOTSAFEPOINT
+static void jl_apply_bind(jl_loader_state *s, uintptr_t *pv) JL_NOTSAFEPOINT
 {
     uintptr_t bind = *pv;
     size_t idx = BIND_PAYLOAD(bind);
@@ -2252,7 +2252,7 @@ static void jl_fill_bind(jl_loader_state *s, uintptr_t *pv) JL_NOTSAFEPOINT
     }
 }
 
-// Finalize the pending import `idx` to `v`, and rewrite the words filled from it, keeping the bits
+// Finalize the pending import `idx` to `v`, and rewrite the words bound to it, keeping the bits
 // that were added to its value (the low bits of the bind, or the GC bits of a type tag)
 static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_NOTSAFEPOINT
 {
@@ -2264,43 +2264,43 @@ static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_N
         return;
     for (size_t i = s->first_waiting[idx]; i; i = (size_t)s->waiting.items[2 * i - 1]) {
         uintptr_t *pv = (uintptr_t*)s->waiting.items[2 * i - 2];
-        assert(*pv - old < 16 && "a word filled from a pending import was written with another value");
+        assert(*pv - old < 16 && "a word bound to a pending import was written with another value");
         *pv = v + (*pv - old);
     }
 }
 
-// Replace each of the `n` relocs at `p` by its value: 0 stays NULL, a bind is filled in, and
+// Replace each of the `n` relocs at `p` by its value: 0 stays NULL, a bind is applied, and
 // anything else is a slide
-static void jl_resolve_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFEPOINT
+static void jl_apply_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFEPOINT
 {
     for (size_t i = 0; i < n; i++) {
         if (p[i] & BIND_BIT)
-            jl_fill_bind(s, &p[i]);
+            jl_apply_bind(s, &p[i]);
         else if (p[i] != 0)
-            p[i] += s->heap_delta;
+            p[i] += s->slide;
     }
 }
 
 // jl_apply_slides and jl_apply_binds walk the two forms of a section in separate loops rather than
 // with one iterator, whose test of the form for every word compilers do not hoist out of the
 // loop.  NOINLINE to avoid some bad decisions by LLVM (very hot loops).
-static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t delta, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
+static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t slide, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
-    if (delta == 0)
+    if (slide == 0)
         return;
     if (relocs_is_bitmap(size, nwords)) {
         // `words` advances with the bitmap, so that GCC can address heap words as words[bit]
         uintptr_t *words = heap;
         for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
             for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1)
-                words[__builtin_ctzll(bits)] += delta;
+                words[__builtin_ctzll(bits)] += slide;
         }
         return;
     }
     const uint8_t *p = (const uint8_t*)sec, *end = p + size;
     for (size_t word = 0; p != end;) {
         word += relocs_read_gap(&p);
-        heap[word] += delta;
+        heap[word] += slide;
     }
 }
 
@@ -2310,14 +2310,14 @@ static NOINLINE void jl_apply_binds(jl_loader_state *s, uintptr_t *heap, const c
         uintptr_t *words = heap;
         for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
             for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1)
-                jl_fill_bind(s, &words[__builtin_ctzll(bits)]);
+                jl_apply_bind(s, &words[__builtin_ctzll(bits)]);
         }
         return;
     }
     const uint8_t *p = (const uint8_t*)sec, *end = p + size;
     for (size_t word = 0; p != end;) {
         word += relocs_read_gap(&p);
-        jl_fill_bind(s, &heap[word]);
+        jl_apply_bind(s, &heap[word]);
     }
 }
 
@@ -3167,7 +3167,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
     s.buildid_depmods_idxs = image_to_depmodidx(mod_array);
     htable_new(&s.method_roots_index, 0);
     htable_new(&s.object_imports, 0);
-    arraylist_new(&s.uniquing_records, 0);
+    arraylist_new(&s.record_objects, 0);
     if (worklist) {
         s.method_roots_list = jl_alloc_vec_any(0);
         s.worklist_key = jl_worklist_key(worklist);
@@ -3332,8 +3332,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
         // At this point we've assigned offsets for every auxdata record (see
         // _backref_id), and now that we've serialized everything we can write
         // the contents of the records.
-        for (size_t i = 0; i < s.uniquing_records.len; i++) {
-            jl_value_t *v = (jl_value_t*)s.uniquing_records.items[i];
+        for (size_t i = 0; i < s.record_objects.len; i++) {
+            jl_value_t *v = (jl_value_t*)s.record_objects.items[i];
             JL_GC_PROMISE_ROOTED(v);
             if (jl_is_datatype(v)) {
                 jl_datatype_t *dt = (jl_datatype_t*)v;
@@ -3416,7 +3416,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
     arraylist_free(&object_worklist);
     arraylist_free(&serialization_queue);
     arraylist_free(&layout_table);
-    arraylist_free(&s.uniquing_records);
+    arraylist_free(&s.record_objects);
     arraylist_free(&s.fixup_types);
     arraylist_free(&s.fixup_objs);
     arraylist_free(&s.memref_list);
@@ -4181,7 +4181,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     }
     arraylist_new(&s.waiting, 0);
     s.first_waiting = (size_t*)calloc_s(nimports * sizeof(size_t));
-    s.heap_delta = (uintptr_t)image_base - h->preferred_base;
+    s.slide = (uintptr_t)image_base - h->preferred_base;
     // Before anything refers to them, in import order, copy the records of types into provisional
     // types, so that every reference to a type or its singleton instance is to a complete object
     // while the imports are resolved (see doc/src/devdocs/sysimg.md), and resolve the bindings.
@@ -4196,14 +4196,14 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         }
         if (type == IMPORT_BINDING) {
             jl_binding_record_t *rec = (jl_binding_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-            jl_resolve_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
+            jl_apply_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
             jl_finalize_import(&s, i, (uintptr_t)jl_get_module_binding((jl_module_t*)rec->mod, (jl_sym_t*)rec->name, 1));
             continue;
         }
         if (type != IMPORT_DATATYPE)
             continue;
         jl_type_record_t *rec = (jl_type_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-        jl_resolve_relocs(&s, (reloc_t*)rec, offsetof(jl_type_record_t, hash) / sizeof(reloc_t));
+        jl_apply_relocs(&s, (reloc_t*)rec, offsetof(jl_type_record_t, hash) / sizeof(reloc_t));
         jl_datatype_t *dt = jl_new_uninitialized_datatype();
         jl_astaggedvalue(dt)->bits.gc = GC_OLD; // the heap refers to it without a write barrier
         s.imports_resolved[i] = (uintptr_t)dt;
@@ -4222,11 +4222,11 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
             jl_astaggedvalue(dt->instance)->bits.gc = GC_OLD;
         }
     }
-    jl_apply_slides((uintptr_t*)image_base, s.heap_delta, image_section(buf, h->slides), h->slides.size, nwords);
+    jl_apply_slides((uintptr_t*)image_base, s.slide, image_section(buf, h->slides), h->slides.size, nwords);
     jl_apply_binds(&s, (uintptr_t*)image_base, image_section(buf, h->binds), h->binds.size, nwords);
 
     // step 3: get references to special values
-    jl_resolve_relocs(&s, (reloc_t*)(image_section(buf, h->specials)), h->specials.size / sizeof(reloc_t));
+    jl_apply_relocs(&s, (reloc_t*)(image_section(buf, h->specials)), h->specials.size / sizeof(reloc_t));
     jl_value_t **specials = (jl_value_t**)(image_section(buf, h->specials));
     if (!pkg) {
         size_t i;
@@ -4316,11 +4316,11 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         if (IMPORT_TYPE(imports[i]) != IMPORT_METHOD_INSTANCE)
             continue;
         jl_mi_record_t *rec = (jl_mi_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-        jl_resolve_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
+        jl_apply_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
         jl_finalize_import(&s, i, (uintptr_t)jl_specializations_get_linfo((jl_method_t*)rec->def, (jl_value_t*)rec->specTypes, (jl_svec_t*)rec->sparam_vals));
     }
     reloc_t *gvars = (reloc_t*)(image_section(buf, h->gvars));
-    jl_resolve_relocs(&s, gvars, h->gvars.size / sizeof(reloc_t));
+    jl_apply_relocs(&s, gvars, h->gvars.size / sizeof(reloc_t));
 #ifndef NDEBUG
     for (size_t i = 0; i < nimports; i++)
         assert(!s.pending[i] && "an import was never resolved");
