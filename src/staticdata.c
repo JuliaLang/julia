@@ -1205,11 +1205,11 @@ static void write_pointer(ios_t *s) JL_NOTSAFEPOINT
     write_uint(s, 0);
 }
 
-// An entry of the fptrs section is 0, or the heap offset of a CodeInstance, with FPTR_INVOKE set if
-// the function is its invoke wrapper
+// The fptrs section contains heap offsets of the CodeInstance associated with
+// each native function.  If the native function is an invoke wrapper, the
+// lowest bit (FPTR_INVOKE) is set.
 #define FPTR_INVOKE ((uintptr_t)1)
 
-// Set the entry for native function `id` (counting from 1)
 static void write_fptr(ios_t *s, int32_t id, uintptr_t v) JL_NOTSAFEPOINT
 {
     ios_ensureroom(s, id * sizeof(void*));
@@ -1242,7 +1242,6 @@ static void **importset_peek_bp_r(htable_t *h, void *key, void *ctx) JL_NOTSAFEP
 HTPROT_R(importset, static JL_UNUSED)
 HTIMPL_R(importset, import_hash, import_eq, _HTIMPL_IDENTITY_KEYALLOC, _HTIMPL_NOOP_KEYFREE)
 
-// Returns a bind to the import `imp`, adding it to the image unless it already was
 static uintptr_t add_import(jl_serializer_state *s, import_t imp) JL_NOTSAFEPOINT
 {
     size_t n = s->imports->size / sizeof(import_t);
