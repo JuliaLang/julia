@@ -731,7 +731,8 @@ describes function `i` of the native image's function table.  The array may be
 shorter than the table, and missing entries are 0.  An entry of 0 means the
 function belongs to no `CodeInstance`.  Functions that are invoke wrappers have
 their lowest bit (`FPTR_INVOKE`) set, as opposed to functions with the specptr
-calling convention.
+calling convention.  Invoke wrappers must come before the corresponding specptr
+function in the fptrs table.
 
 #### Source text
 

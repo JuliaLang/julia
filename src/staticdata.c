@@ -661,8 +661,6 @@ static ci_fptrs_t ci_native_code(jl_code_instance_t *ci)
                                        (fptr_src_t){FUNCTION_RUNTIME, -invoke_id};
         if (specptr_id)
             r.specptr = (fptr_src_t){FUNCTION_NATIVE, specptr_id};
-        // the loader installs `specptr` after `invoke`
-        assert(r.invoke.kind != FUNCTION_NATIVE || r.invoke.idx < r.specptr.idx);
     }
     return r;
 }
@@ -2350,6 +2348,7 @@ static void jl_update_all_fptrs(jl_image_t *image, char *heap, const uintptr_t *
             jl_code_instance_t *codeinst = (jl_code_instance_t*)(base + (offset & ~FPTR_INVOKE));
             linfos[i] = codeinst;
             assert(jl_is_method(jl_get_ci_mi(codeinst)->def.method) && jl_atomic_load_relaxed(&codeinst->invoke) != jl_fptr_const_return);
+            // Check that the invoke wrapper was installed before the corresponding specptr.
             assert(specfunc ? jl_atomic_load_relaxed(&codeinst->invoke) != NULL : jl_atomic_load_relaxed(&codeinst->invoke) == NULL);
             void *fptr = fvars.ptrs[i];
             for (; clone_idx < fvars.nclones; clone_idx++) {
