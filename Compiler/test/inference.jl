@@ -8519,6 +8519,148 @@ stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
 @test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
 @test stale_cond4(1, nothing) === nothing
 
+# JuliaLang/julia#64183: a slot wrapper must not apply to a later value of its slot
+# when control flow returns to the definition that the wrapper was formed for
+struct C64183 end
+struct Box64183
+    x::Any
+end
+function issue64183(a, b)
+    was_c = false
+    result = false
+    for element in (a, b)
+        result = was_c && element isa String
+        was_c = element isa C64183
+    end
+    return result
+end
+@test issue64183(C64183(), "y")
+function stale_alias64183(bs, n)
+    local v
+    i = 1
+    for b in bs
+        if i > 1 && v === n
+            return b.x
+        end
+        v = b.x
+        i += 1
+    end
+    return nothing
+end
+@test Base.infer_return_type(stale_alias64183, (Vector{Box64183}, Int)) == Any
+function stale_merge64183(xs, flag)
+    was_c = false
+    i = 1
+    if flag
+        x = xs[1]
+    else
+        x = xs[2]
+    end
+    while i < length(xs)
+        was_c && return x
+        was_c = x isa C64183
+        i += 1
+        x = xs[i]
+    end
+    return nothing
+end
+@test Base.infer_return_type(stale_merge64183, (Vector{Any}, Bool)) == Any
+function stale_try64183(xs)
+    was_c = false
+    for x in xs
+        try
+            was_c && return x
+            was_c = x isa C64183
+            length(xs) > 1 && error()
+        catch
+        end
+    end
+    return nothing
+end
+@test Base.infer_return_type(stale_try64183, (Vector{Any},)) == Any
+function stale_assign64183(a::Union{C64183,String}, b::Union{C64183,String}, c::Union{C64183,String})
+    was_c = false
+    result = false
+    element = a
+    for i in 1:3
+        v = Core.ifelse(was_c, element, C64183())
+        result = v isa String
+        if i == 1
+            element = b
+            was_c = false
+        else
+            element, was_c = c, element isa C64183
+        end
+    end
+    return result
+end
+@test stale_assign64183("a", C64183(), "s")
+function stale_entry64183(a, b, flag)
+    if flag
+        x = a
+        c = x isa Int
+        x = b
+    else
+        x = b
+        c = false
+    end
+    return c ? x : 0
+end
+@test Base.infer_return_type(stale_entry64183, (Union{Nothing,Int}, Union{Nothing,Int}, Bool)) == Union{Nothing,Int}
+function flag_loop64183(xs)
+    x = xs[1]
+    flag = x isa Int
+    i = 1
+    s = 0
+    while i < length(xs)
+        if flag
+            s += x
+        end
+        i += 1
+        x = xs[i]
+        flag = x isa Int
+    end
+    return s
+end
+@test Base.infer_return_type(flag_loop64183, (Vector{Any},)) == Int
+function flag_branches64183(cond, a, b)
+    if cond
+        x = a
+        flag = x isa Int
+    else
+        x = b
+        flag = x isa Int
+    end
+    return flag ? x : 0
+end
+@test Base.infer_return_type(flag_branches64183, (Bool, Union{Nothing,Int}, Union{Nothing,Int})) == Int
+function flag_branch64183(cond, a)
+    x = nothing
+    flag = false
+    if cond
+        x = a
+        flag = x isa Int
+    end
+    return flag ? x : 0
+end
+@test Base.infer_return_type(flag_branch64183, (Bool, Union{Nothing,Int})) == Int
+function alias_branches64183(b1::AliasableField{Union{Int,String}}, b2::AliasableField{Union{Int,String}}, c::Bool)
+    if c
+        y = b1
+        x = getfield(y, :f)
+    else
+        y = b2
+        x = getfield(y, :f)
+    end
+    if (x::Union{Int,String}) isa Int
+        return getfield(y, :f)
+    end
+    return 0
+end
+let T = AliasableField{Union{Int,String}}
+    @test Base.infer_return_type(alias_branches64183, (T, T, Bool)) == Int
+end
+
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883
     a::Int
