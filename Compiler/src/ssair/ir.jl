@@ -656,7 +656,6 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    # most common first
     head = e.head
     return head === :call || head === :invoke || head === :new || head === :foreigncall ||
            head === :gc_preserve_begin || head === :gc_preserve_end ||
