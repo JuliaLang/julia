@@ -52,12 +52,12 @@ Build system changes
   `libjulia-internal` into a new shared library, `libjulia-frontend` (analogous to the existing
   `libjulia-codegen`). The runtime calls the frontend through a small trampoline interface
   (`jl_frontend_init`, `jl_frontend_parse`, `jl_frontend_lower`, `jl_macroexpand`, the operator
-  queries `jl_frontend_is_operator` etc., and the flisp REPL/profiling entry points), so the
-  library can eventually be replaced or omitted; fallback stubs in `libjulia-internal` are used
-  when it is absent. The runtime's operator queries (`jl_is_operator`, `jl_operator_precedence`,
-  etc., which printing uses) ask the frontend library until Base has started, and then Base's
-  JuliaSyntax. The C entry points `jl_fl_parse`/`jl_fl_lower` have been renamed to
-  `jl_frontend_parse`/`jl_frontend_lower`.
+  queries `jl_frontend_is_operator` etc., and the flisp REPL/profiling entry points, which a
+  frontend library may leave out), so the library can eventually be replaced or omitted; fallback
+  stubs in `libjulia-internal` are used when it is absent. The runtime's operator queries
+  (`jl_is_operator`, `jl_operator_precedence`, etc., which printing uses) ask the frontend library
+  until Base has started, and then Base's JuliaSyntax. The C entry points
+  `jl_fl_parse`/`jl_fl_lower` have been renamed to `jl_frontend_parse`/`jl_frontend_lower`.
 
 New library functions
 ---------------------
