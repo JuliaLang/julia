@@ -19,15 +19,15 @@ top:
 ; OPAQUE: call ptr addrspace(10) @jl_box_int64
     %aboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %a)
 
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0:[0-9]+]]
 ; OPAQUE-NEXT: store ptr addrspace(10) %aboxed, ptr [[GEP0]]
     %bboxed = call {} addrspace(10)* @jl_box_int64(i64 signext %b)
 ; CHECK-NEXT: %bboxed =
 ; Make sure the same gc slot isn't re-used
 
 
-; OPAQUE-NOT: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0]]
-; OPAQUE: [[GEP1:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT1:[0-9]+]]
+; OPAQUE-NOT: getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0]]
+; OPAQUE: [[GEP1:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT1:[0-9]+]]
 ; OPAQUE-NEXT: store ptr addrspace(10) %bboxed, ptr [[GEP1]]
 
 ; CHECK-NEXT: call void @boxed_simple
@@ -40,7 +40,7 @@ define void @leftover_alloca({} addrspace(10)* %a) {
 ; If this pass encounters an alloca, it'll just sink it into the gcframe,
 ; relying on mem2reg to catch simple cases such as this earlier
 ; CHECK-LABEL: @leftover_alloca
-; OPAQUE: %var = getelementptr inbounds ptr addrspace(10), ptr %gcframe
+; OPAQUE: %var = getelementptr inbounds nuw i8, ptr %gcframe
     %pgcstack = call {}*** @julia.get_pgcstack()
     %ptls = call {}*** @julia.ptls_states()
     %var = alloca {} addrspace(10)*
@@ -61,7 +61,7 @@ define void @simple_union() {
 ; OPAQUE: %a = call { ptr addrspace(10), i8 } @union_ret()
     %a = call { {} addrspace(10)*, i8 } @union_ret()
 
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0:[0-9]+]]
 ; OPAQUE-NEXT: [[EXTRACT:%.*]] = extractvalue { ptr addrspace(10), i8 } %a, 0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[EXTRACT]], ptr [[GEP0]]
     call void @union_arg({{} addrspace(10)*, i8} %a)
@@ -99,7 +99,7 @@ blabel:
 common:
     %phi = phi {} addrspace(10)* [ %aboxed, %alabel ], [ %bboxed, %blabel ]
 
-; OPAQUE:  [[GEP:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE:  [[GEP:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE:  store ptr addrspace(10) %phi, ptr [[GEP]]
     call void @one_arg_boxed({} addrspace(10)* %phi)
     ret void
@@ -209,7 +209,7 @@ define {{} addrspace(10)*, i8} @ret_use_struct() {
 ; OPAQUE: %aunion = call { ptr addrspace(10), i8 } @union_ret()
     %aunion = call { {} addrspace(10)*, i8 } @union_ret()
 
-; OPAQUE-DAG: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; OPAQUE-DAG: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0:[0-9]+]]
 ; OPAQUE-DAG: [[EXTRACT:%.*]] = extractvalue { ptr addrspace(10), i8 } %aunion, 0
 ; OPAQUE-NEXT: store ptr addrspace(10) [[EXTRACT]], ptr [[GEP0]]
 
@@ -416,7 +416,7 @@ a:
 ; This needs a store
 ; CHECK-LABEL: a:
 
-; OPAQUE:  [[GEP1:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0:[0-9]+]]
+; OPAQUE:  [[GEP1:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0:[0-9]+]]
 ; OPAQUE:  store ptr addrspace(10) %phi, ptr [[GEP1]]
     call void @one_arg_boxed({} addrspace(10)* %phi)
     br label %latch
@@ -424,7 +424,7 @@ a:
 latch:
 ; This as well in case we went the other path
 
-; OPAQUE:  [[GEP2:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 [[GEPSLOT0]]
+; OPAQUE:  [[GEP2:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 [[GEPSLOT0]]
 ; OPAQUE:  store ptr addrspace(10) %phi, ptr [[GEP2]]
     %obj = call {} addrspace(10)* @alloc()
     %cond = call i1 @check_property({} addrspace(10)* %phi)
@@ -694,7 +694,7 @@ define i8 @vector_arrayptrs() {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
 top:
@@ -718,7 +718,7 @@ define i8 @masked_arrayptrs() {
 
 
 ; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.load.v2p13.p11(ptr addrspace(11) align 16 %arrayptrptr, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> {{zeroinitializer|splat \(ptr addrspace\(13\) null\)}})
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
 top:
@@ -742,7 +742,7 @@ define i8 @gather_arrayptrs() {
 
 
 ; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> align 16 %arrayptrptrs, <2 x i1> <i1 true, i1 false>, <2 x ptr addrspace(13)> {{zeroinitializer|splat \(ptr addrspace\(13\) null\)}})
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
 top:
@@ -765,7 +765,7 @@ define i8 @gather_arrayptrs_alltrue() {
 
 
 ; OPAQUE: %arrayptrs = call <2 x ptr addrspace(13)> @llvm.masked.gather.v2p13.v2p11(<2 x ptr addrspace(11)> align 16 %arrayptrptrs, <2 x i1> {{(<i1 true, i1 true>|splat \(i1 true\))}}, <2 x ptr addrspace(13)> {{zeroinitializer|splat \(ptr addrspace\(13\) null\)}})
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE: store ptr addrspace(10) %obj1, ptr [[GEP0]]
 ;
 top:
@@ -787,7 +787,7 @@ define i8 @lost_select_decayed(i1 %arg1) {
 ; OPAQUE: %gcframe = alloca ptr addrspace(10), i32 3
 
 
-; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: [[GEP0:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; OPAQUE: store ptr addrspace(10) [[SOMETHING:%.*]], ptr [[GEP0]]
 top:
     %pgcstack = call {}*** @julia.get_pgcstack()

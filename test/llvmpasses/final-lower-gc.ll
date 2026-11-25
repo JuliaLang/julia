@@ -34,11 +34,11 @@ top:
 ; OPAQUE-NEXT: store ptr %gcframe, ptr [[GCFRAME_SLOT]], align 8
   call void @julia.push_gc_frame({} addrspace(10)** %gcframe, i32 2)
   %aboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %a)
-; OPAQUE: %frame_slot_1 = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 3
+; OPAQUE: %frame_slot_1 = getelementptr inbounds nuw i8, ptr %gcframe, i64 24
   %frame_slot_1 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 1)
   store {} addrspace(10)* %aboxed, {} addrspace(10)** %frame_slot_1, align 8
   %bboxed = call {} addrspace(10)* @ijl_box_int64(i64 signext %b)
-; OPAQUE: %frame_slot_2 = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 2
+; OPAQUE: %frame_slot_2 = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
   %frame_slot_2 = call {} addrspace(10)** @julia.get_gc_frame_slot({} addrspace(10)** %gcframe, i32 0)
   store {} addrspace(10)* %bboxed, {} addrspace(10)** %frame_slot_2, align 8
 ; OPAQUE: call void @boxed_simple(ptr addrspace(10) %aboxed, ptr addrspace(10) %bboxed)
