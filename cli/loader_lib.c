@@ -487,15 +487,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
     }
-    unsigned int frontend_func_count = 0;
-    while (frontend_func_names[frontend_func_count] != NULL)
-        frontend_func_count++;
     for (unsigned int symbol_idx=0; frontend_func_names[symbol_idx] != NULL; ++symbol_idx) {
         void *addr = lookup_symbol(libjulia_frontend, frontend_func_names[symbol_idx]);
-        if (addr == NULL && symbol_idx >= frontend_func_count - jl_frontend_optional_func_count) {
-            // an optional entry point that this frontend does not provide
-            addr = lookup_symbol(libjulia_internal, jl_frontend_fallback_func_names[symbol_idx]);
-        }
         if (addr == NULL) {
             jl_loader_print_stderr3("ERROR: Unable to load ", frontend_func_names[symbol_idx], frontend_liberr);
             exit(1);

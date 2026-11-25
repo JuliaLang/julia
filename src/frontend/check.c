@@ -11,14 +11,33 @@
 
 #include <julia.h>
 
-// internal-but-exported host entry point (declared in julia_internal.h)
-extern jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t *filename,
-                            size_t lineno, size_t offset, jl_value_t *options,
-                            jl_module_t *inmodule);
+// The host's own parser, for reference results: its JuliaSyntax parser hook,
+// with the edition the frontend interface parses (see JuliaFrontend.jl)
+static jl_value_t *host_parse(const char *text, size_t len, jl_value_t *fname, jl_value_t *opts)
+{
+    static jl_value_t *hook = NULL;
+    if (hook == NULL)
+        // n.b. like the frontend interface (see JuliaFrontend.jl), without
+        // module edition markers
+        hook = jl_eval_string(
+            "let strip(ex) = (ex isa Expr && (ex.head === :module && ex.args[1] isa VersionNumber &&"
+            "                     popfirst!(ex.args); foreach(strip, ex.args)); ex)\n"
+            "    (p, n, f, o) -> (r = Base.JuliaSyntax.core_parser_hook("
+            "        Core.svec(Ptr{UInt8}(p), n), f, 1, 0, o, (1, 14)); strip(r[1]); r)\n"
+            "end");
+    jl_value_t **args;
+    JL_GC_PUSHARGS(args, 4);
+    args[0] = jl_box_voidpointer((void *)text);
+    args[1] = jl_box_long((long)len);
+    args[2] = fname;
+    args[3] = opts;
+    jl_value_t *r = jl_call(hook, args, 4);
+    JL_GC_POP();
+    return r;
+}
 
 typedef jl_value_t *(*parse_fptr_t)(const char *, size_t, jl_value_t *, size_t, size_t, jl_value_t *);
-typedef jl_value_t *(*lower_fptr_t)(jl_value_t *, jl_module_t *, const char *, int, size_t, int);
-typedef int (*opquery_fptr_t)(const char *);
+typedef jl_value_t *(*lower_fptr_t)(jl_module_t *, jl_value_t *, size_t, int8_t, jl_value_t *);
 typedef void (*init_fptr_t)(void);
 
 static int nfail = 0;
@@ -52,9 +71,7 @@ int main(int argc, char **argv)
     init_fptr_t fe_init = (init_fptr_t)dlsym(handle, "jl_frontend_init_impl");
     parse_fptr_t fe_parse = (parse_fptr_t)dlsym(handle, "jl_frontend_parse_impl");
     lower_fptr_t fe_lower = (lower_fptr_t)dlsym(handle, "jl_frontend_lower_impl");
-    opquery_fptr_t fe_isop = (opquery_fptr_t)dlsym(handle, "jl_is_operator_impl");
-    opquery_fptr_t fe_prec = (opquery_fptr_t)dlsym(handle, "jl_operator_precedence_impl");
-    if (!fe_init || !fe_parse || !fe_lower || !fe_isop || !fe_prec) {
+    if (!fe_init || !fe_parse || !fe_lower) {
         fprintf(stderr, "ERROR: missing ABI symbols in %s\n", argv[1]);
         return 2;
     }
@@ -84,8 +101,7 @@ int main(int argc, char **argv)
         }
         got = jl_svecref(result, 0);
         // reference: the host's own parser on the same input
-        expected = jl_svecref(jl_parse(text, strlen(text), fname, 1, 0,
-                                       (jl_value_t *)jl_symbol("all"), NULL), 0);
+        expected = jl_svecref(host_parse(text, strlen(text), fname, (jl_value_t *)jl_symbol("all")), 0);
         char name[128];
         snprintf(name, sizeof(name), "cross-runtime parse %zu", i + 1);
         // n.b. Expr is mutable, so egal is identity; compare structurally
@@ -128,7 +144,7 @@ int main(int argc, char **argv)
     {
         // host-side macro for the cross-runtime macro expansion tests
         // (defined with the host's own frontend; the guest never sees it)
-        jl_eval_string("macro fe_addone(x)\n    :( \$(esc(x)) + 1 )\nend");
+        jl_eval_string("macro fe_addone(x)\n    :( $(esc(x)) + 1 )\nend");
         if (jl_exception_occurred()) {
             jl_static_show(jl_stderr_stream(), jl_current_exception(jl_current_task));
             jl_exception_clear();
@@ -153,7 +169,7 @@ int main(int argc, char **argv)
             {"map(x -> x^2, [1, 2, 3])[3] + 33", 42},
             // quoted syntax (with and without interpolation)
             {"let q = :(a + b)\n    q.head === :call ? 42 : 0\nend", 42},
-            {"let x = 41\n    ex = :( \$x + 1 )\n    ex.args[2] + 1\nend", 42},
+            {"let x = 41\n    ex = :( $x + 1 )\n    ex.args[2] + 1\nend", 42},
             // global method capturing a toplevel local
             // (Core.replace_captured_locals! path)
             {"let v = 42\n    global cross_capt_f() = v\n    cross_capt_f()\nend", 42},
@@ -173,9 +189,8 @@ int main(int argc, char **argv)
             JL_GC_PUSH4(&fname, &expr, &lowered, &val);
             JL_TRY {
                 fname = jl_cstr_to_string("none");
-                expr = jl_svecref(jl_parse(code, strlen(code), fname, 1, 0,
-                                           (jl_value_t *)jl_symbol("statement"), NULL), 0);
-                lowered = fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+                expr = jl_svecref(host_parse(code, strlen(code), fname, (jl_value_t *)jl_symbol("statement")), 0);
+                lowered = fe_lower(jl_main_module, expr, (size_t)-1, 0, jl_new_struct(jl_linenumbernode_type, jl_box_long(1), jl_symbol("none")));
                 val = jl_toplevel_eval(jl_main_module, jl_svecref(lowered, 0));
                 int ok = jl_is_int64(val) && jl_unbox_int64(val) == lowers[i].expected;
                 check(name, ok);
@@ -201,9 +216,8 @@ int main(int argc, char **argv)
             JL_TRY {
                 fname = jl_cstr_to_string("none");
                 const char *mc = "@assert 1 + 1 == 2";
-                expr = jl_svecref(jl_parse(mc, strlen(mc), fname, 1, 0,
-                                           (jl_value_t *)jl_symbol("statement"), NULL), 0);
-                lowered = fe_lower(expr, jl_main_module, "none", 1, (size_t)-1, 0);
+                expr = jl_svecref(host_parse(mc, strlen(mc), fname, (jl_value_t *)jl_symbol("statement")), 0);
+                lowered = fe_lower(jl_main_module, expr, (size_t)-1, 0, jl_new_struct(jl_linenumbernode_type, jl_box_long(1), jl_symbol("none")));
                 val = jl_toplevel_eval(jl_main_module, jl_svecref(lowered, 0));
                 check("cross-runtime lower of @assert", val == jl_nothing);
             }
@@ -216,22 +230,28 @@ int main(int argc, char **argv)
         }
     }
 
-    // --- operator queries: guest answers must match the host frontend ---
+    // --- operator queries, through the frontend interface ---
     {
-        const char *ops[] = {"+", ".+", "+=", "&&", "::", "<:", "~", "in", "where",
-                             "⊕", "√", "im", "foo", "...", "->", "==", "⊻="};
-        int bad = 0;
-        for (size_t i = 0; i < sizeof(ops) / sizeof(ops[0]); i++) {
-            if (fe_isop(ops[i]) != jl_is_operator(ops[i]) ||
-                fe_prec(ops[i]) != jl_operator_precedence(ops[i])) {
-                fprintf(stderr, "  op mismatch: %s\n", ops[i]);
-                bad++;
-            }
+        typedef int (*opq_fptr_t)(const char *);
+        opq_fptr_t is_op = (opq_fptr_t)dlsym(handle, "jl_frontend_is_operator_impl");
+        opq_fptr_t is_unary = (opq_fptr_t)dlsym(handle, "jl_frontend_is_unary_operator_impl");
+        opq_fptr_t is_ub = (opq_fptr_t)dlsym(handle, "jl_frontend_is_unary_and_binary_operator_impl");
+        opq_fptr_t is_syn = (opq_fptr_t)dlsym(handle, "jl_frontend_is_syntactic_operator_impl");
+        opq_fptr_t prec = (opq_fptr_t)dlsym(handle, "jl_frontend_operator_precedence_impl");
+        if (!is_op || !is_unary || !is_ub || !is_syn || !prec) {
+            check("operator query ABI symbols", 0);
         }
-        check("cross-runtime operator queries", bad == 0);
+        else {
+            check("operator query +", is_op("+") && is_unary("+") && is_ub("+") && !is_syn("+") && prec("+") == 11);
+            check("operator query .*", is_op(".*") && !is_unary(".*") && prec(".*") == 12);
+            check("operator query +₁", is_op("+₁") && !is_unary("+₁") && prec("+₁") == 11);
+            check("operator query &&", is_op("&&") && is_syn("&&") && prec("&&") == 6);
+            check("operator query in", !is_op("in") && prec("in") == 7);
+            check("operator query x", !is_op("x") && prec("x") == 0);
+        }
     }
 
-    printf(nfail == 0 ? "HOST DRIVER: ALL PASSED\n" : "HOST DRIVER: %d FAILURES\n", nfail);
+    printf(nfail == 0 ? "all passed\n" : "%d failures\n", nfail);
     jl_atexit_hook(nfail == 0 ? 0 : 1);
     return nfail == 0 ? 0 : 1;
 }

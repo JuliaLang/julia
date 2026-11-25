@@ -217,7 +217,7 @@ end
 # `legacyscope`.
 function _lowering_is_active()
     lower = getglobal(Core, :_lower)
-    return lower !== nothing && lower !== fl_lower
+    return lower !== nothing && lower !== frontend_lower
 end
 
 function _lowering_macroexpand(m::Module, @nospecialize(x), recursive::Bool, legacyscope::Bool)

@@ -516,7 +516,7 @@ end
             @test jl_eval(test_mod, ex; edition=JL_NEW_EDITION) == (a=1,)
         end
         @testset let ex = Expr(:tuple, kw) # calls tuple constructor with kw
-            @test_throws MethodError fl_eval(test_mod, ex)
+            has_flisp && @test_throws MethodError fl_eval(test_mod, ex)
             @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:tuple, pkw)
@@ -535,7 +535,7 @@ end
             @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:curly, Array, Int, kw) # calls constructor with kw
-            @test_throws MethodError fl_eval(test_mod, ex)
+            has_flisp && @test_throws MethodError fl_eval(test_mod, ex)
             @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:curly, Array, Int, pkw)
@@ -553,7 +553,7 @@ end
             @test_throws LoweringError jl_eval(test_mod, ex; edition=JL_NEW_EDITION)
         end
         @testset let ex = Expr(:vect, kw) # calls vect constructor with kw
-            @test_throws MethodError fl_eval(test_mod, ex)
+            has_flisp && @test_throws MethodError fl_eval(test_mod, ex)
             @test_throws MethodError jl_eval(test_mod, ex; edition=JL_NEW_EDITION) broken=true
         end
         @testset let ex = Expr(:vect, pkw)

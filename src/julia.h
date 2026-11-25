@@ -2535,10 +2535,6 @@ JL_DLLIMPORT jl_value_t *jl_frontend_lower(jl_module_t *inmodule, jl_value_t *ex
                                            bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
 JL_DLLIMPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
                                         int recursive, int inplace, int expand_scope) JL_CANSAFEPOINT;
-JL_DLLIMPORT void jl_lisp_prompt(void) JL_CANSAFEPOINT;
-JL_DLLIMPORT void fl_profile(const char *fname) JL_CANSAFEPOINT;
-JL_DLLIMPORT void fl_show_profile(void) JL_CANSAFEPOINT;
-JL_DLLIMPORT void fl_clear_profile(void) JL_CANSAFEPOINT;
 
 // external libraries
 enum JL_RTLD_CONSTANT {

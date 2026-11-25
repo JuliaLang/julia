@@ -3,11 +3,16 @@
 // Host-facing entry points of the self-contained standalone frontend
 // library (libjulia-frontend-standalone).
 //
-// This library contains a complete, private copy of the Julia runtime
-// (libjulia-internal compiled objects, libuv, libsupport, ...) plus a
-// system image with JuliaSyntax/JuliaLowering, all with their symbols
-// internalized: only the jl_frontend_*_impl ABI below is exported. The
-// host process runs its own, possibly different-version, Julia runtime.
+// This library contains a complete, private copy of a Julia runtime (the
+// static libjulia-internal of the julia release that compiled the frontend)
+// plus a system image with JuliaSyntax/JuliaLowering. The library is loaded
+// with RTLD_LOCAL | RTLD_DEEPBIND and linked with -Bsymbolic, so its runtime
+// stays private to it; the host finds only the jl_frontend_*_impl ABI
+// below. The host process runs its own, generally different-version, Julia
+// runtime.
+//
+// This file is compiled against the *guest* runtime's public headers (those
+// of the julia release that built the library), not the host's.
 //
 // Consequently values may not be passed between the two runtimes: each has
 // its own heap, GC and type objects. The functions here implement the
@@ -24,6 +29,7 @@
 // initializes it; later threads are adopted), and host TLS is simply left
 // untouched while host API functions are called for conversion.
 
+#include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -31,28 +37,23 @@
 #include <dlfcn.h>
 
 #include "julia.h"
-#include "julia_internal.h"
-#include "processor.h"
+
+// Defined by the (static) runtime, though not declared in its public headers
+extern void jl_init_options(void);
+extern jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 
 // Native entry points exported (internally) by the embedded image; these
-// take values of the private runtime.
+// take values of the private runtime. (The values are passed as pointers,
+// since the julia that compiles the frontend need not support `Any`
+// arguments to `@ccallable`; see JuliaFrontend.jl.)
 extern jl_value_t *jlfe_parse(const char *text, size_t text_len, jl_value_t *filename,
                               size_t lineno, size_t offset, jl_value_t *options);
-extern jl_value_t *jlfe_lower(jl_value_t *ex, jl_module_t *mod, const char *filename,
-                              int line, size_t world, int warn);
+extern jl_value_t *jlfe_lower(jl_module_t *mod, jl_value_t *ex, size_t world, int warn,
+                              const char *filename, int line);
 extern jl_value_t *jlfe_macroexpand(jl_value_t *ex, jl_module_t *mod, int recursive,
                                     int inplace, int expand_scope);
-extern int jlfe_is_operator(const char *s);
-extern int jlfe_is_unary_operator(const char *s);
-extern int jlfe_is_unary_and_binary_operator(const char *s);
-extern int jlfe_is_syntactic_operator(const char *s);
-extern int jlfe_operator_precedence(const char *s);
-
-// Embedded system image (provided by the statically linked image archive)
-extern const jl_image_pointers_t jl_image_pointers;
-extern const char jl_system_image_data[];
-extern size_t jl_system_image_size;
-extern uint32_t jl_system_image_checksum;
+extern void jlfe_set_binding_salt(const char *salt);
+extern int jlfe_operator_info(const char *name);
 
 // ------------------------------------------------------------------------
 // Host API. `hv` is a value of the *host* runtime; it is opaque here.
@@ -318,6 +319,69 @@ static inline void hpop(void **pg, hframe_t *f)
 }
 
 // ------------------------------------------------------------------------
+// Errors. A host error that is raised while GC frames of this runtime are
+// pushed (during the conversions) must unwind those first: the host's
+// exception handling restores the host's GC frame stack, but would leave
+// them on this runtime's, where its next collection would scan them. The
+// sections of code that push such frames (which are not reentrant) record
+// this runtime's GC frame stack at their start.
+
+static __thread jl_gcframe_t *fe_section_gcstack;
+static __thread int fe_in_section;
+
+static void fe_section_begin(void)
+{
+    fe_section_gcstack = *jl_get_pgcstack();
+    fe_in_section = 1;
+}
+
+static void fe_section_end(void)
+{
+    fe_in_section = 0;
+}
+
+static void fe_raise(const char *fmt, ...)
+{
+    char buf[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (fe_in_section) {
+        *jl_get_pgcstack() = fe_section_gcstack;
+        fe_in_section = 0;
+    }
+    H.errorf("%s", buf);
+}
+
+// Vectors are converted structurally into this runtime, since lowering
+// needs to see the contents of some (the argument names in a generated
+// function's stub); the host vectors they came from are kept here, so
+// that those which lowering passes through come back as themselves.
+static jl_value_t **fe_vec_fe;
+static hv *fe_vec_host;
+static size_t fe_nvecs, fe_vecs_cap;
+
+static void fe_vec_record(jl_value_t *fe_vec, hv host_vec)
+{
+    if (fe_nvecs == fe_vecs_cap) {
+        fe_vecs_cap = fe_vecs_cap ? 2 * fe_vecs_cap : 16;
+        fe_vec_fe = (jl_value_t **)realloc(fe_vec_fe, fe_vecs_cap * sizeof(jl_value_t *));
+        fe_vec_host = (hv *)realloc(fe_vec_host, fe_vecs_cap * sizeof(hv));
+    }
+    fe_vec_fe[fe_nvecs] = fe_vec;
+    fe_vec_host[fe_nvecs++] = host_vec;
+}
+
+static hv fe_vec_lookup(jl_value_t *fe_vec)
+{
+    for (size_t i = 0; i < fe_nvecs; i++)
+        if (fe_vec_fe[i] == fe_vec)
+            return fe_vec_host[i];
+    return NULL;
+}
+
+// ------------------------------------------------------------------------
 // Conversion of this runtime's values to host values, for the value kinds
 // that can occur in parser output.
 
@@ -413,7 +477,7 @@ static hv fe2host(jl_value_t *v, void **pg)
             return *H.main_module;
         void *hmod = fe_shadow_host_ptr(v);
         if (hmod == NULL)
-            H.errorf("libjulia-frontend-standalone: module %s is not a host module shadow",
+            fe_raise("libjulia-frontend-standalone: module %s is not a host module shadow",
                      jl_symbol_name(((jl_module_t *)v)->name));
         return (hv)hmod;
     }
@@ -486,7 +550,7 @@ static hv fe2host(jl_value_t *v, void **pg)
     if (jl_is_svec(v)) {
         if (jl_svec_len(v) == 0)
             return *H.emptysvec;
-        H.errorf("libjulia-frontend-standalone: cannot convert non-empty "
+        fe_raise("libjulia-frontend-standalone: cannot convert non-empty "
                  "SimpleVector across the runtime boundary yet");
     }
     if (jl_is_tuple(v)) {
@@ -506,13 +570,13 @@ static hv fe2host(jl_value_t *v, void **pg)
         hv r = H.call(tuple_f, (hv *)H.array_ptr(ha), (int32_t)n);
         hpop(pg, &f);
         if (r == NULL)
-            H.errorf("libjulia-frontend-standalone: host tuple construction failed");
+            fe_raise("libjulia-frontend-standalone: host tuple construction failed");
         return r;
     }
     if (t == (jl_value_t *)jl_datatype_type) {
         if (v == (jl_value_t *)jl_any_type)
             return *H.any_type;
-        H.errorf("libjulia-frontend-standalone: cannot convert type %s across the "
+        fe_raise("libjulia-frontend-standalone: cannot convert type %s across the "
                  "runtime boundary", jl_symbol_name(((jl_datatype_t *)v)->name->name));
     }
     {
@@ -554,7 +618,7 @@ static hv fe2host(jl_value_t *v, void **pg)
             return *H.nothing;
         jl_value_t *str = jl_call1(jl_get_function(jl_base_module, "string"), v);
         if (str == NULL || !jl_is_string(str))
-            H.errorf("libjulia-frontend-standalone: failed to stringify VersionNumber");
+            fe_raise("libjulia-frontend-standalone: failed to stringify VersionNumber");
         hframe_t f;
         hpush(pg, &f);
         hv hstr = H.pchar_to_string(jl_string_data(str), jl_string_len(str));
@@ -562,10 +626,31 @@ static hv fe2host(jl_value_t *v, void **pg)
         hv r = H.call1(hctor, hstr);
         hpop(pg, &f);
         if (r == NULL)
-            H.errorf("libjulia-frontend-standalone: host VersionNumber construction failed");
+            fe_raise("libjulia-frontend-standalone: host VersionNumber construction failed");
         return r;
     }
-    H.errorf("libjulia-frontend-standalone: cannot convert value of type %s "
+    if (t == jl_array_any_type) {
+        hv orig = fe_vec_lookup(v);
+        if (orig != NULL)
+            return orig;
+        size_t i, n = jl_array_nrows(v);
+        hframe_t f;
+        hpush(pg, &f);
+        hv ha = H.alloc_vec_any(0);
+        hroot(&f, 0, ha);
+        for (i = 0; i < n; i++) {
+            jl_value_t *x = jl_array_ptr_ref(v, i);
+            if (x == NULL)
+                fe_raise("libjulia-frontend-standalone: cannot convert a Vector "
+                         "with undefined elements across the runtime boundary");
+            hv c = fe2host(x, pg);
+            hroot(&f, 1, c);
+            H.array_ptr_1d_push(ha, c);
+        }
+        hpop(pg, &f);
+        return ha;
+    }
+    fe_raise("libjulia-frontend-standalone: cannot convert value of type %s "
              "across the runtime boundary", jl_typeof_str(v));
     return NULL; // unreachable
 }
@@ -599,16 +684,9 @@ static void fe_cross_runtime_init(void)
         // serialized into the same image chain (bootstrap stages) would
         // reuse names. The host world counter is monotonic across such
         // chains.
-        char saltbuf[128];
-        snprintf(saltbuf, sizeof(saltbuf),
-                 "JuliaFrontend.JuliaLowering._module_binding_salt[] = \"w%zu#\"",
-                 (size_t)H.get_world_counter());
-        jl_eval_string(saltbuf);
-        if (jl_exception_occurred()) {
-            jl_exception_clear();
-            fprintf(stderr, "libjulia-frontend-standalone: warning: could not "
-                            "set the binding name salt\n");
-        }
+        char saltbuf[64];
+        snprintf(saltbuf, sizeof(saltbuf), "w%zu#", (size_t)H.get_world_counter());
+        jlfe_set_binding_salt(saltbuf);
     }
     fe_foreign_type = jl_eval_string(
         "struct __FeHostValue ptr::Ptr{Cvoid} end; __FeHostValue");
@@ -745,7 +823,7 @@ static jl_value_t *host2fe(hv v)
                 hv elt = H.call2(getfield_f, v, H.box_int64((int64_t)(i + 1)));
                 fe_args[i] = host2fe(elt);
             }
-            jl_value_t *r = jl_f_tuple(NULL, fe_args, (uint32_t)n);
+            jl_value_t *r = jl_call(jl_get_function(jl_core_module, "tuple"), fe_args, (int32_t)n);
             JL_GC_POP();
             return r;
         }
@@ -760,10 +838,13 @@ static jl_value_t *host2fe(hv v)
         jl_array_t *a = jl_alloc_vec_any(n);
         JL_GC_PUSH1(&a);
         for (i = 0; i < n; i++) {
+            if (data[i] == NULL)
+                continue; // undefined (and so in the new vector)
             jl_value_t *c = host2fe(data[i]);
             jl_array_ptr_set(a, i, c);
         }
         JL_GC_POP();
+        fe_vec_record((jl_value_t *)a, v);
         return (jl_value_t *)a;
     }
     return fe_wrap_foreign(v);
@@ -816,27 +897,58 @@ static hv fe2host_bits_vec(jl_value_t *a, hv htype, size_t elsz)
     return ha;
 }
 
+static hv fe2host_debuginfo(jl_value_t *di, void **pg);
+
+// A svec of DebugInfo (the `edges` of one): built as a host Vector{Any}, which
+// keeps the elements rooted, and then passed to the host's Core.svec
+static hv fe2host_debuginfo_svec(jl_value_t *edges, void **pg)
+{
+    size_t i, n = jl_svec_len(edges);
+    if (n == 0)
+        return *H.emptysvec;
+    hframe_t f;
+    hpush(pg, &f);
+    hv ha = H.alloc_vec_any(0);
+    hroot(&f, 0, ha);
+    for (i = 0; i < n; i++) {
+        hv c = fe2host_debuginfo(jl_svecref(edges, i), pg);
+        hroot(&f, 1, c);
+        H.array_ptr_1d_push(ha, c);
+    }
+    hv svec_f = H.get_global(*H.core_module, H.symbol("svec"));
+    hroot(&f, 2, svec_f);
+    hv r = H.call(svec_f, (hv *)H.array_ptr(ha), (int32_t)n);
+    hpop(pg, &f);
+    if (r == NULL)
+        fe_raise("libjulia-frontend-standalone: could not convert DebugInfo edges");
+    return r;
+}
+
 static hv fe2host_debuginfo(jl_value_t *di, void **pg)
 {
-    // DebugInfo(def::Union{Symbol,Method,MethodInstance}, linetable, edges::SimpleVector, codelocs::String)
+    // DebugInfo(def::Union{Symbol,Method,MethodInstance},
+    //           linetable::Union{Nothing,DebugInfo,String}, edges::SimpleVector,
+    //           codelocs::String)
     jl_value_t *def = jl_fieldref_noalloc(di, 0);
     jl_value_t *linetable = jl_fieldref_noalloc(di, 1);
     jl_value_t *edges = jl_fieldref_noalloc(di, 2);
     jl_value_t *codelocs = jl_fieldref_noalloc(di, 3);
     if (!jl_is_symbol(def))
-        H.errorf("libjulia-frontend-standalone: cannot convert DebugInfo.def of type %s",
+        fe_raise("libjulia-frontend-standalone: cannot convert DebugInfo.def of type %s",
                  jl_typeof_str(def));
-    if (jl_svec_len(edges) != 0)
-        H.errorf("libjulia-frontend-standalone: cannot convert DebugInfo with edges yet");
     hframe_t f;
     hpush(pg, &f);
     hv args[4];
     args[0] = H.symbol((const char *)jl_symbol_name((jl_sym_t *)def));
-    args[1] = linetable == jl_nothing ? *H.nothing : fe2host_debuginfo(linetable, pg);
+    args[1] = linetable == jl_nothing ? *H.nothing :
+              jl_is_string(linetable) ?
+                  H.pchar_to_string(jl_string_data(linetable), jl_string_len(linetable)) :
+                  fe2host_debuginfo(linetable, pg);
     hroot(&f, 0, args[1]);
-    args[2] = *H.emptysvec;
+    args[2] = fe2host_debuginfo_svec(edges, pg);
+    hroot(&f, 1, args[2]);
     args[3] = H.pchar_to_string(jl_string_data(codelocs), jl_string_len(codelocs));
-    hroot(&f, 1, args[3]);
+    hroot(&f, 2, args[3]);
     hv r = H.new_structv(*H.debuginfo_type, args, 4);
     hpop(pg, &f);
     return r;
@@ -910,29 +1022,17 @@ static void fe_runtime_init(void)
         strcpy(selfpath, info.dli_fname);
         jl_options.image_file = selfpath;
     }
-    // Sys.__init__ requires julia_bindir to be non-NULL (the equivalent of
-    // jlapi.c's jl_resolve_sysimg_location, which is static there)
     static char bindir[4096];
     if (jl_options.image_file) {
         strcpy(bindir, jl_options.image_file);
         char *slash = strrchr(bindir, '/');
         if (slash)
             *slash = '\0';
-        jl_options.julia_bindir = bindir;
     }
-
-    // The image is statically linked into this library; construct the
-    // image buffer directly from our own symbols.
-    jl_image_buf_t image = {
-        .kind = JL_IMAGE_KIND_SO,
-        .pointers = &jl_image_pointers,
-        .data = jl_system_image_data,
-        .size = jl_system_image_size,
-        .checksum = jl_system_image_checksum,
-        .base = (intptr_t)info.dli_fbase,
-    };
-
-    jl_init_(image);
+    // The runtime is the static libjulia-internal, so the system image it
+    // restores is the one linked into this library (the image path is only
+    // recorded, e.g. as Base.julia_cmd's image).
+    jl_init_with_image_file(jl_options.image_file ? bindir : NULL, jl_options.image_file);
     jl_exception_clear();
     fe_cross_runtime_init();
 }
@@ -951,7 +1051,10 @@ static void fe_enter(void)
 
 JL_DLLEXPORT void jl_frontend_init_impl(void)
 {
-    fe_enter();
+    // The host initializes its frontend at startup, but lowering and parsing
+    // are served by its own JuliaSyntax and JuliaLowering once it has a Base,
+    // so this library is only used when bootstrapping one: start the private
+    // runtime (restoring its image) only on first use, in fe_enter.
 }
 
 JL_DLLEXPORT hv jl_frontend_parse_impl(const char *text, size_t text_len, hv filename,
@@ -962,6 +1065,7 @@ JL_DLLEXPORT hv jl_frontend_parse_impl(const char *text, size_t text_len, hv fil
     const char *opts = (const char *)H.symbol_name(options);
 
     jl_value_t *fe_res = NULL, *fe_fname = NULL;
+    fe_section_begin();
     JL_GC_PUSH2(&fe_res, &fe_fname);
     fe_fname = jl_pchar_to_string(fname, strlen(fname));
     jl_value_t *fe_opts = (jl_value_t *)jl_symbol(opts);
@@ -980,6 +1084,7 @@ JL_DLLEXPORT hv jl_frontend_parse_impl(const char *text, size_t text_len, hv fil
     hv result = H.svec(2, hex, hofs);
     hpop(pg, &f);
     JL_GC_POP();
+    fe_section_end();
     return result;
 }
 
@@ -1232,11 +1337,20 @@ static hv h_expand_macros_in_quote(hv expr, hv inmodule, h_macroctx_t *macroctx,
     return expr;
 }
 
-JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filename,
-                                       int line, size_t world, int warn)
+JL_DLLEXPORT hv jl_frontend_lower_impl(hv inmodule, hv expr, size_t world, int8_t warn,
+                                       hv loc)
 {
     fe_enter();
     fe_cur_host_inmodule = inmodule;
+    // the source location, a host LineNumberNode
+    char filename[1024] = "none";
+    int line = 0;
+    {
+        hv file = H.get_field(loc, "file");
+        if (H.typeof_(file) == *H.symbol_type)
+            snprintf(filename, sizeof(filename), "%s", (const char *)H.symbol_name(file));
+        line = (int)H.unbox_int64(H.get_field(loc, "line"));
+    }
 
     // Expand macros host-side first (flisp's lowering did the same); the
     // expanded tree, including its hygienic-scope wrappers, then crosses
@@ -1251,6 +1365,8 @@ JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filenam
         hroot(&f, 1, expr);
 
         jl_value_t *fe_ex0 = NULL, *fe_mod0 = NULL, *fe_res0 = NULL;
+        fe_nvecs = 0;
+        fe_section_begin();
         JL_GC_PUSH3(&fe_ex0, &fe_mod0, &fe_res0);
         fe_mod0 = fe_shadow_module(inmodule);
         fe_ex0 = host2fe(expr);
@@ -1263,8 +1379,7 @@ JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filenam
             jl_static_show(JL_STDERR, fe_ex0);
             jl_printf(JL_STDERR, "\n");
         }
-        fe_res0 = jlfe_lower(fe_ex0, (jl_module_t *)fe_mod0, filename ? filename : "none",
-                             line, (size_t)-1, warn);
+        fe_res0 = jlfe_lower((jl_module_t *)fe_mod0, fe_ex0, (size_t)-1, warn, filename, line);
         jl_value_t *r0 = jl_svecref(fe_res0, 0);
         if (jl_svec_len(fe_res0) == 2 && jl_is_symbol(r0) &&
             r0 == (jl_value_t *)jl_symbol("__fe_lowering_error__")) {
@@ -1272,6 +1387,7 @@ JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filenam
             jl_value_t *msg = jl_svecref(fe_res0, 1);
             snprintf(buf, sizeof(buf), "%.*s", (int)jl_string_len(msg), jl_string_data(msg));
             JL_GC_POP();
+            fe_section_end();
             hpop(pg, &f);
             H.errorf("jl_frontend_lower: %s", buf);
         }
@@ -1285,8 +1401,43 @@ JL_DLLEXPORT hv jl_frontend_lower_impl(hv expr, hv inmodule, const char *filenam
         hv result = H.svec(1, hlowered);
         hpop(pg, &f);
         JL_GC_POP();
+        fe_section_end();
+        fe_nvecs = 0;
         return result;
     }
+}
+
+// The operator queries, which the host asks the frontend until its Base has
+// started (see jlfe_operator_info for the encoding of the answers)
+static int fe_operator_info(const char *sym)
+{
+    fe_enter();
+    return jlfe_operator_info(sym);
+}
+
+JL_DLLEXPORT int jl_frontend_is_operator_impl(const char *sym)
+{
+    return (fe_operator_info(sym) & 1) != 0;
+}
+
+JL_DLLEXPORT int jl_frontend_is_unary_operator_impl(const char *sym)
+{
+    return (fe_operator_info(sym) & 2) != 0;
+}
+
+JL_DLLEXPORT int jl_frontend_is_unary_and_binary_operator_impl(const char *sym)
+{
+    return (fe_operator_info(sym) & 4) != 0;
+}
+
+JL_DLLEXPORT int jl_frontend_is_syntactic_operator_impl(const char *sym)
+{
+    return (fe_operator_info(sym) & 8) != 0;
+}
+
+JL_DLLEXPORT int jl_frontend_operator_precedence_impl(const char *sym)
+{
+    return fe_operator_info(sym) >> 8;
 }
 
 JL_DLLEXPORT hv jl_macroexpand_impl(hv expr, hv inmodule, int recursive, int inplace,
@@ -1309,60 +1460,4 @@ JL_DLLEXPORT hv jl_macroexpand_impl(hv expr, hv inmodule, int recursive, int inp
                            H.get_world_counter(), 0);
     hpop(pg, &f);
     return r;
-}
-
-JL_DLLEXPORT int jl_is_operator_impl(const char *s)
-{
-    fe_enter();
-    return jlfe_is_operator(s);
-}
-
-JL_DLLEXPORT int jl_is_unary_operator_impl(const char *s)
-{
-    fe_enter();
-    return jlfe_is_unary_operator(s);
-}
-
-JL_DLLEXPORT int jl_is_unary_and_binary_operator_impl(const char *s)
-{
-    fe_enter();
-    return jlfe_is_unary_and_binary_operator(s);
-}
-
-JL_DLLEXPORT int jl_is_syntactic_operator_impl(const char *s)
-{
-    fe_enter();
-    return jlfe_is_syntactic_operator(s);
-}
-
-JL_DLLEXPORT int jl_operator_precedence_impl(const char *s)
-{
-    fe_enter();
-    return jlfe_operator_precedence(s);
-}
-
-JL_DLLEXPORT void jl_lisp_prompt_impl(void)
-{
-    fe_resolve_host_api();
-    H.errorf("--lisp: this julia uses the JuliaSyntax/JuliaLowering frontend; "
-             "there is no flisp REPL");
-}
-
-JL_DLLEXPORT void fl_profile_impl(const char *fname)
-{
-    (void)fname;
-    fe_resolve_host_api();
-    H.errorf("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend");
-}
-
-JL_DLLEXPORT void fl_show_profile_impl(void)
-{
-    fe_resolve_host_api();
-    H.errorf("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend");
-}
-
-JL_DLLEXPORT void fl_clear_profile_impl(void)
-{
-    fe_resolve_host_api();
-    H.errorf("flisp profiling is not available in the JuliaSyntax/JuliaLowering frontend");
 }

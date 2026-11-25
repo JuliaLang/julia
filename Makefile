@@ -31,7 +31,7 @@ all: debug release
 # sort is used to remove potential duplicates
 DIRS := $(sort $(build_bindir) $(build_depsbindir) $(build_libdir) $(build_private_libdir) $(build_private_libexecdir) $(build_libexecdir) $(build_includedir) $(build_includedir)/julia $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_datarootdir)/julia/stdlib $(build_man1dir))
 ifneq ($(BUILDROOT),$(JULIAHOME))
-BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/flisp src/support src/arch src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
+BUILDDIRS := $(BUILDROOT) $(addprefix $(BUILDROOT)/,base src src/support src/arch src/clangsa cli doc deps stdlib test test/clangsa test/embedding test/gcext test/llvmpasses)
 BUILDDIRMAKE := $(addsuffix /Makefile,$(BUILDDIRS)) $(BUILDROOT)/sysimage.mk $(BUILDROOT)/pkgimage.mk
 DIRS += $(BUILDDIRS)
 $(BUILDDIRMAKE): | $(BUILDDIRS)
@@ -61,8 +61,6 @@ endif
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base $(JULIAHOME)/test,$(eval $(call symlink_target,$(link),$$(build_datarootdir)/julia,$(notdir $(link)))))
 
-julia_flisp.boot.inc.phony: julia-deps
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
 $(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl -o -name version_git_dirty \) -prune -o -type f -print)
@@ -130,7 +128,7 @@ julia-libllvmcalltest: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src libllvmcalltest
 
 .PHONY: julia-src-release julia-src-debug
-julia-src-release julia-src-debug : julia-src-% : julia-deps julia_flisp.boot.inc.phony julia-cli-%
+julia-src-release julia-src-debug : julia-src-% : julia-deps julia-cli-%
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src $*
 
 .PHONY: julia-cli-release julia-cli-debug
@@ -267,10 +265,10 @@ JL_PRIVATE_LIBS-1 := # libraries from USE_SYSTEM=1
 JL_PRIVATE_EXES := 7z
 JL_PRIVATE_TOOLS :=
 ifeq ($(JULIA_BUILD_MODE),release)
-JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen libjulia-frontend
+JL_PRIVATE_LIBS-0 += libjulia-internal libjulia-codegen
 JL_STATIC_RUNTIME := libjulia-internal.a
 else ifeq ($(JULIA_BUILD_MODE),debug)
-JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug libjulia-frontend-debug
+JL_PRIVATE_LIBS-0 += libjulia-internal-debug libjulia-codegen-debug
 JL_STATIC_RUNTIME := libjulia-internal-debug.a
 endif
 # BSD-3-Clause
@@ -384,13 +382,11 @@ ifeq ($(JULIA_BUILD_MODE),release)
 	cp -a $(build_libdir)/libjulia.*.dSYM $(DESTDIR)$(libdir)
 	cp -a $(build_libdir)/libjulia-internal.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_libdir)/libjulia-codegen.*.dSYM $(DESTDIR)$(private_libdir)
-	cp -a $(build_libdir)/libjulia-frontend.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys.dylib.dSYM $(DESTDIR)$(private_libdir)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	cp -a $(build_libdir)/libjulia-debug.*.dSYM $(DESTDIR)$(libdir)
 	cp -a $(build_libdir)/libjulia-internal-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_libdir)/libjulia-codegen-debug.*.dSYM $(DESTDIR)$(private_libdir)
-	cp -a $(build_libdir)/libjulia-frontend-debug.*.dSYM $(DESTDIR)$(private_libdir)
 	cp -a $(build_private_libdir)/sys-debug.dylib.dSYM $(DESTDIR)$(private_libdir)
 endif
 endif
@@ -544,21 +540,17 @@ ifeq ($(OS), Darwin)
 ifeq ($(JULIA_BUILD_MODE),release)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
-	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-frontend.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
 	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
-	install_name_tool -add_rpath @loader_path/$(reverse_private_libdir_rel) $(DESTDIR)$(private_libdir)/libjulia-frontend-debug.$(SHLIB_EXT)
 endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal.$(SHLIB_EXT)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen.$(SHLIB_EXT)
-	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-frontend.$(SHLIB_EXT)
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-internal-debug.$(SHLIB_EXT)
 	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-codegen-debug.$(SHLIB_EXT)
-	$(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$ORIGIN:$$ORIGIN/$(reverse_private_libdir_rel)' $(DESTDIR)$(private_libdir)/libjulia-frontend-debug.$(SHLIB_EXT)
 endif
 endif
 
@@ -751,7 +743,7 @@ clean: | $(CLEAN_TARGETS)
 
 .PHONY: cleanall
 cleanall: clean
-	@-$(MAKE) -C $(BUILDROOT)/src clean-flisp clean-support
+	@-$(MAKE) -C $(BUILDROOT)/src clean-support
 	@-$(MAKE) -C $(BUILDROOT)/deps clean-libuv clean-utf8proc
 	-rm -fr $(build_prefix) $(build_staging)
 
@@ -819,7 +811,6 @@ endif
 		$(call cygpath_w,$(build_shlibdir)/libjulia.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-internal.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_shlibdir)/libjulia-codegen.$(SHLIB_EXT)) \
-		$(call cygpath_w,$(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT)) \
 		$(call cygpath_w,$(build_bindir)/julia$(EXE)))
 ifeq ($(OS),Darwin)
 	$(call spawn,$(LLVM_SIZE) -A $(call cygpath_w,$(build_shlibdir)/libLLVM.$(SHLIB_EXT)))

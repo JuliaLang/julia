@@ -49,8 +49,7 @@ MMTK_JULIA_CARGO_ARGS := --features $(MMTK_JULIA_CARGO_FEATURES) $(MMTK_JULIA_CA
 MMTK_JULIA_BINDGEN_IGNORE_DEPS := \
 	$(JULIAHOME)/src/julia_version.h \
 	$(JULIAHOME)/src/jl_internal_funcs.inc \
-	$(JULIAHOME)/src/jl_data_globals_defs.inc \
-	$(JULIAHOME)/src/julia_flisp.boot.inc
+	$(JULIAHOME)/src/jl_data_globals_defs.inc
 MMTK_JULIA_BINDGEN_DEPS := \
 	$(filter-out $(MMTK_JULIA_BINDGEN_IGNORE_DEPS), \
 		$(wildcard $(JULIAHOME)/src/*.h) \

@@ -332,7 +332,9 @@ function runtime_library_names(optional_components)
         append!(optional, Base.CODEGEN_LIBRARY_NAMES)
     end
     if :frontend in optional_components
-        push!(required, "libjulia-frontend$debug")
+        # only present in a build tree: installations need no frontend library,
+        # since parsing and lowering are done by Base's JuliaSyntax and JuliaLowering
+        push!(optional, "libjulia-frontend$debug")
     end
     return required, optional
 end
@@ -346,8 +348,8 @@ relative to `Sys.BINDIR`.
 
 The optional components are `:codegen` (`libjulia-codegen` and LLVM), which a program that
 never compiles code at run time, such as one built with `--trim`, can leave out, and
-`:frontend` (`libjulia-frontend`, the flisp-based parser and lowering), which a program that
-never parses or lowers code at run time can leave out.
+`:frontend` (`libjulia-frontend`, the frontend that bootstraps julia, which a build tree has),
+which no program needs once the system image is built.
 
 Only files in this installation are returned, and libraries of standard libraries are not
 included; see [`library_files`](@ref) for those. Throws if the installation lacks a library

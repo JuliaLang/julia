@@ -1150,11 +1150,6 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
     lock_low32();
 
     libsupport_init();
-    int lisp_prompt = (argc >= 2 && strcmp((char*)argv[1],"--lisp") == 0);
-    if (lisp_prompt) {
-        memmove(&argv[1], &argv[2], (argc-2)*sizeof(void*));
-        argc--;
-    }
     char **new_argv = argv;
     jl_parse_opts(&argc, (char***)&new_argv);
 
@@ -1180,17 +1175,8 @@ JL_DLLEXPORT int jl_repl_entrypoint(int argc, char *argv[]) JL_CANSAFEPOINT_ENTE
 
     jl_init_(sysimage);
 
-    int ret;
-    if (lisp_prompt) {
-        jl_current_task->world_age = jl_get_world_counter();
-        jl_lisp_prompt();
-        ret = 0;
-        jl_gc_safe_enter(jl_current_task->ptls); // park in gc-safe for analyzer, skipping atexit hook
-    }
-    else {
-        ret = true_main(argc, (char**)new_argv);
-        jl_atexit_hook(ret);
-    }
+    int ret = true_main(argc, (char**)new_argv);
+    jl_atexit_hook(ret);
     return ret;
 }
 

@@ -454,7 +454,7 @@ end
                   Expr(:quote, Expr(:string, "s", "tr")),
                   Expr(:quote, Expr(:string, "s", Expr(:$, :outer_field)))]
 
-        @test_throws "invalid syntax" fl_eval(
+        @test_throws r"invalid (`\.` )?syntax" fl_eval(
             test_mod, Expr(:block, Expr(:., test_mod.gs, field)))
         @test_throws LoweringError jl_eval(
             test_mod, Expr(:block, Expr(:., test_mod.gs, field)); edition=JL_NEW_EDITION)

@@ -8,12 +8,12 @@ Language changes
 ----------------
 
 * `Slices` exposes `dataids` of its parent array to properly identify aliasing in broadcasting ([#49182]).
-* `macroexpand`, `macroexpand!` and `@macroexpand` are implemented by JuliaLowering when it is the
-  active lowering, as it is by default. With `legacyscope=true` (the default for `macroexpand`),
-  the variables that an expansion binds are renamed with `gensym` (e.g. `var"##x#123"`), and the
-  `toplevel` forms in expansions keep the hygiene of their arguments as `hygienic-scope` forms, to
-  be resolved when they are expanded. Errors thrown by the macros themselves are rethrown as
-  before; other expansion errors are `JuliaLowering.MacroExpansionError`s.
+* `macroexpand`, `macroexpand!` and `@macroexpand` are implemented by JuliaLowering. With
+  `legacyscope=true` (the default for `macroexpand`), the variables that an expansion binds are
+  renamed with `gensym` (e.g. `var"##x#123"`), and the `toplevel` forms in expansions keep the
+  hygiene of their arguments as `hygienic-scope` forms, to be resolved when they are expanded.
+  Errors thrown by the macros themselves are rethrown as before; other expansion errors are
+  `JuliaLowering.MacroExpansionError`s.
 
 Compiler/Runtime improvements
 -----------------------------
@@ -26,6 +26,8 @@ Compiler/Runtime improvements
 Command-line option changes
 ---------------------------
 
+* The `--lisp` option, which started the REPL of the flisp interpreter that used to implement the
+  parser and lowering, has been removed along with flisp.
 * `--code-coverage=-<paths>` records no coverage for files under the given paths, and
   optimizes their code as if coverage were off, so that instrumenting a test suite does not change
   how its own functions are compiled.
@@ -54,16 +56,18 @@ Build system changes
 * `base/userimg.jl` is no longer supported, and the build now fails if it exists. To build a
   system image with additional code, use PackageCompiler.jl, or run a script on top of an existing
   system image with `julia --sysimage <image> --output-o <file> <script>`.
-* The flisp-based reference frontend (parser, macro expansion and lowering) has been split out of
-  `libjulia-internal` into a new shared library, `libjulia-frontend` (analogous to the existing
-  `libjulia-codegen`). The runtime calls the frontend through a small trampoline interface
-  (`jl_frontend_init`, `jl_frontend_parse`, `jl_frontend_lower`, `jl_macroexpand`, the operator
-  queries `jl_frontend_is_operator` etc., and the flisp REPL/profiling entry points, which a
-  frontend library may leave out), so the library can eventually be replaced or omitted; fallback
-  stubs in `libjulia-internal` are used when it is absent. The runtime's operator queries
-  (`jl_is_operator`, `jl_operator_precedence`, etc., which printing uses) ask the frontend library
-  until Base has started, and then Base's JuliaSyntax. The C entry points
-  `jl_fl_parse`/`jl_fl_lower` have been renamed to `jl_frontend_parse`/`jl_frontend_lower`.
+* The flisp-based parser and lowering have been removed. Julia's system image is now
+  bootstrapped with `libjulia-frontend`, a library compiled from this tree's JuliaSyntax and
+  JuliaLowering by a pinned julia release (see `deps/julia-bootstrap.version`), which is
+  downloaded like the other dependencies, or taken from the installation in `JULIA_BOOTSTRAP_HOME`.
+  The library contains its own copy of that release's runtime, and the runtime reaches it through a
+  small trampoline interface (`jl_frontend_init`, `jl_frontend_parse`, `jl_frontend_lower`,
+  `jl_macroexpand` and the operator queries `jl_frontend_is_operator` etc.). It is only needed to
+  build system images from `boot.jl` and is not installed: once a system image exists, parsing,
+  lowering and `macroexpand` are done by its JuliaSyntax and JuliaLowering, and JuliaSyntax answers
+  the operator queries that printing uses (`jl_is_operator` etc.). The C entry points
+  `jl_fl_parse`/`jl_fl_lower` and `Base.fl_parse`/`Base.fl_lower` have been replaced by
+  `jl_frontend_parse`/`jl_frontend_lower` and `Base.frontend_parse`/`Base.frontend_lower`.
 
 New library functions
 ---------------------

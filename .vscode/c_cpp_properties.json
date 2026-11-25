@@ -10,7 +10,6 @@
             "cppStandard": "c++17",
             "compileCommands": [
                 "${workspaceFolder}/src/compile_commands.json",
-                "${workspaceFolder}/src/flisp/compile_commands.json",
                 "${workspaceFolder}/src/support/compile_commands.json"
             ]
         }

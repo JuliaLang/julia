@@ -2641,8 +2641,8 @@ void jl_task_frame_noreturn(jl_task_t *ct) JL_CANSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
-JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;

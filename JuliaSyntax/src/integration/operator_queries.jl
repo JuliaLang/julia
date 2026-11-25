@@ -4,9 +4,10 @@
 # answer with (jl_is_operator, jl_is_unary_operator,
 # jl_is_unary_and_binary_operator, jl_is_syntactic_operator and
 # jl_operator_precedence, which printing uses to decide how to show code). Their
-# semantics are those of the flisp parser, which answers them until Base has
-# started; here they are derived from this parser's tokenizer. Julia's Base
-# hands them to the runtime with `register_operator_queries`.
+# semantics are those of the flisp parser, which used to answer them; here they
+# are derived from this parser's tokenizer. Julia's Base hands them to the
+# runtime with `register_operator_queries`, and the frontend library that
+# bootstraps julia answers with them until then.
 
 # Map JuliaSyntax PrecedenceLevel values to the numeric precedence levels of
 # the runtime's operator queries (those of the flisp parser: the order of its

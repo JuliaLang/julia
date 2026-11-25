@@ -70,12 +70,6 @@ static const char *const jl_frontend_fallback_func_names[] = {
 };
 #undef XX
 
-// the number of entries at the end of the frontend interface that a frontend
-// library may leave out (see JL_FRONTEND_OPTIONAL_FUNCS)
-#define XX(name)    + 1
-static const unsigned int jl_frontend_optional_func_count = 0 JL_FRONTEND_OPTIONAL_FUNCS(XX);
-#undef XX
-
 #define XX(name)    &name##_addr,
 static anonfunc **const jl_runtime_exported_func_addrs[] = {
     JL_RUNTIME_EXPORTED_FUNCS(XX)

@@ -4892,8 +4892,7 @@ end
 
 # The runtime's operator queries, which printing relies on, come from the
 # frontend: from Base's JuliaSyntax (`JuliaSyntax.operator_info`), and before it
-# has started, as while bootstrapping, from flisp (jl_frontend_is_operator
-# etc.). The two must agree.
+# has started, as while bootstrapping, from the frontend library.
 module OperatorQueries
 const _JS = Base.JuliaSyntax
 frontend_info(s) = (
@@ -4943,13 +4942,14 @@ function candidates()
 end
 end
 @testset "operator queries" begin
-    # n.b. in no particular order: flisp interns every name it is asked about,
-    # in a binary tree that sorted names would degenerate
-    cands = sort!(OperatorQueries.candidates(), by=hash)
-    @test isempty(filter(s -> OperatorQueries.frontend_info(s) != OperatorQueries.juliasyntax_info(s), cands))
+    cands = OperatorQueries.candidates()
+    ops = filter(s -> OperatorQueries.juliasyntax_info(s)[1], cands)
+    sample = [ops[1:min(end, 5000)]; ["x", "if", "foo", "in", "isa", "where", "+₁", ".+="]]
+    # the frontend library is only there in a build tree
+    if ccall(:jl_frontend_is_operator, Cint, (Cstring,), "+") != 0
+        @test isempty(filter(s -> OperatorQueries.frontend_info(s) != OperatorQueries.juliasyntax_info(s), sample))
+    end
     # the runtime asks JuliaSyntax (n.b. each name it is asked about becomes a Symbol)
-    ops = filter(s -> OperatorQueries.juliasyntax_info(s)[1], cands)[1:min(end, 5000)]
-    @test isempty(filter(s -> OperatorQueries.runtime_info(s) != OperatorQueries.juliasyntax_info(s),
-                         [ops; ["x", "if", "foo", "in", "isa"]]))
+    @test isempty(filter(s -> OperatorQueries.runtime_info(s) != OperatorQueries.juliasyntax_info(s), sample))
     @test Base.isoperator(:+) && Base.isunaryoperator(:-) && Base.operator_precedence(:*) == 12
 end

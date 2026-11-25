@@ -45,13 +45,10 @@ exception frames, and taking/releasing locks.
 * `gc_perm_lock` (`uv_mutex_t`)
 * `gc_queue_observer_lock` (`uv_mutex_t`)
 * `gc_threads_lock` (`uv_mutex_t`)
-* `flisp_lock` (`uv_mutex_t`)
-  !!! note
-      flisp itself is already threadsafe; this lock only protects the
-      `jl_ast_context_list_t` pool.  Likewise, the `ResourcePool<?>::mutexes`
-      just protect the associated resource pool.
-
 * `ResourcePool<?>.mutex` (`std::mutex`)
+  !!! note
+      The `ResourcePool<?>::mutexes` just protect the associated resource pool.
+
 * `RLST_mutex` (`std::mutex`)
 * `llvm_printing_mutex` (`std::mutex`)
 * `jl_locked_stream.mutex` (`std::mutex`)

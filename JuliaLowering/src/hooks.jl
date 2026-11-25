@@ -82,6 +82,10 @@ function activate!(enable=true; freeze_world_age=true)
     if enable
         Core._setlowerer!(core_lowering_hook)
         Core._set_toplevel_eval!(__script_exit_eval)
+    elseif isdefined(Base, :frontend_lower)
+        # the runtime's frontend library (julia >= 1.15)
+        Core._setlowerer!(Base.frontend_lower)
+        Core._set_toplevel_eval!(Base.frontend_toplevel_eval)
     else
         Core._setlowerer!(Base.fl_lower)
         Core._set_toplevel_eval!(Base.fl_toplevel_eval)

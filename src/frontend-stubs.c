@@ -33,8 +33,3 @@ JL_DLLEXPORT int jl_frontend_is_unary_operator_fallback(const char *sym) { retur
 JL_DLLEXPORT int jl_frontend_is_unary_and_binary_operator_fallback(const char *sym) { return 0; }
 JL_DLLEXPORT int jl_frontend_is_syntactic_operator_fallback(const char *sym) { return 0; }
 JL_DLLEXPORT int jl_frontend_operator_precedence_fallback(const char *sym) { return 0; }
-
-JL_DLLEXPORT void jl_lisp_prompt_fallback(void) UNAVAILABLE
-JL_DLLEXPORT void fl_profile_fallback(const char *fname) UNAVAILABLE
-JL_DLLEXPORT void fl_show_profile_fallback(void) UNAVAILABLE
-JL_DLLEXPORT void fl_clear_profile_fallback(void) UNAVAILABLE

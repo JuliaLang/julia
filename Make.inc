@@ -177,7 +177,6 @@ ENDCOLOR:="\033[0m"
 CCCOLOR:="\033[34m"
 LINKCOLOR:="\033[34;1m"
 PERLCOLOR:="\033[35m"
-FLISPCOLOR:="\033[32m"
 JULIACOLOR:="\033[32;1m"
 DTRACECOLOR:="\033[32;1m"
 
@@ -192,7 +191,6 @@ ENDCOLOR:=""
 CCCOLOR:=""
 LINKCOLOR:=""
 PERLCOLOR:=""
-FLISPCOLOR:=""
 JULIACOLOR:=""
 DTRACECOLOR:=""
 
@@ -2172,7 +2170,6 @@ PRINT_CC = printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDC
 PRINT_ANALYZE = printf '    %b %b\n' $(CCCOLOR)ANALYZE$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_LINK = printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_PERL = printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
-PRINT_FLISP = printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_JULIA = printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 PRINT_DTRACE = printf '    %b %b\n' $(DTRACECOLOR)DTRACE$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR); $(1)
 
@@ -2182,7 +2179,6 @@ PRINT_CC = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_ANALYZE = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_LINK = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_PERL = printf "%s\n" $(call shell_escape,$(1)); $(1)
-PRINT_FLISP = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_JULIA = printf "%s\n" $(call shell_escape,$(1)); $(1)
 PRINT_DTRACE = printf "%s\n" $(call shell_escape,$(1)); $(1)
 

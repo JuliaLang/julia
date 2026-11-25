@@ -8,9 +8,6 @@
 /*.lto
 
 /boot.j.inc
-/julia_flisp.boot
-/julia_flisp.boot.inc
-/flisp.boot.inc
 /jl_data_globals_defs.inc
 /jl_internal_funcs.inc
 /jl_codegen_hash.inc*
@@ -23,10 +20,10 @@
 /libjulia-release.so
 /libjulia-release.dylib
 /julia_version.h
-/flisp/host
 /support/host
 /base/
 
 # Clang compilation database
 compile_commands*.json
 .clangd/
+/frontend-build/

@@ -4,7 +4,7 @@ One of the hardest parts about learning how the Julia Language runs code is lear
 the pieces work together to execute a block of code.
 
 Each chunk of code typically makes a trip through many steps with potentially unfamiliar names,
-such as (in no particular order): flisp, AST, C++, LLVM, `eval`, `typeinf`, `macroexpand`, sysimg
+such as (in no particular order): AST, C++, LLVM, `eval`, `typeinf`, `macroexpand`, sysimg
 (or system image), bootstrapping, compile, parse, execute, JIT, interpret, box, unbox, intrinsic
 function, and primitive function, before turning into the desired result (hopefully).
 
@@ -72,19 +72,18 @@ The 10,000 foot view of the whole process is as follows:
 
 ## [Parsing](@id dev-parsing)
 
-By default, Julia uses [JuliaSyntax.jl](https://github.com/JuliaLang/JuliaSyntax.jl) to produce the
-AST. Historically, it used a small lisp program written in femtolisp, the source-code for which is
-distributed inside Julia in [src/flisp](https://github.com/JuliaLang/julia/tree/master/src/flisp).
+Julia uses JuliaSyntax (in the `JuliaSyntax` directory of the repository) to produce the AST.
+Until Julia 1.14, the AST was produced by a small lisp program written in femtolisp, which was
+distributed inside Julia in `src/flisp`.
 
 ## [Macro Expansion](@id dev-macro-expansion)
 
 When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
-the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Julia), to the parser
-function `jl_macroexpand()` to the Julia macro itself (written in - what
-else - Julia) via `fl_invoke_julia_macro()`, and back.
+the expression. Macro expansion is done by JuliaLowering (in the `JuliaLowering` directory of the
+repository), which calls the Julia macro itself and resolves the hygiene of its expansion.
 
 Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`Core._lower()`,
-although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`jl_macroexpand()`.
+although it can also be invoked directly by a call to [`macroexpand()`](@ref).
 
 ## [Type Inference](@id dev-type-inference)
 
