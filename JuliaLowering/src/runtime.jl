@@ -260,15 +260,12 @@ end
 function _lower_generated_code(g::Base.SyntaxGeneratedFunctionStub, source::Method,
                                sc::SyntaxContext, __module__::Module,
                                world::UInt, @nospecialize(ex0))
-    if ex0 isa Expr
-        ex0 = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
-    end
-    # TODO: the above is possible with interpolated `return`, matching flisp,
-    # but we want to throw an error like below
+    # Lowering is usually able to make this Syntax, but explicit return
+    # expressions in the generator may return anything when `is_flisp_compat`
     if !(ex0 isa SyntaxTree)
-        ex0 isa Expr && throw(LoweringError(
-            ex0, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-        ex0 = expr_to_est(ex0, g.srcref, sc)
+        est = expr_to_est(ex0, LineNumberNode(Int(source.line), source.file))
+        is_flisp_compat(sc) || throw(LoweringError(est, """expected `Syntax` from generated function defined with edition >1.14. Either change this generator to return `Syntax`, or ensure its definition uses an older edition."""))
+        ex0 = est
     end
 
     @jl_assert base_layer(sc).mod == __module__ ex0
