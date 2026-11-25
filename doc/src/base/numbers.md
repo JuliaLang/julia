@@ -106,6 +106,7 @@ Base.bytes2hex
 Base.one
 Base.oneunit
 Base.zero
+Base.haszero
 Base.im
 Base.MathConstants.pi
 Base.MathConstants.ℯ

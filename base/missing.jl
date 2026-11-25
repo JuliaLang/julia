@@ -107,6 +107,8 @@ for f in (:zero, :one, :oneunit)
     @eval ($f)(::Type{Missing}) = missing
     @eval ($f)(::Type{T}) where {T>:Missing} = $f(nonmissingtype_checked(T))
 end
+# `nonmissingtype(Any) === Any`, so check for a number before recursing
+haszero(::Type{T}) where {T>:Missing} = nonmissingtype(T) <: Number && haszero(nonmissingtype(T))
 for f in (:float, :real, :complex)
     @eval ($f)(::Type{Any}) = throw(MethodError($f, (Any,)))  # To prevent StackOverflowError
     @eval ($f)(::Type{T}) where {T>:Missing} = Union{$f(nonmissingtype(T)), Missing}
