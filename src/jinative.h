@@ -6,7 +6,7 @@
 // objects of an image into one position-independent blob, and loaded by
 // jinative-load.c without the system dynamic loader. It does not depend on the
 // object format of the platform: the only load-time work is to map three
-// segments and patch two kinds of 64-bit slots in the data segment.
+// segments and patch two kinds of pointer slots in the data segment.
 
 #ifndef JL_JINATIVE_H
 #define JL_JINATIVE_H
@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 #define JL_NATIVE_MAGIC "\177JLNATV"
-#define JL_NATIVE_VERSION 3
+#define JL_NATIVE_VERSION 4
 
 // All offsets are relative to the start of the section, which is page aligned in
 // the file. For the four segments the file offset is also the offset from the
@@ -43,6 +43,8 @@ typedef struct {
     uint64_t debug_off; // jl_native_debug_section_t[ndebug]
     uint64_t strtab_off, strtab_size;
     uint32_t nrebase, nbind, nimports, nsyms, nobjects, ndebug;
+    uint32_t ptr_size; // of the slots that the fixups patch
+    uint32_t pad;
     uint64_t link_base; // the address the image was linked at, which the debug info uses
     // image offsets of the symbols the loader needs (0 if absent)
     uint64_t image_pointers; // jl_image_pointers
@@ -74,7 +76,7 @@ typedef struct {
 } jl_native_object_t;
 
 // A DWARF section, with addresses as if the image were loaded at `link_base`.
-// `slides` are the offsets in it of the 64-bit addresses, for a consumer that
+// `slides` are the offsets in it of the pointer-sized addresses, for a consumer that
 // needs them to be those of the loaded image (a debugger).
 typedef struct {
     uint64_t off, size; // as stored

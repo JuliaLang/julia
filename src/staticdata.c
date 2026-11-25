@@ -3746,7 +3746,7 @@ static void jl_write_header_for_incremental(ios_t *f, jl_array_t *worklist, jl_a
 
 int jl_embed_native_code(void) JL_NOTSAFEPOINT
 {
-#if !(defined(_CPU_AARCH64_) || defined(_CPU_X86_64_)) || (defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_))
+#if !(defined(_CPU_AARCH64_) || defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_))
     return 0;
 #else
     // TODO: on by default to try it on every platform of CI

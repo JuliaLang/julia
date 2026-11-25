@@ -244,26 +244,35 @@ static int native_env_flag(const char *name, int dflt) JL_NOTSAFEPOINT
 // linked object to them through the GDB JIT interface: a relocatable ELF file in
 // memory that has the address of the code, the function symbols, the unwind
 // tables and the debug info with its addresses moved to where the image is.
+// These are the ELF structures of the pointer size of the process.
 typedef struct {
     unsigned char e_ident[16];
     uint16_t e_type, e_machine;
     uint32_t e_version;
-    uint64_t e_entry, e_phoff, e_shoff;
+    uintptr_t e_entry, e_phoff, e_shoff;
     uint32_t e_flags;
     uint16_t e_ehsize, e_phentsize, e_phnum, e_shentsize, e_shnum, e_shstrndx;
 } native_elf_ehdr_t;
 typedef struct {
     uint32_t sh_name, sh_type;
-    uint64_t sh_flags, sh_addr, sh_offset, sh_size;
+    uintptr_t sh_flags, sh_addr, sh_offset, sh_size;
     uint32_t sh_link, sh_info;
-    uint64_t sh_addralign, sh_entsize;
+    uintptr_t sh_addralign, sh_entsize;
 } native_elf_shdr_t;
+#ifdef _P64
 typedef struct {
     uint32_t st_name;
     unsigned char st_info, st_other;
     uint16_t st_shndx;
     uint64_t st_value, st_size;
 } native_elf_sym_t;
+#else
+typedef struct {
+    uint32_t st_name, st_value, st_size;
+    unsigned char st_info, st_other;
+    uint16_t st_shndx;
+} native_elf_sym_t;
+#endif
 
 static arraylist_t native_gdb_objects;
 
@@ -274,7 +283,7 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
     const jl_native_sym_t *syms = (const jl_native_sym_t*)(img->meta + h->syms_off);
     const jl_native_debug_section_t *dsecs = (const jl_native_debug_section_t*)(img->meta + h->debug_off);
     const char *strtab = img->meta + h->strtab_off;
-    uint64_t slide = (uintptr_t)img->base - h->link_base;
+    uintptr_t slide = (uintptr_t)img->base - (uintptr_t)h->link_base;
     for (uint32_t o = 0; o < h->nobjects; o++) {
         const jl_native_object_t *obj = &objs[o];
         size_t lo = 0, hi = h->nsyms;
@@ -307,9 +316,12 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
         native_elf_ehdr_t *eh = (native_elf_ehdr_t*)buf;
         native_elf_shdr_t *sh = (native_elf_shdr_t*)(buf + sizeof(*eh));
         memcpy(eh->e_ident, "\177ELF\2\1\1", 7);
+        eh->e_ident[4] = sizeof(void*) == 8 ? 2 : 1; // ELFCLASS64 or ELFCLASS32
         eh->e_type = 1; // ET_REL
-#ifdef _CPU_AARCH64_
+#if defined(_CPU_AARCH64_)
         eh->e_machine = 183;
+#elif defined(_CPU_X86_)
+        eh->e_machine = 3;
 #else
         eh->e_machine = 62;
 #endif
@@ -362,9 +374,9 @@ static void native_register_debugger(jl_native_image_t *img) JL_CANSAFEPOINT
                 memcpy(buf + pos, img->meta + ds->off, dsize);
             const uint32_t *slides = (const uint32_t*)(img->meta + ds->slides_off);
             for (uint32_t j = 0; j < ds->nslides; j++) {
-                if (slides[j] > dsize - sizeof(uint64_t))
+                if (dsize < sizeof(uintptr_t) || slides[j] > dsize - sizeof(uintptr_t))
                     continue;
-                uint64_t v;
+                uintptr_t v;
                 memcpy(&v, buf + pos + slides[j], sizeof(v));
                 v += slide;
                 memcpy(buf + pos + slides[j], &v, sizeof(v));
@@ -455,7 +467,8 @@ JL_DLLEXPORT void jl_native_image_stats(uint64_t *time, uint64_t *count) JL_NOTS
 static int native_header_ok(const jl_native_header_t *h, uint64_t avail) JL_NOTSAFEPOINT
 {
     uint64_t ps = h->page_size;
-    if (ps == 0 || (ps & (ps - 1)) != 0 || h->file_size > avail)
+    if (ps == 0 || (ps & (ps - 1)) != 0 || h->file_size > avail || h->file_size > SIZE_MAX / 2 ||
+        h->ptr_size != sizeof(void*))
         return 0;
     // the segments are in this order and each starts on a page
     if (h->text_off != ps || h->rodata_off % ps || h->relro_off % ps || h->data_off % ps || h->vm_size % ps)
@@ -665,9 +678,9 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
             shift += 7;
         } while (b & 0x80);
         slot += delta;
-        if (slot < hdr.relro_off || slot > hdr.vm_size - sizeof(uint64_t))
+        if (slot < hdr.relro_off || slot > hdr.vm_size - sizeof(uintptr_t))
             goto fail;
-        uint64_t v;
+        uintptr_t v;
         memcpy(&v, base + slot, sizeof(v));
         v += (uintptr_t)base;
         memcpy(base + slot, &v, sizeof(v));
@@ -675,9 +688,9 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     binds = (const jl_native_bind_t*)(meta + hdr.bind_off);
     for (uint32_t i = 0; i < hdr.nbind; i++) {
         if (binds[i].import >= hdr.nimports || binds[i].slot < hdr.relro_off ||
-            binds[i].slot > hdr.vm_size - sizeof(uint64_t))
+            binds[i].slot > hdr.vm_size - sizeof(uintptr_t))
             goto fail;
-        uint64_t v = (uintptr_t)imports[binds[i].import] + binds[i].addend;
+        uintptr_t v = (uintptr_t)imports[binds[i].import] + (uintptr_t)binds[i].addend;
         memcpy(base + binds[i].slot, &v, sizeof(v));
     }
     free(imports);

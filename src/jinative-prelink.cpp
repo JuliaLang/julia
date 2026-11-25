@@ -6,7 +6,7 @@
 // Every object becomes one LinkGraph. All graphs are laid out in one address
 // range that starts at a made-up base, and symbols that no graph defines get
 // made-up addresses far away from it. After the fixups are applied, anything
-// that depends on where the image or an import is loaded is a 64-bit pointer
+// that depends on where the image or an import is loaded is a pointer-sized
 // slot, which is recorded as a rebase or a bind. Everything else is relative
 // and was resolved here.
 
@@ -16,6 +16,7 @@
 #include <llvm/ExecutionEngine/JITLink/JITLink.h>
 #include <llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h>
 #include <llvm/ExecutionEngine/JITLink/aarch64.h>
+#include <llvm/ExecutionEngine/JITLink/x86.h>
 #include <llvm/ExecutionEngine/JITLink/x86_64.h>
 #include <llvm/Object/Archive.h>
 #include <llvm/Support/Endian.h>
@@ -40,7 +41,9 @@ using namespace llvm::jitlink;
 
 namespace {
 
-static const uint64_t VBase = 0x1000000000ULL; // above 4 GiB so that no address fits 32 bits
+// Above 4 GiB where pointers are 64 bits, so that no address fits 32 bits
+static const uint64_t VBase64 = 0x1000000000ULL, VBase32 = 0x10000000;
+// Out of reach of a 32-bit displacement on every target
 static const uint64_t ImportBase = 0x7000000000000000ULL;
 static const uint64_t ImportStride = 0x10000;
 
@@ -69,11 +72,13 @@ struct PendingLookup {
 
 class ImageAlloc : public JITLinkMemoryManager::InFlightAlloc {
 public:
+    ImageAlloc(uint64_t VBase) : VBase(VBase) {}
     void abandon(OnAbandonedFunction OnAbandoned) override { OnAbandoned(Error::success()); }
     void finalize(OnFinalizedFunction OnFinalized) override
     {
         OnFinalized(JITLinkMemoryManager::FinalizedAlloc(orc::ExecutorAddr(VBase)));
     }
+    uint64_t VBase;
 };
 
 class ImageMemoryManager : public JITLinkMemoryManager {
@@ -92,6 +97,8 @@ public:
 struct Prelinker {
     Triple TT;
     uint64_t PageSize;
+    uint64_t VBase;
+    unsigned PtrSize;
     std::string Err;
     ImageMemoryManager MemMgr{*this};
     std::vector<PendingAlloc> Allocs;
@@ -127,11 +134,13 @@ struct Prelinker {
 
     void layout();
     void resolve();
+    Error keepUnwindTables(LinkGraph &G);
     Error addImportStubs(LinkGraph &G);
+    Error makeStubsPIC(LinkGraph &G);
     Error markRelocatedSectionsWritable(LinkGraph &G);
     Error relaxStubCalls(LinkGraph &G);
     Error recordFixups(LinkGraph &G);
-    bool isPointer64(Edge::Kind K) const;
+    bool isPointer(Edge::Kind K) const;
     bool isAbsolute(Edge::Kind K) const;
     void write(SmallVectorImpl<char> &Out);
 };
@@ -165,7 +174,9 @@ public:
     void notifyFinalized(JITLinkMemoryManager::FinalizedAlloc Alloc) override { Alloc.release(); }
     Error modifyPassConfig(LinkGraph &G, PassConfiguration &Config) override
     {
+        Config.PrePrunePasses.push_back([this](LinkGraph &G) { return P.keepUnwindTables(G); });
         Config.PostPrunePasses.push_back([this](LinkGraph &G) { return P.addImportStubs(G); });
+        Config.PostPrunePasses.push_back([this](LinkGraph &G) { return P.makeStubsPIC(G); });
         Config.PostPrunePasses.push_back([this](LinkGraph &G) { return P.markRelocatedSectionsWritable(G); });
         Config.PreFixupPasses.push_back([this](LinkGraph &G) { return P.relaxStubCalls(G); });
         Config.PostFixupPasses.push_back([this](LinkGraph &G) { return P.recordFixups(G); });
@@ -179,10 +190,13 @@ void ImageMemoryManager::allocate(const JITLinkDylib *JD, LinkGraph &G, OnAlloca
     P.Allocs.push_back({&G, std::make_unique<BasicLayout>(G), std::move(OnAllocated)});
 }
 
-bool Prelinker::isPointer64(Edge::Kind K) const
+// The kind of a slot that holds an address
+bool Prelinker::isPointer(Edge::Kind K) const
 {
     if (TT.isAArch64())
         return K == aarch64::Pointer64;
+    if (TT.getArch() == Triple::x86)
+        return K == x86::Pointer32;
     return K == x86_64::Pointer64;
 }
 
@@ -192,8 +206,23 @@ bool Prelinker::isAbsolute(Edge::Kind K) const
     if (TT.isAArch64())
         return K == aarch64::Pointer64Authenticated || K == aarch64::Pointer32 ||
                K == aarch64::MoveWide16;
+    if (TT.getArch() == Triple::x86)
+        return K == x86::Pointer16;
     return K == x86_64::Pointer32 || K == x86_64::Pointer32Signed || K == x86_64::Pointer16 ||
            K == x86_64::Pointer8;
+}
+
+// JITLink has no pass for the unwind tables of 32-bit x86, so nothing refers to
+// them and they would be dropped as dead.
+Error Prelinker::keepUnwindTables(LinkGraph &G)
+{
+    if (TT.getArch() != Triple::x86)
+        return Error::success();
+    if (Section *EH = G.findSectionByName(".eh_frame")) {
+        for (auto *B : EH->blocks())
+            G.addAnonymousSymbol(*B, 0, B->getSize(), false, true);
+    }
+    return Error::success();
 }
 
 // COFF code calls a function of another image through `__imp_` pointers if it
@@ -245,6 +274,27 @@ Error Prelinker::addImportStubs(LinkGraph &G)
     return Error::success();
 }
 
+// The stubs of JITLink for 32-bit x86 jump through the address of a GOT entry,
+// which would have to be fixed up in the code. Jump through its offset from
+// the GOT instead: code that calls through a stub has the GOT in `ebx`, as it
+// has for the procedure linkage table of a shared library.
+Error Prelinker::makeStubsPIC(LinkGraph &G)
+{
+    if (TT.getArch() != Triple::x86)
+        return Error::success();
+    Section *Stubs = G.findSectionByName(x86::PLTTableManager::getSectionName());
+    if (!Stubs)
+        return Error::success();
+    for (auto *B : Stubs->blocks()) {
+        if (B->getSize() != sizeof(x86::PointerJumpStubContent) || B->edges_size() != 1 ||
+            B->edges().begin()->getKind() != x86::Pointer32)
+            return make_error<StringError>("unexpected stub in " + G.getName(), inconvertibleErrorCode());
+        B->getMutableContent(G)[1] = (char)0xa3; // jmp *disp32(%ebx)
+        B->edges().begin()->setKind(x86::Delta32FromGOT);
+    }
+    return Error::success();
+}
+
 // A slot that is fixed up at load time has to be writable then. Sections that
 // are otherwise read-only go to a segment of their own.
 Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
@@ -262,7 +312,7 @@ Error Prelinker::markRelocatedSectionsWritable(LinkGraph &G)
         for (auto *B : Sec.blocks()) {
             for (auto &E : B->edges()) {
                 // COFF edges have kinds of their own until JITLink lowers them before the fixups
-                if (isPointer64(E.getKind()) ||
+                if (isPointer(E.getKind()) ||
                     (TT.isOSBinFormatCOFF() && StringRef(G.getEdgeKindName(E.getKind())) == "Pointer64")) {
                     HasPointer = true;
                     break;
@@ -332,7 +382,7 @@ Error Prelinker::relaxStubCalls(LinkGraph &G)
         Edge &PtrEdge = *Ptr.getBlock().edges().begin();
         Target = &PtrEdge.getTarget();
         Addend = PtrEdge.getAddend();
-        return isPointer64(PtrEdge.getKind()) && inImage(Target->getAddress().getValue() + Addend);
+        return isPointer(PtrEdge.getKind()) && inImage(Target->getAddress().getValue() + Addend);
     };
     auto instr = [&](Block &B, Edge &E) {
         return support::endian::read32le(B.getContent().data() + E.getOffset());
@@ -452,7 +502,7 @@ Error Prelinker::recordFixups(LinkGraph &G)
                 Symbol &T = E.getTarget();
                 uint64_t TAddr = T.getAddress().getValue();
                 bool Import = !inImage(TAddr);
-                if (!isPointer64(E.getKind())) {
+                if (!isPointer(E.getKind())) {
                     // relative to the image or a constant, as long as the target is in it
                     if (TT.isOSBinFormatCOFF() && E.getKind() == x86_64::Pointer32 && !Import)
                         continue; // JITLink lowered an offset from __ImageBase to this
@@ -473,11 +523,15 @@ Error Prelinker::recordFixups(LinkGraph &G)
                     if (Idx == 0)
                         return error("pointer to an unresolved import", *B, E);
                     Binds.push_back({Slot, E.getAddend(), Idx - 1, 0});
-                    support::endian::write64le(P, 0);
+                    memset(P, 0, PtrSize);
                 }
                 else {
                     Rebases.push_back(Slot);
-                    support::endian::write64le(P, TAddr + E.getAddend() - VBase);
+                    uint64_t V = TAddr + E.getAddend() - VBase;
+                    if (PtrSize == 4)
+                        support::endian::write32le(P, V);
+                    else
+                        support::endian::write64le(P, V);
                 }
             }
         }
@@ -532,7 +586,7 @@ Error Prelinker::recordFixups(LinkGraph &G)
             uint64_t BOff = B->getAddress() - R.getStart();
             memcpy(DS.Data.data() + BOff, B->getContent().data(), B->getSize());
             for (auto &E : B->edges()) {
-                if (isPointer64(E.getKind()) && inImage(E.getTarget().getAddress().getValue()))
+                if (isPointer(E.getKind()) && inImage(E.getTarget().getAddress().getValue()))
                     DS.Slides.push_back(BOff + E.getOffset());
             }
         }
@@ -661,6 +715,7 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
     H.page_size = PageSize;
     H.vm_size = Image.size();
     H.link_base = VBase;
+    H.ptr_size = PtrSize;
     H.text_off = RegionOff[RX]; H.text_size = RegionSize[RX];
     H.rodata_off = RegionOff[RO]; H.rodata_size = RegionSize[RO];
     H.relro_off = RegionOff[RELRO]; H.relro_size = RegionSize[RELRO];
@@ -767,13 +822,16 @@ void Prelinker::write(SmallVectorImpl<char> &Out)
 bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT, uint64_t PageSize,
                              SmallVectorImpl<char> &Out, std::string &Err, std::string *Stats)
 {
-    if (!(TT.isAArch64() || TT.getArch() == Triple::x86_64)) {
+    if (!(TT.isAArch64() || TT.getArch() == Triple::x86_64 ||
+          (TT.getArch() == Triple::x86 && TT.isOSBinFormatELF()))) {
         Err = "unsupported architecture";
         return false;
     }
     Prelinker P;
     P.TT = TT;
     P.PageSize = PageSize;
+    P.PtrSize = TT.isArch64Bit() ? 8 : 4;
+    P.VBase = TT.isArch64Bit() ? VBase64 : VBase32;
     auto SSP = std::make_shared<orc::SymbolStringPool>();
     for (auto &Obj : Objects) {
         auto G = createLinkGraphFromObject(Obj, SSP);
@@ -782,7 +840,7 @@ bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT
             return false;
         }
         // the address that the compact unwind tables of Mach-O are relative to
-        (*G)->addAbsoluteSymbol("__jitlink$libunwind_dso_base", orc::ExecutorAddr(VBase), 0,
+        (*G)->addAbsoluteSymbol("__jitlink$libunwind_dso_base", orc::ExecutorAddr(P.VBase), 0,
                                 Linkage::Strong, Scope::Local, true);
         link(std::move(*G), std::make_unique<Context>(P));
         if (!P.Err.empty())
@@ -798,7 +856,7 @@ bool jl_prelink_native_image(ArrayRef<MemoryBufferRef> Objects, const Triple &TT
                 P.fail(toString(std::move(E)));
                 break;
             }
-            A.OnAllocated(std::make_unique<ImageAlloc>());
+            A.OnAllocated(std::make_unique<ImageAlloc>(P.VBase));
             if (!P.Err.empty())
                 break;
         }
@@ -844,7 +902,15 @@ int main(int argc, char **argv)
             Objects.push_back(Ref);
         }
     }
+    // the target of the objects, which need not be that of this program
     Triple TT(sys::getProcessTriple());
+    if (!Objects.empty()) {
+        auto G = createLinkGraphFromObject(Objects[0], std::make_shared<orc::SymbolStringPool>());
+        if (G)
+            TT = (*G)->getTargetTriple();
+        else
+            consumeError(G.takeError());
+    }
     SmallVector<char, 0> Out;
     std::string Err, Stats;
     if (!jl_prelink_native_image(Objects, TT, TT.isAArch64() ? 16384 : 4096, Out, Err, &Stats)) {
