@@ -415,6 +415,6 @@ function inbounds_option()
     return :off
 end
 
-is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+is_asserts() = !iszero(ccall(:jl_is_assertsbuild, Int8, ()))
 
 _time_ns() = ccall(:jl_hrtime, UInt64, ())

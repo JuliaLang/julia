@@ -551,7 +551,7 @@ end
 
 # manually generate a broken function, which will break codegen
 # and make sure Julia doesn't crash (when using a non-asserts build)
-is_asserts() = ccall(:jl_is_assertsbuild, Cint, ()) == 1
+is_asserts() = !iszero(ccall(:jl_is_assertsbuild, Int8, ()))
 if !is_asserts()
 @eval @noinline Base.@constprop :none f_broken_code() = 0
 let m = which(f_broken_code, ())

@@ -162,7 +162,7 @@ const ISAs_by_family = Dict(
 )
 
 # Test a CPU feature exists on the currently-running host
-test_cpu_feature(feature::UInt32) = ccall(:jl_test_cpu_feature, Bool, (UInt32,), feature)
+test_cpu_feature(feature::UInt32) = !iszero(ccall(:jl_test_cpu_feature, Cint, (UInt32,), feature))
 
 # Architectures accepted as the first argument of `@cpu_supports`.
 const _CPU_SUPPORTS_ARCHES = (:x86_64, :aarch64, :riscv64)
