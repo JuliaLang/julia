@@ -965,6 +965,10 @@ void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT;
 #endif
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_exit_thread0_pending;
+#ifndef _OS_WINDOWS_
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT;
+#endif
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;

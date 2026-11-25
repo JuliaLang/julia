@@ -76,7 +76,8 @@ let
 end
 
 if Sys.isunix()
-    @testset "SIGQUIT prints task backtraces" begin
+    # with the event loop on another thread, thread 0 sleeps in the scheduler
+    @testset "SIGQUIT prints task backtraces (io_thread=$io_thread)" for io_thread in (false, true)
         script = """
             mutable struct RLimit
                 cur::Int64
@@ -84,6 +85,7 @@ if Sys.isunix()
             end
             const RLIMIT_CORE = 4 # from /usr/include/sys/resource.h
             ccall(:setrlimit, Cint, (Cint, Ref{RLimit}), RLIMIT_CORE, Ref(RLimit(0, 0)))
+            $(io_thread ? "Base.Experimental.make_io_thread(); sleep(0.1)" : "")
             write(stdout, "r")
             wait()
         """
@@ -97,7 +99,8 @@ if Sys.isunix()
         # The process will not ignore the second SIGQUIT, but the kernel might ignore it.
         # So keep sending SIGQUIT every few seconds until the kernel delivers the second one
         # and `p` exits.
-        t = Timer(0, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
+        # the delay lets the child go idle, so thread 0 parks in the scheduler
+        t = Timer(0.5, interval=10) do t; Base.kill(p, Base.SIGQUIT); end
         wait(p)
         close(t)
         err_s = readchomp(errp)

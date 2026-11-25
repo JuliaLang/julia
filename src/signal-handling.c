@@ -460,6 +460,10 @@ static void jl_check_profile_autostop(void) JL_NOTSAFEPOINT
     }
 }
 
+// The fatal signal that jl_exit_thread0_wake (Unix) left for thread 0 to handle
+// from jl_task_get_next, or 0.
+_Atomic(int) jl_exit_thread0_pending = 0;
+
 static void stack_overflow_warning(void)
 {
     jl_safe_printf("Warning: detected a stack overflow; program state may be corrupted, so further execution might be unreliable.\n");
