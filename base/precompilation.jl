@@ -443,16 +443,13 @@ end
 # 8 spaces account for `timing_string`'s width so columns line up.
 format_verbose_timing_header() = "   total │ include   (deps)   (comp) │ methods  img-gen     cache  ~pk-rss"
 
-# Sum the on-disk size of the `.ji` cache file and (optionally) its companion
-# pkgimage (`.so`/`.dylib`/`.dll`). Returns 0 if files are missing.
-function _precompile_cache_bytes(cf_jl::AbstractString, cf_so::Union{Nothing,AbstractString})
-    total = Int64(0)
+# The on-disk size of the `.ji` cache file. Returns 0 if it is missing.
+function _precompile_cache_bytes(cf_jl::AbstractString)
     try
-        isfile(cf_jl) && (total += filesize(cf_jl))
-        cf_so === nothing || (isfile(cf_so) && (total += filesize(cf_so)))
+        isfile(cf_jl) && return Int64(filesize(cf_jl))
     catch
     end
-    return total
+    return Int64(0)
 end
 
 
@@ -2886,8 +2883,8 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                         else
                             cache_bytes = Int64(0)
                             if ret !== nothing
-                                cf_jl, cf_so = ret::Tuple{String, Union{Nothing, String}}
-                                cache_bytes = _precompile_cache_bytes(cf_jl, cf_so)
+                                cf_jl, _ = ret::Tuple{String, Union{Nothing, String}}
+                                cache_bytes = _precompile_cache_bytes(cf_jl)
                             end
                             !s.fancyprint && !s.brief && BG.monitoring && @lock s.print_lock begin
                                 verbose_prefix = BG.verbose ? format_verbose_timing(job.verbose_timing, t, cache_bytes, job.peak_rss_bytes, s.hascolor) : ""

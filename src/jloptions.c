@@ -1182,7 +1182,7 @@ restart_switch:
     jl_options.code_coverage = codecov;
     jl_options.malloc_log = malloclog;
     bool_t emit_native = jl_options.outputo || jl_options.outputbc ||
-                         jl_options.outputunoptbc || jl_options.outputasm;
+                         jl_options.outputunoptbc || jl_options.outputasm || jl_embed_native_code();
     if (jl_options.compress_sysimage && !emit_native && jl_options.outputji) {
         jl_safe_printf(
             "WARNING: --compress-sysimage=yes is unsupported when emitting non-split .ji; disabling.\n");

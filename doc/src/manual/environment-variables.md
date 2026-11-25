@@ -212,7 +212,7 @@ recently and writes a smaller copy of the file, for example to save between CI j
 
 ### [`JULIA_VERBOSE_LINKING`](@id JULIA_VERBOSE_LINKING)
 
-If set to true, linker commands will be displayed during precompilation.
+If set to true, the linker command is displayed when a system image is linked.
 
 ## Pkg.jl
 

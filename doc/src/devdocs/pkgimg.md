@@ -6,31 +6,21 @@ In fact the underlying serialization format is the same, and the system image is
 
 ## High-level overview
 
-Package images are shared libraries that contain both code and data. Like `.ji` cache files, they are generated per package. The data section contains both global data (global variables in the package) as well as the necessary metadata about what methods and types are defined by the package. The code section contains native objects that cache the final output of Julia's LLVM-based compiler.
+A package image is one `.ji` cache file per package that contains both data and code. The data contains both global data (global variables in the package) as well as the necessary metadata about what methods and types are defined by the package. The code is native code that caches the final output of Julia's LLVM-based compiler.
 
 The command line option `--pkgimages=no` can be used to turn off object caching for this session. Note that this means that cache files have to likely be regenerated.
 See [`JULIA_MAX_NUM_PRECOMPILE_FILES`](@ref JULIA_MAX_NUM_PRECOMPILE_FILES) for the upper limit of variants Julia caches per default.
 
 !!! note
-    While the package images present themselves as native shared libraries, they are only an approximation thereof. You will not be able to link against them from a native program and they must be loaded from Julia.
+    A package image is not a shared library of the system. A native program cannot link against it, and tools that learn about code from the dynamic loader do not see it by themselves. Set `ENABLE_GDBLISTENER=1` for a debugger and `ENABLE_JITPROFILING=1` for `perf`, as for code from the JIT.
 
+## Linking and loading
 
-## Linking
+The objects that the compiler produces for a package are linked in the precompile process itself, with LLVM's JITLink used as a static linker (`src/jinative-prelink.cpp`). The result is a section of the `.ji`, laid out the same way on every platform (`src/jinative.h`): code and read-only data that are mapped from the file as they are, data, and a list of the slots in the data that hold an address of the image or of a symbol that it imports.
 
-Since the package images contain native code, we must run a linker over them before we can use them. You can set the environment variable [`JULIA_VERBOSE_LINKING`](@ref JULIA_VERBOSE_LINKING) to `true` to make the package image linking process verbose.
+Loading (`src/jinative-load.c`) maps the segments, adds the load address to the first kind of slot, stores the address of the import in the second, and tells the unwinder where the unwind tables are. The dynamic loader of the system is not involved, and no linker is needed where packages are precompiled. On macOS the section carries an ad-hoc code signature, which the kernel requires to map a file executable.
 
-Furthermore, we cannot assume that the user has a working system linker installed. Therefore, Julia ships with LLD, the LLVM linker, to provide a working out of the box experience. In `base/linking.jl`, we implement a limited interface to be able to link package images on all supported platforms.
-
-### Quirks
-Despite LLD being a multi-platform linker, it does not provide a consistent interface across platforms. Furthermore, it is meant to be used from `clang` or
-another compiler driver, we therefore reimplement some of the logic from `llvm-project/clang/lib/Driver/ToolChains`. Thankfully one can use `lld -flavor` to set lld to the right platform
-
-#### Windows
-To avoid having to deal with `link.exe` we use `-flavor gnu`, effectively turning `lld` into a cross-linker from a mingw32 environment. Windows DLLs are required to contain a `_DllMainCRTStartup` function and to minimize our dependence on mingw32 libraries, we inject a stub definition ourselves.
-
-#### MacOS
-Dynamic libraries on macOS need to link against `-lSystem`. On recent macOS versions, `-lSystem` is only available for linking when Xcode is available.
-To that effect we link with `-undefined dynamic_lookup`.
+On architectures that the prelinker does not support (anything but x86-64, AArch64 and 32-bit x86 on ELF), package images are written without native code.
 
 ## [Package images optimized for multiple microarchitectures](@id pkgimgs-multi-versioning)
 

@@ -181,12 +181,7 @@ end
 function evict_cachefile(cachefile::String, guard::Union{Nothing,Filesystem.File}=nothing)
     @debug "Evicting file from cache" cachefile
     try
-        # remove the .ji first, so a failure leaves nothing that loads; the next build retries
         rm(cachefile; force=true)
-        rm(ocachefile_from_cachefile(cachefile); force=true)
-        @static if Sys.isapple()
-            rm(ocachefile_from_cachefile(cachefile) * ".dSYM"; force=true, recursive=true)
-        end
     catch e
         e isa IOError || rethrow()
         @debug "Could not evict a cache file" cachefile exception=e

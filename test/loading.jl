@@ -2308,8 +2308,8 @@ end
                 `$cov_exename --startup-file=no --pkgimage=yes --code-coverage=@ --project -e 'using CovTest; exit(0)'`,
                 "JULIA_DEPOT_PATH" => depot,
             ))
-            # check that the native code exists, as object cache file(s) or in the .ji
-            @test any(f -> !endswith(f, ".ji") || Base.cache_embeds_native_code(joinpath(cov_cache_dir, f)),
+            # check that the native code exists
+            @test any(f -> endswith(f, ".ji") && Base.cache_embeds_native_code(joinpath(cov_cache_dir, f)),
                       readdir(cov_cache_dir))
             @test !cov_hit()
             rm_cov_files()
@@ -2522,7 +2522,7 @@ end
         restore = """
             pkg = Base.identify_package("CovDep")
             path = $(repr(plaindep))
-            r = @lock Base.require_lock Base._tryrequire_from_serialized(pkg, path, Base.ocachefile_from_cachefile(path))
+            r = @lock Base.require_lock Base._tryrequire_from_serialized(pkg, path, nothing)
             exit(r isa Module ? 0 : occursin("coverage", sprint(showerror, r)) ? 2 : 1)
             """
         @test success(covcmd(`--code-coverage=none`, restore))

@@ -630,7 +630,7 @@ static const char *jl_git_commit(void) JL_CANSAFEPOINT
 
 
 // "magic" string and version header of .ji file
-static const int JI_FORMAT_VERSION = 17;
+static const int JI_FORMAT_VERSION = 18;
 static const char JI_MAGIC[] = "\373jli\r\n\032\n"; // based on PNG signature
 static const uint16_t BOM = 0xFEFF; // byte-order marker
 
@@ -638,10 +638,9 @@ static const uint16_t BOM = 0xFEFF; // byte-order marker
 static const uint32_t JI_FLAG_PKGIMAGE = 1 << 0;
 // This .ji must be loaded from the associated native image (.so/.dylib/.dll).
 static const uint32_t JI_FLAG_SPLIT = 1 << 1;
-// This split .ji has no code, so no native image was written and it is loaded on its own.
+// This split .ji is loaded on its own: it is a package image, which has no native image file.
 static const uint32_t JI_FLAG_NO_NATIVE = 1 << 2;
-// The native code is a section of this .ji (see jinative.h). Set together with
-// JI_FLAG_NO_NATIVE, since there is no native image file then either.
+// This .ji has native code, in a section of it (see jinative.h).
 static const uint32_t JI_FLAG_NATIVE_EMBEDDED = 1 << 3;
 
 static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT

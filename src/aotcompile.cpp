@@ -2341,7 +2341,7 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
     unsigned OverrideStackAlignment = dataM.getOverrideStackAlignment();
 
     auto compile = [&](Module &M, StringRef name, unsigned shards, unsigned workers, JobserverClient *jobserver, auto module_released) {
-        return add_output(M, *SourceTM, name, shards, workers, !!unopt_bc_fname, !!bc_fname, !!obj_fname, !!asm_fname, jobserver, module_released);
+        return add_output(M, *SourceTM, name, shards, workers, !!unopt_bc_fname, !!bc_fname, obj_fname || params->native_image, !!asm_fname, jobserver, module_released);
     };
 
     SmallVector<AOTOutputs, 16> sysimg_outputs;
@@ -2662,9 +2662,8 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
 
         WRITE_ARCHIVE(unopt_bc_fname, unopt, "_unopt", ".bc");
         WRITE_ARCHIVE(bc_fname, opt, "_opt", ".bc");
-        if (obj_fname && params->native_image) {
-            // link the objects here, into a section of the .ji, instead of
-            // writing them out for the linker of the system
+        if (params->native_image) {
+            // link the objects here, into a section of the .ji
             SmallVector<MemoryBufferRef, 16> objects;
             for (size_t i = 0; i < shards; i++)
                 objects.push_back(MemoryBufferRef(StringRef(data_outputs[i].obj.data(), data_outputs[i].obj.size()), "text"));
@@ -2676,7 +2675,6 @@ static void jl_dump_native_locked(jl_native_code_desc_t *data, const char *bc_fn
             if (!jl_prelink_native_image(objects, TheTriple, page_size, image, err, nullptr))
                 report_fatal_error(Twine("cannot link the native code of the image: ") + err);
             ios_write(params->native_image, image.data(), image.size());
-            obj_fname = nullptr;
         }
         WRITE_ARCHIVE(obj_fname, obj, "", ".o");
         WRITE_ARCHIVE(asm_fname, asm_, "", ".s");
@@ -2694,7 +2692,7 @@ jl_dump_native_impl(void *native_code, const char *bc_fname, const char *unopt_b
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Dump);
     jl_native_code_desc_t *data = (jl_native_code_desc_t*)native_code;
-    if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname) {
+    if (!bc_fname && !unopt_bc_fname && !obj_fname && !asm_fname && !params->native_image) {
         LLVM_DEBUG(dbgs() << "No output requested, skipping native code dump?\n");
         delete data;
         return;
