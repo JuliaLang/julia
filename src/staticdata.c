@@ -355,7 +355,7 @@ JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTS
 static htable_t fptr_to_id;
 
 void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching data from LLVM
-static jl_array_t *image_ci_order; // ordered CodeInstances for the image's method caches, or NULL to save the caches as they are
+static jl_value_t *image_code; // svec(codeinfos, ci_order) collected for the image (see jl_collect_and_infer_code), or NULL to save the method caches as they are
 
 // table of struct field addresses to rewrite during saving
 static htable_t object_replace;
@@ -870,7 +870,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         int is_builtin = jl_is_method(midef) &&
             ((jl_method_t*)midef)->source == NULL &&
             ((jl_method_t*)midef)->generator == NULL;
-        if (image_ci_order && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+        if (image_code && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
             record_field_change((jl_value_t*)mi, (jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         // pruned once queueing is done
@@ -3319,10 +3319,11 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
 
-    if (image_ci_order) {
+    if (image_code) {
         // Rewrite each MethodInstance's cache to the ordered list of
         // CodeInstances selected for this image (see jl_rewrite_mi_caches).
-        jl_rewrite_mi_caches(jl_array_data(image_ci_order, jl_code_instance_t*), jl_array_nrows(image_ci_order));
+        jl_array_t *ci_order = (jl_array_t*)jl_svecref(image_code, 1);
+        jl_rewrite_mi_caches(jl_array_data(ci_order, jl_code_instance_t*), jl_array_nrows(ci_order));
     }
     if (native_functions) {
         size_t num_gvars, num_external_fns;
@@ -3334,15 +3335,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_get_llvm_external_fns(native_functions, &num_external_fns,
                                  (jl_code_instance_t *)external_fns.items);
         if (jl_options.trim) {
-            size_t num_mis;
-            jl_get_llvm_cis(native_functions, &num_mis, NULL);
-            arraylist_grow(&MIs, num_mis);
-
-            // Record MethodInstances for user-provided code (as reported by codegen)
-            jl_get_llvm_cis(native_functions, &num_mis, (jl_code_instance_t**)MIs.items);
-            for (size_t i = 0; i < num_mis; i++) {
-                jl_code_instance_t *ci = (jl_code_instance_t*)MIs.items[i];
-                MIs.items[i] = (void*)jl_get_ci_mi(ci);
+            // Record MethodInstances for user-provided code
+            jl_array_t *codeinfos = (jl_array_t*)jl_svecref(image_code, 0);
+            for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
+                jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+                if (jl_is_code_instance(item))
+                    arraylist_push(&MIs, jl_get_ci_mi((jl_code_instance_t*)item));
             }
 
             // Record MethodInstances for built-ins (used when dynamically dispatching to a
@@ -3751,9 +3749,9 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ios_mem(f, 0);
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *extext_records = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
-    jl_value_t *image_code = NULL; // svec(codeinfos, ci_order), see jl_collect_and_infer_code
     int64_t datastartpos = 0;
-    JL_GC_PUSH6(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis, &image_code);
+    jl_value_t *collected = NULL; // svec(codeinfos, ci_order), see jl_collect_and_infer_code
+    JL_GC_PUSH6(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis, &collected);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
 
@@ -3774,12 +3772,12 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             all = jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL;
             allmodules = mod_array;
         }
-        image_code = jl_collect_and_infer_code(trim, external_linkage, jl_atomic_load_acquire(&jl_world_counter),
-                                               allmodules, newmodules, all, module_init_order, ext_foreign_cis);
-        image_ci_order = (jl_array_t*)jl_svecref(image_code, 1);
+        collected = jl_collect_and_infer_code(trim, external_linkage, jl_atomic_load_acquire(&jl_world_counter),
+                                              allmodules, newmodules, all, module_init_order, ext_foreign_cis);
+        image_code = collected;
     }
     if (_native_data != NULL)
-        *_native_data = jl_create_native((jl_array_t*)jl_svecref(image_code, 0), external_linkage);
+        *_native_data = jl_create_native((jl_array_t*)jl_svecref(collected, 0), external_linkage);
 
     int64_t checksumpos;
     if (worklist) {
@@ -3809,34 +3807,21 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     if (worklist) {
         // new_exts: [code_instances, ...], anything to add to the image just for side-effects
         // Save the inferred code from newly inferred, external methods
-        arraylist_t CIs;
-        arraylist_new(&CIs, 0);
-        if (native_functions) {
-            size_t num_cis = 0;
-            jl_get_llvm_cis(native_functions, &num_cis, NULL);
-            arraylist_grow(&CIs, num_cis);
-            jl_get_llvm_cis(native_functions, &num_cis, (jl_code_instance_t**)CIs.items);
-        }
-        else {
-            // The CodeInstances that native code would have been emitted for
-            jl_array_t *codeinfos = (jl_array_t*)jl_svecref(image_code, 0);
-            for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
-                jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
-                if (jl_is_code_instance(item) &&
-                    !(jl_atomic_load_relaxed(&((jl_code_instance_t*)item)->flags) & JL_CI_FLAGS_FROM_IMAGE))
-                    arraylist_push(&CIs, item);
-            }
-        }
-        // Create a filtered list of the compiled code instances that are
-        // possibly not referenced via any other way but valid for the
-        // Method cache field of an external method
+        // Keep the collected code instances that are possibly not referenced
+        // via any other way but valid for the Method cache field of an external method
         new_ext = jl_alloc_vec_any(0);
-        for (size_t i = 0; i < CIs.len; i++) {
-            jl_code_instance_t *ci = (jl_code_instance_t*)CIs.items[i];
+        jl_array_t *codeinfos = (jl_array_t*)jl_svecref(collected, 0);
+        for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
+            jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+            if (!jl_is_code_instance(item))
+                continue;
+            jl_code_instance_t *ci = (jl_code_instance_t*)item;
+            // code from another image stays there
+            if (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE)
+                continue;
             if (ci_not_internal_cache(ci))
-                jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                jl_array_ptr_1d_push(new_ext, item);
         }
-        arraylist_free(&CIs);
         // Merge foreign & external CIs
         size_t n_ext = jl_array_nrows(ext_foreign_cis);
         for (size_t i = 0; i < n_ext; i++)
@@ -3871,7 +3856,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
-    image_ci_order = NULL;
+    image_code = NULL;
     // make sure we don't run any Julia code concurrently before this point
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);
