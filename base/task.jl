@@ -572,6 +572,7 @@ end
 ## consumed completions).
 struct DoneWait
     t::Task
+    slot::Int
 end
 
 function wait_enqueue!(x::DoneWait, w::WaitEntry, first::Bool)
@@ -583,8 +584,9 @@ function wait_enqueue!(x::DoneWait, w::WaitEntry, first::Bool)
         return false
     end
     # a duplicate of an already-registered task shares its slot
-    if _find_slot(w, donenotify) == 0
-        push!(waitqueue(t), w)
+    if _slot_owner(w, x.slot) === nothing
+        _set_slot_owner!(w, x.slot, donenotify)
+        _link_tail!(waitqueue(t), w)
     end
     unlock(donenotify)
     return true
@@ -593,7 +595,7 @@ end
 function wait_recheck(x::DoneWait, w::WaitEntry)
     t = x.t
     istaskdone(t) || return false
-    return _find_slot(w, t.donenotify::ThreadSynchronizer) != 0
+    return _slot_owner(w, x.slot) === t.donenotify::ThreadSynchronizer
 end
 
 function wait_dequeue!(x::DoneWait, w::WaitEntry, why::UInt8)
@@ -604,9 +606,24 @@ function wait_dequeue!(x::DoneWait, w::WaitEntry, why::UInt8)
     t = x.t
     donenotify = t.donenotify::ThreadSynchronizer
     lock(donenotify)
-    list_deletefirst!(waitqueue(t), w)
+    _slot_owner(w, x.slot) === donenotify && list_deletefirst!(waitqueue(t), w, x.slot)
     unlock(donenotify)
     return nothing
+end
+
+struct PendingWaits
+    tasks::Vector{Task}
+    slot::Vector{Int}
+    done::BitVector
+    src::Union{CancellationTokenSource, Nothing}
+end
+IteratorSize(::Type{PendingWaits}) = SizeUnknown()
+@inline function iterate(ws::PendingWaits, i::Int=1)
+    j = findnext(!, ws.done, i)
+    j === nothing || return (DoneWait(ws.tasks[j], ws.slot[j]), j + 1)
+    src = ws.src
+    (src === nothing || i > length(ws.tasks) + 1) && return nothing
+    return (SourceWait(src, 0x00), length(ws.tasks) + 2)
 end
 
 function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=false, failfast::Bool=false,
@@ -660,12 +677,14 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
     ct = current_task()
     src = cancel_source(tok)
     src === nothing || checkcancel(src)
-    ws = Vector{Union{DoneWait, SourceWait}}()
+    # slot 1 is left for the source, which takes the first free slot
+    slot = zeros(Int, length(tasks))
+    seen = IdDict{Task,Int}()
     for (i, done) in enumerate(done_mask)
-        done || push!(ws, DoneWait(tasks[i]))
+        done || (slot[i] = get!(seen, tasks[i], length(seen) + 2))
     end
-    src === nothing || push!(ws, SourceWait(src, 0x00))
-    w = acquire_wait_entry!(ct, ws)
+    ws = PendingWaits(tasks, slot, done_mask, src)
+    w = WaitEntryN(ct, length(seen) + 1)
     while true
         # suspend only when the park armed (a `false` park means a waitable
         # fired - a completion, or the source - and the self-claim won)
@@ -682,7 +701,7 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
             done && continue
             t = tasks[i]
             if istaskdone(t)
-                wait_dequeue!(DoneWait(t), w, WAKE_WITHDRAWN)
+                wait_dequeue!(DoneWait(t, slot[i]), w, WAKE_WITHDRAWN)
                 done_mask[i] = true
                 exception |= istaskfailed(t)
                 nremaining -= 1
@@ -691,11 +710,6 @@ function _wait_multiple(tasks::Vector{Task}, throwexc::Bool=false, all::Bool=fal
         if nremaining == 0 || (!all && any(done_mask)) || (exception && failfast)
             break
         end
-        empty!(ws)
-        for (i, done) in enumerate(done_mask)
-            done || push!(ws, DoneWait(tasks[i]))
-        end
-        src === nothing || push!(ws, SourceWait(src, 0x00))
     end
     withdraw!(ws, w)
 

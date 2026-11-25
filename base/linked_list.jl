@@ -190,6 +190,10 @@ end
 function push!(qr::ILLRef{WaitEntry}, val::WaitEntry)
     _find_slot(val, qr.waitee) == 0 || error("val already in this list")
     _acquire_slot!(val, qr.waitee)
+    return _link_tail!(qr, val)
+end
+
+function _link_tail!(qr::ILLRef{WaitEntry}, val::WaitEntry)
     q = qr.list
     tail = q.tail
     if tail === nothing
@@ -236,8 +240,10 @@ end
 # Delete `val` from the list, but only if it is actually in it, as witnessed
 # by its slot for this list's identity. This makes deletion a no-op if `val`
 # was concurrently popped, which various cleanup paths rely upon.
-function list_deletefirst!(qr::ILLRef{WaitEntry}, val::WaitEntry)
-    vi = _find_slot(val, qr.waitee)
+list_deletefirst!(qr::ILLRef{WaitEntry}, val::WaitEntry) =
+    list_deletefirst!(qr, val, _find_slot(val, qr.waitee))
+
+function list_deletefirst!(qr::ILLRef{WaitEntry}, val::WaitEntry, vi::Int)
     vi == 0 && return qr.list
     q = qr.list
     o = qr.waitee
