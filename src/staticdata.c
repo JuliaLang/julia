@@ -3752,8 +3752,9 @@ JL_DLLEXPORT int jl_embed_native_code(void) JL_NOTSAFEPOINT
 #if !(defined(_CPU_AARCH64_) || defined(_CPU_X86_64_) || defined(_CPU_X86_)) || (defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_))
     return 0;
 #else
+    // an object output that is asked for is written as well
     return jl_options.incremental && jl_options.outputji != NULL &&
-           jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_YES;
+           (jl_options.use_pkgimages == JL_OPTIONS_USE_PKGIMAGES_YES || jl_options.outputo != NULL);
 #endif
 }
 

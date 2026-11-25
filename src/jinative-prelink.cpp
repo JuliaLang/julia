@@ -213,7 +213,8 @@ bool Prelinker::isAbsolute(Edge::Kind K) const
 }
 
 // JITLink has no pass for the unwind tables of 32-bit x86, so nothing refers to
-// them and they would be dropped as dead.
+// them and they would be dropped as dead. The unwinder of the system is not
+// told their size, so they also need the record of length zero that ends them.
 Error Prelinker::keepUnwindTables(LinkGraph &G)
 {
     if (TT.getArch() != Triple::x86)
@@ -221,6 +222,10 @@ Error Prelinker::keepUnwindTables(LinkGraph &G)
     if (Section *EH = G.findSectionByName(".eh_frame")) {
         for (auto *B : EH->blocks())
             G.addAnonymousSymbol(*B, 0, B->getSize(), false, true);
+        static const char Terminator[4] = {};
+        // the highest address makes it the last block of the section
+        Block &End = G.createContentBlock(*EH, Terminator, orc::ExecutorAddr(~uint64_t(4)), 1, 0);
+        G.addAnonymousSymbol(End, 0, sizeof(Terminator), false, true);
     }
     return Error::success();
 }
@@ -508,7 +513,12 @@ Error Prelinker::recordFixups(LinkGraph &G)
                         continue; // JITLink lowered an offset from __ImageBase to this
                     if (isAbsolute(E.getKind()))
                         return error("absolute relocation that the loader cannot apply", *B, E);
-                    if (Import && !(T.isAbsolute() && TAddr == VBase))
+                    // An object of 32-bit x86 that needs no GOT entry has the GOT at
+                    // address 0. Its code then computes how far the image was moved,
+                    // and adds the addresses the image was linked at to that.
+                    bool NoGOT = TT.getArch() == Triple::x86 && T.isAbsolute() && TAddr == 0 &&
+                                 T.hasName() && *T.getName() == "_GLOBAL_OFFSET_TABLE_";
+                    if (Import && !(T.isAbsolute() && TAddr == VBase) && !NoGOT)
                         return error("relative relocation against an import", *B, E);
                     continue;
                 }
