@@ -2395,8 +2395,6 @@ static void write_reloc(jl_serializer_state *s, ios_t *f, jl_value_t *v) JL_CANS
     write_uint(f, reloc_for(s, v));
 }
 
-// Write the gvars as relocs: the objects the native code uses, then the specialized
-// functions of CodeInstances in other images that it calls
 static size_t write_gvars(jl_serializer_state *s, ios_t *f, arraylist_t *globals, arraylist_t *external_fns) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     for (size_t i = 0; i < globals->len; i++)
@@ -2410,8 +2408,8 @@ static size_t write_gvars(jl_serializer_state *s, ios_t *f, arraylist_t *globals
     return globals->len;
 }
 
-// Copy the gvars into the native image's slots, rooting the objects of incremental images
-// (the first `nobjects`)
+// Copy the gvars into the native image's slots.  We root the Julia objects (the
+// first `nobjects`).
 static void jl_update_all_gvars(jl_image_t *image, uintptr_t *gvars, size_t l, size_t nobjects, int incremental) JL_CANSAFEPOINT
 {
     if (image->gvars_base == NULL)
