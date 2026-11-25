@@ -134,6 +134,12 @@ function process_events()
     return ccall(:jl_process_events, Int32, ())
 end
 
+# the poll of a task that blocks; returns `false` if it was skipped because the event loop
+# was idle a moment ago
+function process_events_throttled()
+    return ccall(:jl_process_events_throttled, Int32, ()) != 0
+end
+
 function uv_alloc_buf end
 function uv_readcb end
 function uv_writecb_task end

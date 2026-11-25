@@ -1454,11 +1454,14 @@ Switch to the scheduler to allow another scheduled task to run. A task that call
 function is still runnable, and will be restarted immediately if there are no other runnable
 tasks.
 """
-function yield()
+yield() = _yield(true)
+
+# `poll`: see `_wait`
+function _yield(poll::Bool)
     ct = current_task()
     enq_work(ct)
     try
-        wait()
+        _wait(poll)
     catch
         q = ct.queue; q === nothing || list_deletefirst!(q::StickyWorkqueue, ct)
         rethrow()
@@ -1671,7 +1674,10 @@ end
 
 checktaskempty = Partr.multiq_check_empty
 
-function wait()
+wait() = _wait(false)
+
+# `poll`: check for libuv events even if the event loop was idle a moment ago
+function _wait(poll::Bool)
     ct = current_task()
     # [task] user_time -yield-or-done-> wait_time
     record_running_time!(ct)
@@ -1679,11 +1685,16 @@ function wait()
     GC.safepoint()
     # check for libuv events, but not on a completed task (#63048)
     ct_done = istaskdone(ct)
-    ct_done || process_events()
+    polled = ct_done || (poll ? (process_events(); true) : process_events_throttled())
 
     # get the next task to run
     W = workqueue_for(Threads.threadid())
     task = trypoptask(W)
+    if task === nothing && !polled
+        # the poll may only be skipped while there is another task to run
+        process_events()
+        task = trypoptask(W)
+    end
     if task === nothing
         # No tasks to run. If the current task is done, switch to the scheduler task
         # to run the thread sleep logic, so that this task's stack can be freed

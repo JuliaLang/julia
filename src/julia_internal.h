@@ -184,6 +184,8 @@ static uv_loop_t *const unused_uv_loop_arg = (uv_loop_t *)0xBAD10;
 
 extern jl_mutex_t jl_uv_mutex;
 extern _Atomic(int) jl_uv_n_waiters;
+JL_DLLEXPORT int jl_process_events_throttled(void) JL_CANSAFEPOINT;
+int jl_run_event_loop(uv_loop_t *loop, uv_run_mode mode, int backoff) JL_CANSAFEPOINT;
 // Set when a thread finds the event loop idle before it sleeps. Cleared before the
 // scheduler runs the loop, and by jl_iolock_end when it wakes the event loop thread.
 // Protected by jl_uv_mutex.

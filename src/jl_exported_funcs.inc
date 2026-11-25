@@ -370,6 +370,7 @@
     XX(jl_printf) \
     XX(jl_print_backtrace) \
     XX(jl_process_events) \
+    XX(jl_process_events_throttled) \
     XX(jl_profile_clear_data) \
     XX(jl_profile_delay_nsec) \
     XX(jl_profile_get_data) \
