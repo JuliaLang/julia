@@ -1488,6 +1488,14 @@ endif
 USE_BINARYBUILDER ?= 0
 endif
 
+# The julia release, pinned in deps/julia-bootstrap.version, that builds the frontend
+# which bootstraps julia (libjulia-frontend, see src/frontend/README.md). By default it is
+# downloaded (deps/julia-bootstrap.mk); set JULIA_BOOTSTRAP_HOME to the root of an
+# installation of that release to use it instead.
+include $(JULIAHOME)/deps/julia-bootstrap.version
+JULIA_BOOTSTRAP_DEFAULT_HOME := $(BUILDROOT)/deps/scratch/julia-bootstrap-$(JULIA_BOOTSTRAP_VER)
+JULIA_BOOTSTRAP_HOME ?= $(JULIA_BOOTSTRAP_DEFAULT_HOME)
+
 # Auto-detect triplet once, create different versions that we use as defaults below for each BB install target
 FC_VERSION := $(shell $(FC) -dM -E - < /dev/null 2>/dev/null | grep __GNUC__ | cut -d' ' -f3)
 ifeq ($(USEGCC)$(FC_VERSION),1)

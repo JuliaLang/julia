@@ -1,0 +1,4 @@
+# -*- makefile -*-
+
+## Pinned julia release that builds the bootstrap frontend (see deps/julia-bootstrap.mk)
+JULIA_BOOTSTRAP_VER := 1.14.0-beta1
