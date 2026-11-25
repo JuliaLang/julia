@@ -114,16 +114,12 @@ end
 
 # rem_pio16(a) takes a = |x| < trig16_limit_hi(rem_pio16, a) (defined below) and returns
 # n and the remainder z, with |z| <= 1/2 and a = π/16*(n + z); rem_pio16_large handles larger
-# finite a. Float16 and Float32 return (z, n), with z in Float32 and Float64 respectively; Float64
-# returns (rh, rl, n), with the reduced angle π/16*z = rh + rl in radians.
+# finite a. Float32 returns (z, n), with z in Float64; Float16 and Float64 return (rh, rl, n),
+# with the reduced angle π/16*z = rh + rl in radians. Float16 is reduced in Float64 so that
+# rounding to Float16 at the end is the only rounding of the result.
 
-# Radians, Float16 (in Float32). 16/π ≈ Float32(INV_PIO16) + 2.0546042f-7, and the fma subtracts n
-# from the exact product of a with the first part, so only the small remainder is rounded.
-@inline function rem_pio16(a::Float16)
-    af = Float32(a)
-    id, n = roundmul(af, Float32(INV_PIO16))
-    return muladd(af, 2.0546042f-7, fma(af, Float32(INV_PIO16), -id)), n
-end
+# Radians, Float16 (in Float64).
+@inline rem_pio16(a::Float16) = rem_pio16(Float64(a))
 
 # Radians, Float32 (in Float64). For a < 2^26, 16/π is split so that the high part times a is exact.
 # n is rounded from the full product, so that |z| <= 1/2.
