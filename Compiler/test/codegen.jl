@@ -1677,3 +1677,20 @@ end
     @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_inline, Tuple{Int, Vector{Int}, Vector{Int}, Vector{Int}, Int}))
     @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_allptr, Tuple{Vector{Int}, Vector{Int}, Vector{Int}, Int}))
 end
+
+# `rem` only guards the overflowing `typemin % -1`, so a numerator that can't be `typemin`
+# leaves a plain `srem`, which can be CSE'd and paired with a division
+srem_index(i::UInt16, n::Int) = rem(i % Int, n)
+@noinline srem_dynamic(x, y) = rem(x, y)
+@testset "checked srem" begin
+    ir = get_llvm(srem_index, Tuple{UInt16, Int}, false)
+    @test occursin(" = srem $Iptr ", ir)
+    @test !occursin("phi", ir)
+    for T in Base.BitSigned_types
+        x, y = Base.inferencebarrier(typemin(T)), Base.inferencebarrier(T(-1))
+        @test srem_dynamic(x, y) === T(0)
+        @test srem_dynamic(x + T(1), y) === T(0)
+        @test srem_dynamic(x, T(7)) === T(rem(big(typemin(T)), 7))
+        @test_throws DivideError srem_dynamic(x, zero(T))
+    end
+end
