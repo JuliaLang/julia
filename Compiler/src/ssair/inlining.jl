@@ -1422,7 +1422,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 else
                     handled_all_cases = false
                 end
-            elseif !(match.spec_types <: match.method.sig) # the requirement for correct union-split
+            elseif !(match.fully_covers || match.spec_types <: match.method.sig) # the requirement for correct union-split
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_call_result!(cases,
