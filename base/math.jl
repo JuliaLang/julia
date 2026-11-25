@@ -998,6 +998,16 @@ function exponent(x::Bool)
     end
 end
 
+function exponent(x::Rational)
+    num, den = Base.uabs(numerator(x)), Base.uabs(denominator(x))
+    iszero(num) && throw(DomainError(x, "cannot be zero"))
+    iszero(den) && throw(DomainError(x, "cannot be infinite"))
+    # 2^e ≤ num/den < 2^(e+2); the shifted operand has the same top set bit as the
+    # other one, so the shift cannot overflow
+    e = exponent(num) - exponent(den)
+    return (e >= 0 ? num >= den << e : num << -e >= den) ? e : e - 1
+end
+
 """
     significand(x)
 
