@@ -77,8 +77,8 @@ static htable_t nullptrs;
 // FIFO queue for objects to be serialized. Anything requiring fixup upon deserialization
 // must be "toplevel" in this queue.
 static arraylist_t serialization_queue;
-// for each `id` in `serialization_order`: where the object was written, a position in `s->s`,
-// or BITS_ITEM plus a position in `s->bits`
+// Map from indices in `serialization_order` to position in the output stream,
+// or `BITS_ITEM` | pointer-free area position.
 static arraylist_t layout_table;
 static arraylist_t object_worklist;  // used to mimic recursion by jl_serialize_reachable
 
@@ -640,8 +640,8 @@ typedef struct { fptr_src_t invoke, specptr; } ci_fptrs_t;
 // Return a struct describing how we'll need to compute the function pointers
 // for a CodeInstance.  FUNCTION_BUILTIN means idx is an index into
 // jl_builtin_f_addrs, FUNCTION_RUNTIME means it's a jl_invoke_api_t number, and
-// FUNCTION_NONE means it's an index into the table of native functions for this
-// image.
+// FUNCTION_NATIVE means it's an index into the table of native functions for
+// this image.
 static ci_fptrs_t ci_native_code(jl_code_instance_t *ci)
 {
     ci_fptrs_t r = {{FUNCTION_NONE, 0}, {FUNCTION_NONE, 0}};
@@ -1380,10 +1380,10 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
     assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
     assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
     if (s->incremental && needs_uniquing(v, s->query_cache)) {
-        // The import records for these objects need an object into the auxdata
-        // section.  We could use a placeholder for this and assign the offsets
-        // in the section later, but it's simpler to advance auxdata_size here
-        // and get the final import table entry now.
+        // The import of each of these objects needs the offset of its record in
+        // the auxdata section.  We could use a placeholder for this and assign
+        // the offsets in the section later, but it's simpler to advance
+        // auxdata_size here and get the final import table entry now.
         import_type_t type = jl_is_datatype(w)        ? IMPORT_DATATYPE :
                              jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE :
                                                         IMPORT_BINDING;
@@ -1696,14 +1696,12 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
         // write header
         if (object_id_expected)
             write_uint(f, jl_object_id(v));
-        // a small tag is fixed by the runtime, so it is written in its final form; any other type
-        // is relocated (and its object is not in the bits stream)
         if (!t->smalltag)
             record_reloc(s, ios_pos(f), backref_id(s, t));
         write_uint(f, ((uintptr_t)t->smalltag << 4) | GC_PERM_BITS);
         size_t reloc_offset = ios_pos(f);
         assert(item < layout_table.len && layout_table.items[item] == NULL);
-        layout_table.items[item] = (void*)(reloc_offset | (f == s->bits ? BITS_ITEM : 0)); // store the inverse mapping of `serialization_order` (`id` => object-as-streampos)
+        layout_table.items[item] = (void*)(reloc_offset | (f == s->bits ? BITS_ITEM : 0));
 
         if (s->incremental && needs_recaching(v, s->query_cache))
             arraylist_push(jl_is_datatype(v) ? &s->fixup_types : &s->fixup_objs, (void*)reloc_offset);
@@ -2097,7 +2095,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
 }
 
 // Returns the reloc for `item` (see `backref_id`) plus `offset`: a bind, or the address of a slide
-// when the heap is at `s->heap_base`
+// when the heap is at `s->preferred_base`
 static reloc_t get_reloc_for_item(jl_serializer_state *s, uintptr_t item, size_t offset)
 {
     if (item & BIND_BIT) {
@@ -2153,8 +2151,8 @@ static void relocmaps_init(jl_relocmaps_t *m, size_t size) JL_NOTSAFEPOINT
     ios_ensureroom(&m->binds, nbytes);
 }
 
-// A binds or slides section is a bitmap when its size is exactly `nwords` u64s, and otherwise a
-// list of gaps
+// A binds or slides section is a bitmap when its size is exactly `nwords` u64s,
+// and otherwise it's a list of gaps.
 static inline int relocs_is_bitmap(size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
     return size == nwords * sizeof(uint64_t);
@@ -2170,8 +2168,8 @@ static inline uint32_t relocs_read_gap(const uint8_t **p) JL_NOTSAFEPOINT
     return gap;
 }
 
-// Write the final value of each relocation in `list` into the heap at `base`, and mark it as a
-// slide or a bind
+// Write the final value of each relocation in `list` into the heap at `base`,
+// and mark it as a slide or a bind.
 static void jl_finish_relocs(jl_serializer_state *s, char *base, jl_relocmaps_t *m)
 {
     arraylist_t *list = &s->relocs_list;
@@ -2183,7 +2181,8 @@ static void jl_finish_relocs(jl_serializer_state *s, char *base, jl_relocmaps_t 
     }
 }
 
-// Turn the offset in each MemoryRef in `list` into a slide, once its Memory's data is placed
+// Turn the offset in each MemoryRef in `list` into a slide, once its Memory's
+// data is serialized.
 static void jl_finish_memrefs(jl_serializer_state *s, char *base, jl_relocmaps_t *m)
 {
     arraylist_t *list = &s->memref_list;
@@ -2390,8 +2389,6 @@ static void jl_update_all_fptrs(jl_image_t *image, char *heap, const uintptr_t *
     jl_register_fptrs(image->base, &fvars, linfos, img_fvars_max);
 }
 
-// The reloc for `v`: 0 for NULL, a bind, or otherwise the address of `v` when the heap is at
-// `s->heap_base`
 static reloc_t reloc_for(jl_serializer_state *s, jl_value_t *v) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     return v ? get_reloc_for_item(s, backref_id(s, v), 0) : 0;
@@ -2972,9 +2969,7 @@ static int jl_prune_internal_mtable(jl_methtable_t *mt, void *env)
     return 1;
 }
 
-// Write the contents of `sec` to `f` at an 8-byte aligned offset, as a section of the payload
-// starting at `payload`, store its offset and size in `out`, and close `sec`.  If the image stream
-// cannot be grown to fit the section, fail rather than return with a truncated section.
+// Write the contents of `sec` to `f` at an 8-byte aligned offset.
 static void write_section(ios_t *f, size_t payload, jl_image_section_t *out, ios_t *sec, const char *name) JL_CANSAFEPOINT
 {
     write_padding(f, LLT_ALIGN(ios_pos(f), 8) - ios_pos(f));
@@ -4163,7 +4158,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         IMAGE_NATIVE_CODE_TAINTED = 1;
     }
 
-    // step 1: read the section table
+    // step 1: get the header, and the metadata of the images that deprefs refer to
     const jl_ji_header_t *h = buf->header;
     size_t nwords = bitmap_nwords(h->pointer_free_offset);
     char *image_base = (char*)buf->heap;
@@ -4191,10 +4186,8 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     arraylist_new(&s.waiting, 0);
     s.first_waiting = (size_t*)calloc_s(nimports * sizeof(size_t));
     s.slide = (uintptr_t)image_base - h->preferred_base;
-    // Before anything refers to them, in import order, copy the records of types into provisional
-    // types, so that every reference to a type or its singleton instance is to a complete object
-    // while the imports are resolved (see doc/src/devdocs/sysimg.md), and resolve the bindings.
-    // MethodInstances read as NULL until they are resolved.
+
+    // Set up provisional types, singletons for those types, and look up or create bindings.
     char *records = image_section(buf, h->auxdata);
     for (size_t i = 0; i < nimports; i++) {
         import_type_t type = IMPORT_TYPE(imports[i]);
@@ -4231,6 +4224,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
             jl_astaggedvalue(dt->instance)->bits.gc = GC_OLD;
         }
     }
+
     jl_apply_slides((uintptr_t*)image_base, s.slide, image_section(buf, h->slides), h->slides.size, nwords);
     jl_apply_binds(&s, (uintptr_t*)image_base, image_section(buf, h->binds), h->binds.size, nwords);
 
@@ -4262,12 +4256,9 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     const uintptr_t *fixup_types = (const uintptr_t*)image_section(buf, h->fixup_types);
     const uintptr_t *fixup_objs = (const uintptr_t*)image_section(buf, h->fixup_objs);
     size_t nfixup_types = h->fixup_types.size / sizeof(uintptr_t), nfixup_objs = h->fixup_objs.size / sizeof(uintptr_t);
-    // Resolve the provisional types, and the singletons of those types, in import order: a type
-    // found in the caches or in the region replaces its provisional type, and a provisional type
-    // that is not found becomes the type, and waits in the region until the types are complete,
-    // with whatever the lookups build meanwhile that mentions it.  What a lookup compares by
-    // identity refers to earlier imports, so it is final already.
-    JL_LOCK(&typecache_lock); // Might GC--prevent other threads from changing any type caches while we inspect them all
+
+    // Finalize the provisional types/singletons.
+    JL_LOCK(&typecache_lock); // Prevent other threads from changing any type caches while we inspect them all
     jl_deferred_typecache_t region;
     jl_typecache_region_begin(&region);
     JL_TRY {
@@ -4286,16 +4277,12 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
             assert(newdt->hash == dt->hash);
             jl_finalize_import(&s, i, (uintptr_t)newdt);
         }
-        // the layouts of the types that mention them, which may fail, before anything is published
         jl_typecache_region_layouts(&region);
     }
     JL_CATCH {
-        // the image is abandoned: drop its new types, with what mentions them
         jl_typecache_region_end(&region, 0);
         jl_rethrow();
     }
-    // finally cache all our new types now: each is complete, and the lock keeps other threads from
-    // making a type that is still unpublished
     { JL_TRY {
         jl_typecache_region_end(&region, 1);
         for (size_t i = 0; i < nfixup_types; i++) {
@@ -4306,21 +4293,21 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         }
     }
     JL_CATCH {
-        // the region is closed, but the lock must not stay held
-        JL_UNLOCK(&typecache_lock); // Might GC
+        JL_UNLOCK(&typecache_lock);
         jl_rethrow();
     } }
 #ifndef NDEBUG
-    // a type that the lookup missed because it compared a provisional type is a second copy
     for (size_t i = 0; i < nimports; i++) {
         if (IMPORT_TYPE(imports[i]) == IMPORT_DATATYPE)
             assert(jl_lookup_cache_type_((jl_datatype_t*)s.imports_resolved[i]) == (jl_datatype_t*)s.imports_resolved[i] &&
                    "a type was looked up before what it compares by identity was final");
     }
 #endif
+
     // TODO: make the MethodInstance allocations below appear to other threads together with the types, but we would need to acquire all jl_specializations_get_linfo and jl_module_globalref locks, which is hard
-    JL_UNLOCK(&typecache_lock); // Might GC
-    // resolve the MethodInstances, whose records refer to the types
+    JL_UNLOCK(&typecache_lock);
+    // Now that the types are all final, we can finalize the MethodInstances
+    // (which may refer to types we just finalized).
     for (size_t i = 0; i < nimports; i++) {
         if (IMPORT_TYPE(imports[i]) != IMPORT_METHOD_INSTANCE)
             continue;
@@ -4328,8 +4315,10 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         jl_apply_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
         jl_finalize_import(&s, i, (uintptr_t)jl_specializations_get_linfo((jl_method_t*)rec->def, (jl_value_t*)rec->specTypes, (jl_svec_t*)rec->sparam_vals));
     }
+
     reloc_t *gvars = (reloc_t*)(image_section(buf, h->gvars));
     jl_apply_relocs(&s, gvars, h->gvars.size / sizeof(reloc_t));
+
 #ifndef NDEBUG
     for (size_t i = 0; i < nimports; i++)
         assert(!s.pending[i] && "an import was never resolved");
@@ -4573,11 +4562,6 @@ static jl_value_t *jl_restore_incremental_from_buf(const jl_image_buf_t *buf, jl
             jl_svecset(cachesizes_sv, 4, jl_box_long(h->slides.size + h->fixup_types.size + h->fixup_objs.size));
             jl_svecset(cachesizes_sv, 5, jl_box_long(h->gvars.size));
             jl_svecset(cachesizes_sv, 6, jl_box_long(h->fptrs.size));
-            // Surface extext_methods to external inspectors (e.g.
-            // PkgCacheInspector.jl). With the single global jl_method_table,
-            // `extext_methods` contains all worklist methods; `internal_methods`
-            // only partially overlaps it and exists only for per-object world-stamp
-            // updates during the fixup walk.
             restored = (jl_value_t*)jl_svec(6, pkg.worklist, pkg.module_init_order, internal_methods, pkg.extext_methods, pkg.method_roots_list, cachesizes_sv);
         }
         else {
