@@ -162,6 +162,9 @@ static void *native_libgcc_handle(void) JL_NOTSAFEPOINT
         handle = jl_dlopen(JL_LIBGCC_NAME, JL_RTLD_NOLOAD);
     return handle;
 }
+// The linker is given openlibm for the images: code for a CPU without SSE4.1
+// calls e.g. `floor` and `rint`, which the JIT never needs for the CPU it runs on.
+static void *native_libm_handle;
 #endif
 
 // Addresses of the symbols that images import, which are the same few in every image
@@ -181,7 +184,7 @@ static void *native_resolve_import(const char *name) JL_NOTSAFEPOINT
 #ifdef _OS_WINDOWS_
     // where the JIT finds the symbols that code refers to (see JuliaOJIT::JuliaOJIT)
     void *handles[] = {jl_libjulia_internal_handle, jl_libjulia_handle, jl_exe_handle, native_libgcc_handle(),
-                       jl_ntdll_handle, jl_kernel32_handle, jl_crtdll_handle, jl_winsock_handle};
+                       native_libm_handle, jl_ntdll_handle, jl_kernel32_handle, jl_crtdll_handle, jl_winsock_handle};
 #if defined(_CPU_X86_64_)
     // part of the static libgcc, which a linker puts into every image that needs it
     if (strcmp(name, "___chkstk_ms") == 0)
@@ -498,7 +501,7 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     char *base = NULL, *meta = NULL, *meta_mem = NULL;
     void **imports = NULL;
     size_t pagesz = jl_getpagesize(), text_end = 0, meta_size = 0;
-    int perf = 0, copy = 0, mapped = 0;
+    int perf = 0, copy = 0, mapped = 0, unresolved = 0;
     const uint32_t *import_names;
     const uint8_t *p, *pend;
     const jl_native_bind_t *binds;
@@ -603,18 +606,26 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
         goto fail;
     import_names = (const uint32_t*)(meta + hdr.imports_off);
     imports = (void**)malloc(sizeof(void*) * (hdr.nimports + 1));
+#ifdef _OS_WINDOWS_
+    // loading a library can be a safepoint, so not while the imports are resolved
+    if (native_libm_handle == NULL)
+        native_libm_handle = jl_load_dynamic_library("libopenlibm", JL_RTLD_DEFAULT, /* throw_err */ 0);
+#endif
     JL_LOCK_NOGC(&native_lock);
     for (uint32_t i = 0; i < hdr.nimports; i++) {
         imports[i] = import_names[i] < hdr.strtab_size ? native_resolve_import(strtab + import_names[i]) : NULL;
         if (imports[i] == NULL) {
-            JL_UNLOCK_NOGC(&native_lock);
-            if (import_names[i] < hdr.strtab_size && getenv("JULIA_DEBUG_NATIVE_IMAGE") != NULL)
+            // TODO: unconditional while this is brought up on CI
+            if (import_names[i] < hdr.strtab_size)
                 jl_safe_printf("native image %s: cannot resolve %s\n", path, strtab + import_names[i]);
-            *err = "native code refers to a symbol that this process does not have";
-            goto fail;
+            unresolved = 1;
         }
     }
     JL_UNLOCK_NOGC(&native_lock);
+    if (unresolved) {
+        *err = "native code refers to a symbol that this process does not have";
+        goto fail;
+    }
     t2 = jl_hrtime();
 
     // every slot is in the two segments that are still writable
@@ -726,6 +737,8 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     return img;
 
 fail:
+    // TODO: unconditional while this is brought up on CI
+    jl_safe_printf("native image %s: %s\n", path, *err);
     free(imports);
 #ifdef _OS_WINDOWS_
     free(meta_mem);
