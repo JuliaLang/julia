@@ -146,6 +146,9 @@ static void destroy_query_cache(jl_query_cache *cache) JL_NOTSAFEPOINT
 }
 
 #include "jinative.h"
+#ifndef _OS_WINDOWS_
+#include <fcntl.h>
+#endif
 #include "staticdata_utils.c"
 #include "precompile_utils.c"
 
@@ -4230,8 +4233,13 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
             goto error;
     }
 
-    if (native_off && *native_off != 0 && *native_off != UINT64_MAX)
-        *native_fd = dup(s.fd);
+    if (native_off && *native_off != 0 && *native_off != UINT64_MAX) {
+#ifdef _OS_WINDOWS_
+        *native_fd = _dup(s.fd);
+#else
+        *native_fd = fcntl(s.fd, F_DUPFD_CLOEXEC, 0); // not for a process spawned meanwhile
+#endif
+    }
     ios_close(&s);
     return size;
 

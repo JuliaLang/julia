@@ -2164,6 +2164,7 @@ struct _jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64
 // `dladdr` for the images loaded by jl_native_image_load
 JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const char **path,
                                           void **saddr, const char **sname) JL_NOTSAFEPOINT;
+JL_DLLEXPORT size_t jl_native_image_symbol_size(uintptr_t addr) JL_NOTSAFEPOINT;
 struct _jl_native_object_t;
 // Write the native code of package images into their .ji
 int jl_embed_native_code(void) JL_NOTSAFEPOINT;

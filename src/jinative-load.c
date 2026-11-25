@@ -101,6 +101,28 @@ JL_DLLEXPORT int jl_native_image_for_addr(uintptr_t addr, uint64_t *base, const 
     return 1;
 }
 
+// The number of bytes from `addr` to the end of the function it is in, or 0
+JL_DLLEXPORT size_t jl_native_image_symbol_size(uintptr_t addr) JL_NOTSAFEPOINT
+{
+    jl_native_image_t *img = native_find(addr);
+    if (img == NULL)
+        return 0;
+    const jl_native_header_t *h = img->hdr;
+    const jl_native_sym_t *syms = (const jl_native_sym_t*)(img->meta + h->syms_off);
+    uint64_t off = addr - (uintptr_t)img->base;
+    size_t lo = 0, hi = h->nsyms;
+    while (lo < hi) { // last symbol that starts at or before `off`
+        size_t mid = (lo + hi) / 2;
+        if (syms[mid].addr <= off)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    if (lo == 0 || off - syms[lo - 1].addr >= syms[lo - 1].size)
+        return 0;
+    return syms[lo - 1].size - (off - syms[lo - 1].addr);
+}
+
 #ifdef _OS_DARWIN_
 struct unw_dynamic_unwind_sections {
     uintptr_t dso_base;

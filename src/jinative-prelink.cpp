@@ -561,8 +561,10 @@ void Prelinker::layout()
             Region R = Prot == RelroProt ? RELRO : isExec(Prot) ? RX :
                        (Prot & orc::MemProt::Write) != orc::MemProt::None ? RW : RO;
             ZeroFill += Seg.ZeroFillSize;
-            if (Seg.Alignment.value() > PageSize) {
-                // the regions start on a page, which would not be aligned enough
+            // The image is loaded on a page boundary, and the smallest page the
+            // platform runs with can be smaller than the one it is laid out for.
+            uint64_t MinPage = TT.isAArch64() && TT.isOSDarwin() ? 16384 : 4096;
+            if (Seg.Alignment.value() > std::min(PageSize, MinPage)) {
                 fail("section aligned to more than a page in " + A.G->getName());
                 return;
             }

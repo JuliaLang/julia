@@ -615,6 +615,8 @@ jl_value_t *jl_dump_fptr_asm_impl(uint64_t fptr, char emit_mc, const char* asm_v
     }
     if (symsize == 0 && Section.getObject())
         symsize = compute_obj_symsize(Section, fptr + slide);
+    if (symsize == 0)
+        symsize = jl_native_image_symbol_size(fptr); // native code section of a .ji
     if (symsize == 0) {
         jl_printf(JL_STDERR, "WARNING: Could not determine size of symbol\n");
         return jl_pchar_to_string("", 0);
