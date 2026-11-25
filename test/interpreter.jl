@@ -53,3 +53,19 @@ let code = """
     """
     @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "ok"
 end
+
+# `--compile=min` runs an opaque closure made from optimized IR, which has no
+# uninferred source, in the interpreter, or compiles it if it needs the compiler
+let code = """
+    f(x) = x + 1
+    g(x) = ccall(:abs, Cint, (Cint,), x)
+    ir = first(only(Base.code_ircode(f, (Int,))))
+    ir.argtypes[1] = Tuple{}
+    @assert Core.OpaqueClosure(ir)(41) === 42
+    ir = first(only(Base.code_ircode(g, (Cint,))))
+    ir.argtypes[1] = Tuple{}
+    @assert Core.OpaqueClosure(ir)(Cint(-3)) === Cint(3)
+    print("ok")
+    """
+    @test read(`$(Base.julia_cmd()) --startup-file=no --compile=min -e $code`, String) == "ok"
+end
