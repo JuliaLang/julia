@@ -31,7 +31,10 @@ function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc,
     local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_est(code, loc) : code
-        if head(st0) in (:toplevel, :module, :error, :incomplete)
+        if head(st0) in (:toplevel, :module, :error, :incomplete) ||
+                (portable && head(st0) in (:export, :public))
+            # forms the runtime evaluates itself (for portable output, these
+            # include toplevel `export` and `public`, as with flisp)
             return Core.svec(code)
         end
         st0 = rebase_layers(st0, mod)

@@ -270,7 +270,17 @@ _module_binding_i_taken(mod::Module, basename::AbstractString, i::Int) =
 # closure types as a more local alternative to current-julia-module-counter.
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
-function reserve_module_binding_i(mod::Module, basename::AbstractString)
+# Inserted into the names that lowering reserves in modules (closure types,
+# generators, ...; see `reserve_module_binding_i` and `module_unique_name`) by
+# a frontend that serves another runtime. Such a frontend sees that runtime's
+# modules through shadow modules which start empty in every process, so without
+# a token unique to the session (e.g. derived from the other runtime's world
+# counter) it would reuse names reserved by earlier sessions whose lowered code
+# went into the same image, such as the earlier stages of julia's bootstrap.
+const _module_binding_salt = Base.RefValue{String}("")
+
+function reserve_module_binding_i(mod::Module, basename0::AbstractString)
+    basename = string(basename0, _module_binding_salt[])
     hi = 0
     while _module_binding_i_taken(mod, basename, hi)
         hi = 2hi + 1
@@ -301,7 +311,7 @@ function module_unique_name(mod::Module)
         # (JETLS) jl_module_next_counter is not exported before 1.14.0-DEV.3063
         reserve_module_binding_i(mod, "")[3:end]
     else
-        string(@ccall(jl_module_next_counter(mod::Module)::UInt32))
+        string(_module_binding_salt[], @ccall(jl_module_next_counter(mod::Module)::UInt32))
     end
 end
 function module_unique_name(mod::Module, funcname::AbstractString)
