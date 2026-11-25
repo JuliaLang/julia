@@ -2,6 +2,11 @@
 
 # NB: This file is `Core.eval`-uated into the (pre-existing) module Filesystem
 
+@doc """
+Provide file and directory operations such as copying, moving and removing, temporary files
+and directories, path inspection and low level file descriptor access.
+""" Filesystem
+
 ## File Operations (Libuv-based) ##
 
 """
@@ -168,6 +173,17 @@ include(string(Base.BUILDROOT, "file_constants.jl"))  # include($BUILDROOT/base/
 
 abstract type AbstractFile <: IO end
 
+"""
+    File(fd)
+
+Wrap a raw file descriptor as an `IO` handle. The descriptor is not duplicated, so closing
+the `File` closes the underlying descriptor as well.
+
+A `File` is obtained by wrapping an existing descriptor with `File(fd)`, or by calling
+`open(path, flags)` with one of the `JL_O_*` flag constants. Besides the usual `IO`
+operations, it supports the file descriptor operations of this module such as
+[`sendfile`](@ref), [`futime`](@ref), [`trylockfile`](@ref) and [`unlockfile`](@ref).
+"""
 mutable struct File <: AbstractFile
     open::Bool
     handle::OS_HANDLE
@@ -306,6 +322,14 @@ end
 closewrite(f::File) = nothing
 
 # sendfile is the most efficient way to copy from a file descriptor
+"""
+    sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
+
+Copy `bytes` bytes from the open file `src`, starting at byte offset `src_offset`, into the
+open file `dst` at its current file position. The copy is performed in the kernel where the
+operating system offers a suitable interface, which makes this the most efficient way to
+copy data between open files. Returns `nothing`.
+"""
 function sendfile(dst::File, src::File, src_offset::Int64, bytes::Int)
     check_open(dst)
     check_open(src)
@@ -342,6 +366,12 @@ function truncate(f::File, n::Integer)
     return f
 end
 
+"""
+    futime(f::File, atime::Float64, mtime::Float64)
+
+Set the access time of the open file `f` to `atime` and its modification time to `mtime`,
+in seconds since the epoch. Returns `f`.
+"""
 function futime(f::File, atime::Float64, mtime::Float64)
     check_open(f)
     req = Libc.malloc(_sizeof_uv_fs)

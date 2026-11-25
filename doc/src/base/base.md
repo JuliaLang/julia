@@ -131,6 +131,7 @@ Base
 ```@docs
 Base.Broadcast
 Base.Docs
+Base.Filesystem
 Base.Iterators
 Base.Libc
 Base.Meta
