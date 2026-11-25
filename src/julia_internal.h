@@ -947,6 +947,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;
+extern _Atomic(int) jl_exit_thread0_pending;
+#ifndef _OS_WINDOWS_
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT;
+#endif
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
