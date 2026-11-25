@@ -279,9 +279,7 @@ typedef struct {
     ios_t *fptr_record;
     arraylist_t memref_list;    // locations of MemoryRefs to Memory in this image
     arraylist_t symtab;         // the symbols of a system image, sorted by `jl_symbol_order`
-    // the objects written as auxdata records, in the order of their records, and the size of the
-    // auxdata section they take up
-    arraylist_t uniquing_records;
+    arraylist_t uniquing_records; // objects we need to write auxdata records for
     size_t auxdata_size;
     size_t bits_start;          // Heap offset of the pointer-free (or "bits") section
     uintptr_t preferred_base;   // the address at which the heap expects to be placed
@@ -1258,12 +1256,15 @@ static uintptr_t add_import(jl_serializer_state *s, import_t imp) JL_NOTSAFEPOIN
 }
 
 // Return the bind for the import `imp`.  Adds the import to the imports table
-// if it is not already there (deduplicated by `key`).
-static uintptr_t add_keyed_import(jl_serializer_state *s, const void *key, import_t imp) JL_NOTSAFEPOINT
+// if it is not already there (deduplicated by `key`), and then sets `*added`.
+static uintptr_t add_keyed_import(jl_serializer_state *s, const void *key, import_t imp, int *added) JL_NOTSAFEPOINT
 {
     void **bp = ptrhash_bp(&s->object_imports, (void*)key);
-    if (*bp == HT_NOTFOUND)
+    int new_import = *bp == HT_NOTFOUND;
+    if (new_import)
         *bp = (void*)add_import(s, imp);
+    if (added)
+        *added = new_import;
     return (uintptr_t)*bp;
 }
 
@@ -1272,7 +1273,7 @@ static uintptr_t add_function_import(jl_serializer_state *s, function_kind_t kin
     assert(kind == FUNCTION_BUILTIN || kind == FUNCTION_RUNTIME);
     const void *f = kind == FUNCTION_BUILTIN ? (const void*)jl_builtin_f_addrs[idx] :
                                                (const void*)jl_invoke_api_callptr((jl_invoke_api_t)idx);
-    return add_keyed_import(s, f, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx));
+    return add_keyed_import(s, f, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx), NULL);
 }
 
 // The dependency reference to `addr`, which is in the image described by `meta`
@@ -1289,11 +1290,9 @@ static uint64_t depref(jl_serializer_state *s, image_metadata_t *meta, const voi
 
 static uintptr_t add_image_bind(jl_serializer_state *s, image_metadata_t *meta, const void *addr) JL_NOTSAFEPOINT
 {
-    return add_keyed_import(s, addr, IMPORT_ENCODE(IMPORT_IMAGE, depref(s, meta, addr)));
+    return add_keyed_import(s, addr, IMPORT_ENCODE(IMPORT_IMAGE, depref(s, meta, addr)), NULL);
 }
 
-// The object that is written in place of `v`: `v` if it is queued, and otherwise the object
-// recorded to replace it, or an egal copy, if it is deduplicated by content
 static jl_value_t *written_copy(jl_value_t *v) JL_NOTSAFEPOINT
 {
     if (ptrhash_get(&serialization_order, v) != HT_NOTFOUND)
@@ -1345,28 +1344,29 @@ static uintptr_t write_layout(jl_serializer_state *s, jl_datatype_t *dt) JL_NOTS
     return layout;
 }
 
-// Return the item for `v`: a bind, or its serialization id
+// If `v` is an object that will be resolved from an import, return a bind.  For
+// objects that will be serialized into the image and be referred to with a
+// slide, returns the serialization id.
 #define backref_id(s, v) _backref_id(s, (jl_value_t*)(v))
 static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     assert(v != NULL && "cannot get backref to NULL object");
     if (s->incremental && jl_is_symbol(v) && !jl_object_in_image(v)) {
-        void *bind = ptrhash_get(&s->object_imports, v);
-        if (bind != HT_NOTFOUND)
-            return (uintptr_t)bind;
-        size_t pos = s->symbols->size;
-        ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), strlen(jl_symbol_name((jl_sym_t*)v)) + 1);
-        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SYMBOL, pos));
+        int added;
+        uintptr_t b = add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SYMBOL, s->symbols->size), &added);
+        if (added)
+            ios_write(s->symbols, jl_symbol_name((jl_sym_t*)v), strlen(jl_symbol_name((jl_sym_t*)v)) + 1);
+        return b;
     }
     if (v == (jl_value_t*)s->ptls->root_task)
-        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SPECIAL, 0));
+        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SPECIAL, 0), NULL);
     if (s->incremental && jl_object_in_image(v))
         return add_image_bind(s, external_blob_metadata(v), v);
     if (s->incremental && jl_is_datatype_singleton((jl_datatype_t*)jl_typeof(v)) && needs_uniquing(v, s->query_cache)) {
         uintptr_t dt = backref_id(s, jl_typeof(v));
         assert((dt & BIND_BIT) && IMPORT_TYPE(jl_load_unaligned_i64(s->imports->buf + BIND_PAYLOAD(dt) * sizeof(import_t))) == IMPORT_DATATYPE &&
                "the type of a uniqued singleton has a record");
-        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)));
+        return add_keyed_import(s, v, IMPORT_ENCODE(IMPORT_SINGLETON, BIND_PAYLOAD(dt)), NULL);
     }
     jl_value_t *w = written_copy(v);
     void *idx = ptrhash_get(&serialization_order, w);
@@ -1378,15 +1378,21 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
     assert(idx != (void*)(uintptr_t)-1 && "object missed during jl_insert_into_serialization_queue pass");
     assert(idx != (void*)(uintptr_t)-2 && "object missed during jl_insert_into_serialization_queue pass");
     if (s->incremental && needs_uniquing(v, s->query_cache)) {
-        // the first reference to an object that is written as a record places its record
-        void *bind = ptrhash_get(&s->object_imports, w);
-        if (bind != HT_NOTFOUND)
-            return (uintptr_t)bind;
-        import_type_t type = jl_is_datatype(w) ? IMPORT_DATATYPE : jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE : IMPORT_BINDING;
-        uintptr_t b = add_keyed_import(s, w, IMPORT_ENCODE(type, s->auxdata_size));
-        s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
-                        jl_is_binding(w) ? sizeof(jl_binding_record_t) : sizeof(jl_mi_record_t);
-        arraylist_push(&s->uniquing_records, w);
+        // The import records for these objects need an object into the auxdata
+        // section.  We could use a placeholder for this and assign the offsets
+        // in the section later, but it's simpler to advance auxdata_size here
+        // and get the final import table entry now.
+        import_type_t type = jl_is_datatype(w)        ? IMPORT_DATATYPE :
+                             jl_is_method_instance(w) ? IMPORT_METHOD_INSTANCE :
+                                                        IMPORT_BINDING;
+        int added;
+        uintptr_t b = add_keyed_import(s, w, IMPORT_ENCODE(type, s->auxdata_size), &added);
+        if (added) {
+            s->auxdata_size += jl_is_datatype(w) ? sizeof(jl_type_record_t) :
+                               jl_is_binding(w)  ? sizeof(jl_binding_record_t) :
+                                                   sizeof(jl_mi_record_t);
+            arraylist_push(&s->uniquing_records, w);
+        }
         return b;
     }
     return from_seroder_entry(idx);
@@ -2399,7 +2405,7 @@ static size_t write_gvars(jl_serializer_state *s, ios_t *f, arraylist_t *globals
         jl_code_instance_t *ci = (jl_code_instance_t*)external_fns->items[i];
         assert(ci && (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_SPECPTR_SPECIALIZED));
         uint64_t ref = depref(s, external_blob_metadata((jl_value_t*)ci), ci);
-        write_uint(f, add_keyed_import(s, &ci->specptr, IMPORT_ENCODE(IMPORT_SPECPTR, ref)));
+        write_uint(f, add_keyed_import(s, &ci->specptr, IMPORT_ENCODE(IMPORT_SPECPTR, ref), NULL));
     }
     return globals->len;
 }
