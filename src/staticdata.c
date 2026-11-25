@@ -342,7 +342,9 @@ typedef uint64_t import_t;
 typedef enum { IMPORT_IMAGE, IMPORT_SPECIAL, IMPORT_FUNCTION, IMPORT_SYMBOL, IMPORT_SINGLETON, IMPORT_DATATYPE,
                IMPORT_METHOD_INSTANCE, IMPORT_BINDING, IMPORT_SPECPTR } import_type_t;
 #define IMPORT_HAS_RECORD(t) (IMPORT_DATATYPE <= (t) && (t) <= IMPORT_BINDING)
-typedef enum { FUNCTION_BUILTIN, FUNCTION_RUNTIME } function_kind_t;
+// Only FUNCTION_BUILTIN and FUNCTION_RUNTIME are function import kinds.  We
+// only use FUNCTION_NATIVE and FUNCTION_NONE in the writer.
+typedef enum { FUNCTION_BUILTIN, FUNCTION_RUNTIME, FUNCTION_NATIVE, FUNCTION_NONE } function_kind_t;
 #define IMPORT_TYPE_OFFSET 60
 #define IMPORT_TYPE(x) ((import_type_t)((x) >> IMPORT_TYPE_OFFSET))
 #define IMPORT_ENCODE(type, payload) (((import_t)(type) << IMPORT_TYPE_OFFSET) | (import_t)(payload))
@@ -630,6 +632,39 @@ static void jl_queue_module_for_serialization(jl_serializer_state *s, jl_module_
         jl_queue_for_serialization(s, m->usings_backedges);
         jl_queue_for_serialization(s, m->scanned_methods);
     }
+}
+
+typedef struct { function_kind_t kind; uint32_t idx; } fptr_src_t;
+typedef struct { fptr_src_t invoke, specptr; } ci_fptrs_t;
+
+// Return a struct describing how we'll need to compute the function pointers
+// for a CodeInstance.  FUNCTION_BUILTIN means idx is an index into
+// jl_builtin_f_addrs, FUNCTION_RUNTIME means it's a jl_invoke_api_t number, and
+// FUNCTION_NONE means it's an index into the table of native functions for this
+// image.
+static ci_fptrs_t ci_native_code(jl_code_instance_t *ci)
+{
+    ci_fptrs_t r = {{FUNCTION_NONE, 0}, {FUNCTION_NONE, 0}};
+    if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) {
+        r.invoke = (fptr_src_t){FUNCTION_RUNTIME, JL_INVOKE_CONST};
+    }
+    else if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
+        int builtin_idx = jl_builtin_idx(jl_atomic_load_relaxed(&ci->specptr.fptr));
+        if (builtin_idx >= 0)
+            return (ci_fptrs_t){{FUNCTION_RUNTIME, JL_INVOKE_ARGS},
+                                {FUNCTION_BUILTIN, builtin_idx}};
+        int32_t invoke_id = 0, specptr_id = 0;
+        jl_get_function_id(native_functions, ci, &invoke_id, &specptr_id);
+        assert(invoke_id != -JL_INVOKE_SPECSIG);
+        if (invoke_id)
+            r.invoke = invoke_id > 0 ? (fptr_src_t){FUNCTION_NATIVE, invoke_id} :
+                                       (fptr_src_t){FUNCTION_RUNTIME, -invoke_id};
+        if (specptr_id)
+            r.specptr = (fptr_src_t){FUNCTION_NATIVE, specptr_id};
+        // the loader installs `specptr` after `invoke`
+        assert(r.invoke.kind != FUNCTION_NATIVE || r.invoke.idx < r.specptr.idx);
+    }
+    return r;
 }
 
 static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
@@ -939,11 +974,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
             // so there is no need to keep it if the image contains neither
             jl_value_t *src = get_replaceable_field((jl_value_t**)&ci->inferred, 1);
             if (!(src && (jl_is_string(src) || jl_is_code_info(src)))) {
-                int32_t invokeptr_id = 0;
-                int32_t specfptr_id = 0;
-                if (native_functions)
-                    jl_get_function_id(native_functions, ci, &invokeptr_id, &specfptr_id);
-                if (invokeptr_id <= 0 && specfptr_id == 0)
+                ci_fptrs_t fptrs = ci_native_code(ci);
+                if (fptrs.invoke.kind != FUNCTION_NATIVE && fptrs.specptr.kind != FUNCTION_NATIVE)
                     record_field_change((jl_value_t*)ci, (jl_value_t**)&ci->debuginfo, (jl_value_t*)jl_nulldebuginfo);
             }
         }
@@ -1239,6 +1271,7 @@ static uintptr_t add_keyed_import(jl_serializer_state *s, const void *key, impor
 
 static uintptr_t add_function_import(jl_serializer_state *s, function_kind_t kind, size_t idx) JL_NOTSAFEPOINT
 {
+    assert(kind == FUNCTION_BUILTIN || kind == FUNCTION_RUNTIME);
     const void *f = kind == FUNCTION_BUILTIN ? (const void*)jl_builtin_f_addrs[idx] :
                                                (const void*)jl_invoke_api_callptr((jl_invoke_api_t)idx);
     return add_keyed_import(s, f, IMPORT_ENCODE(IMPORT_FUNCTION, ((import_t)kind << IMPORT_FUNCTION_KIND_OFFSET) | idx));
@@ -1550,21 +1583,12 @@ static void record_gvars(jl_serializer_state *s, arraylist_t *globals) JL_CANSAF
         jl_queue_for_serialization(s, globals->items[i]);
 }
 
-static int32_t ci_native_code(jl_code_instance_t *ci, int *builtin_idx, int32_t *specfptr_id)
+static void write_ci_fptr(jl_serializer_state *s, uintptr_t ci_offset, size_t field, uintptr_t tag, fptr_src_t src)
 {
-    int32_t invokeptr_id = 0;
-    *builtin_idx = -1;
-    *specfptr_id = 0;
-    if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return)
-        return -JL_INVOKE_CONST;
-    if (jl_is_method(jl_get_ci_mi(ci)->def.method)) {
-        *builtin_idx = jl_builtin_idx(jl_atomic_load_relaxed(&ci->specptr.fptr));
-        if (*builtin_idx >= 0)
-            return -JL_INVOKE_ARGS;
-        jl_get_function_id(native_functions, ci, &invokeptr_id, specfptr_id); // see if we generated code for it
-        assert(invokeptr_id != -JL_INVOKE_SPECSIG);
-    }
-    return invokeptr_id;
+    if (src.kind == FUNCTION_NATIVE)
+        write_fptr(s->fptr_record, src.idx, ci_offset | tag);
+    else if (src.kind != FUNCTION_NONE)
+        record_reloc(s, ci_offset + field, add_function_import(s, src.kind, src.idx));
 }
 
 // We re-order objects in the serialization queue in order to cut down on the
@@ -1601,10 +1625,8 @@ static int write_pass(jl_serializer_state *s, jl_value_t *v)
     if (!jl_is_code_instance(v))
         return PASS_OTHERS;
     jl_code_instance_t *ci = (jl_code_instance_t*)v;
-    int builtin_idx;
-    int32_t specfptr_id;
     if ((s->incremental && jl_atomic_load_relaxed(&ci->max_world) == ~(size_t)0) ||
-        ci_native_code(ci, &builtin_idx, &specfptr_id) != 0)
+        ci_native_code(ci).invoke.kind != FUNCTION_NONE)
         return PASS_WRITTEN;
     return PASS_CODE_INSTANCES;
 }
@@ -2029,21 +2051,9 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
                 // preserve only JL_CI_FLAGS_NATIVE_CACHE_VALID and JL_CI_FLAGS_UNIQUE_BACKEDGES bits
                 jl_atomic_store_relaxed(&newci->flags, jl_atomic_load_relaxed(&newci->flags) & (JL_CI_FLAGS_NATIVE_CACHE_VALID | JL_CI_FLAGS_UNIQUE_BACKEDGES));
                 jl_atomic_store_relaxed(&newci->specptr.fptr, NULL);
-                int builtin_idx;
-                int32_t specfptr_id;
-                int32_t invokeptr_id = ci_native_code(ci, &builtin_idx, &specfptr_id);
-                if (invokeptr_id > 0)
-                    write_fptr(s->fptr_record, invokeptr_id, reloc_offset | FPTR_INVOKE);
-                if (specfptr_id) {
-                    assert(specfptr_id > invokeptr_id && specfptr_id > 0);
-                    write_fptr(s->fptr_record, specfptr_id, reloc_offset);
-                }
-                if (invokeptr_id < 0)
-                    record_reloc(s, reloc_offset + offsetof(jl_code_instance_t, invoke),
-                                 add_function_import(s, FUNCTION_RUNTIME, -invokeptr_id));
-                if (builtin_idx >= 0)
-                    record_reloc(s, reloc_offset + offsetof(jl_code_instance_t, specptr.fptr),
-                                 add_function_import(s, FUNCTION_BUILTIN, builtin_idx));
+                ci_fptrs_t fptrs = ci_native_code(ci);
+                write_ci_fptr(s, reloc_offset, offsetof(jl_code_instance_t, invoke), FPTR_INVOKE, fptrs.invoke);
+                write_ci_fptr(s, reloc_offset, offsetof(jl_code_instance_t, specptr.fptr), 0, fptrs.specptr);
             }
             else if (jl_is_datatype(v)) {
                 assert(f == s->s);
