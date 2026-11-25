@@ -306,7 +306,7 @@ typedef struct {
     uintptr_t *imports_resolved; // The address each import resolves to
     // All of the binds waiting on a pending import form a linked list in
     // `waiting`.  `next` is 1 + the index of the next pair bound to the same
-    // import.
+    // import.  See waiting_word/waiting_next.
     arraylist_t waiting;         // list of (bind addr, next) pairs
     size_t *first_waiting;       // for each import, 1 + the index of the head of its list in `waiting`
     uint8_t *pending;            // whether each import is pending (see jl_apply_bind)
@@ -2254,6 +2254,16 @@ static void jl_apply_bind(jl_loader_state *s, uintptr_t *pv) JL_NOTSAFEPOINT
     }
 }
 
+static uintptr_t *waiting_word(jl_loader_state *s, size_t i) JL_NOTSAFEPOINT
+{
+    return (uintptr_t *)s->waiting.items[2 * i - 2];
+}
+
+static size_t waiting_next(jl_loader_state *s, size_t i) JL_NOTSAFEPOINT
+{
+    return (size_t)s->waiting.items[2 * i - 1];
+}
+
 // Finalize the pending import `idx` to `v`, and rewrite the words bound to it, keeping the bits
 // that were added to its value (the low bits of the bind, or the GC bits of a type tag)
 static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_NOTSAFEPOINT
@@ -2264,8 +2274,8 @@ static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_N
     s->pending[idx] = 0;
     if (v == old)
         return;
-    for (size_t i = s->first_waiting[idx]; i; i = (size_t)s->waiting.items[2 * i - 1]) {
-        uintptr_t *pv = (uintptr_t*)s->waiting.items[2 * i - 2];
+    for (size_t i = s->first_waiting[idx]; i; i = waiting_next(s, i)) {
+        uintptr_t *pv = waiting_word(s, i);
         assert(*pv - old < 16 && "a word bound to a pending import was written with another value");
         *pv = v + (*pv - old);
     }
@@ -4179,7 +4189,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     for (size_t i = 0; i < nimports; i++) {
         import_type_t type = IMPORT_TYPE(imports[i]);
         s.imports_resolved[i] = jl_resolve_import(&s, imports[i], strtab);
-        s.pending[i] = IMPORT_HAS_RECORD(type) || type == IMPORT_SINGLETON;
+        s.pending[i] = type == IMPORT_DATATYPE || type == IMPORT_SINGLETON || type == IMPORT_METHOD_INSTANCE;
     }
     arraylist_new(&s.waiting, 0);
     s.first_waiting = (size_t*)calloc_s(nimports * sizeof(size_t));
@@ -4199,7 +4209,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         if (type == IMPORT_BINDING) {
             jl_binding_record_t *rec = (jl_binding_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
             jl_apply_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
-            jl_finalize_import(&s, i, (uintptr_t)jl_get_module_binding((jl_module_t*)rec->mod, (jl_sym_t*)rec->name, 1));
+            s.imports_resolved[i] = (uintptr_t)jl_get_module_binding((jl_module_t*)rec->mod, (jl_sym_t*)rec->name, 1);
             continue;
         }
         if (type != IMPORT_DATATYPE)
