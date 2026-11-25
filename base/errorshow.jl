@@ -75,6 +75,38 @@ function showerror(io::IO, ex::BoundsError)
     Experimental.show_error_hints(io, ex)
 end
 
+function show_splatted(io::IO, iterator)
+    ei1 = Iterators.peel(iterator)
+    if ei1 === nothing
+        return  # `iterator` is empty, return without printing anything
+    end
+    (e1, i1) = ei1
+    show(io, e1)
+    ei2 = Iterators.peel(i1)
+    if ei2 === nothing
+        return  # `iterator` had only a single element, we already printed it, return now
+    end
+    (e2, i2) = ei2
+    print(io, ", ")
+    show(io, e2)
+    for e ∈ i2
+        print(io, ", ")
+        show(io, e)
+    end
+end
+
+function showerror(io::IO, ex::LightBoundsError)
+    show(io, typeof(ex))
+    print(io, ": out-of-bounds indexing: `collection[")
+    show_splatted(io, ex.requested_indices)
+    print(io, "]`, where:\n* `typeof(collection) == ")
+    show(io, ex.collection_type)
+    print(io, "`\n* `axes(collection) == ")
+    show(io, ex.collection_axes)
+    print(io, '`')
+    nothing
+end
+
 function showerror(io::IO, ex::TypeError)
     print(io, "TypeError: ")
     if ex.expected === Bool
