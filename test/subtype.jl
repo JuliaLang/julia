@@ -1156,6 +1156,25 @@ function test_intersection()
     # tests for robustness after incorrect datatype allocation normalization
     @test typeintersect(Vector{Tuple{T, T} where Number<:T<:Number}, Vector{Tuple{Number, Number}}) === Vector{Tuple{T, T} where Number<:T<:Number}
     @test typeintersect(Vector{Tuple{Number, Number}}, Vector{Tuple{T, T} where Number<:T<:Number}) === Vector{Tuple{Number, Number}}
+
+    # A pinned variable inside an invariant constructor can constrain an outer variable.
+    sig = Tuple{Type{T},Type{Vector{T}}} where T
+    W = Union{A,B} where {A<:Int,B<:Int}
+    @test W == Int && W !== Int
+    for V in (Vector{X} where Int<:X<:Int, Vector{X} where Int<:X<:W)
+        for arg in (Type{V}, Core.TypeEgal{V})
+            @testintersect(Tuple{Any,arg}, sig, Tuple{Type{Int},arg})
+            @testintersect(Tuple{Any,arg}, Tuple{Type{T},Type{Vector{T}}} where T<:AbstractFloat, Bottom)
+        end
+    end
+    @testintersect(Tuple{Any,Core.TypeEgal{Vector{X} where Int<:X<:Real}}, sig, Bottom)
+end
+
+let
+    matches(::Type{T}, ::Type{Vector{T}}) where {T} = true
+    call(r) = matches(r[], Vector{X} where Int<:X<:Int)
+    @test call(Ref{Any}(Int))
+    @test_throws MethodError call(Ref{Any}(String))
 end
 
 function test_intersection_properties()
