@@ -13,8 +13,10 @@ function runsearch(histfile::HistoryFile, term, prefix::String = "\e[90m",
     update!(histfile)
     events = Channel{Symbol}(Inf)
     pspec = create_prompt(events, term, prefix, terminal_properties)
-    ptask = @spawn runprompt!(pspec, events, terminal_properties)
-    dtask = @spawn run_display!(pspec, events, histfile.records, terminal_properties)
+    # Use the interactive threadpool so that history search stays responsive even when
+    # the default pool is busy, e.g. with a slow hint-generation task (#65220).
+    ptask = @spawn :interactive runprompt!(pspec, events, terminal_properties)
+    dtask = @spawn :interactive run_display!(pspec, events, histfile.records, terminal_properties)
     wait(ptask)
     fullselection(fetch(dtask))
 end
