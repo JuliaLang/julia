@@ -25,13 +25,13 @@ export
     mkpidlock,
     trymkpidlock
 
-import Base: @handle_as, wait, close, eventloop, notify_error, IOError,
-    uv_req_data, uv_req_set_data, associate_julia_struct, disassociate_julia_struct,
-    _sizeof_uv_poll, _sizeof_uv_fs, _sizeof_uv_fs_event, _uv_hook_close, uv_error, _UVError,
-    iolock_begin, iolock_end, preserve_handle, unpreserve_handle,
-    isreadable, iswritable, isopen, |, getproperty, propertynames
+import Base: @handle_as, _UVError, _sizeof_uv_fs, _sizeof_uv_fs_event, _sizeof_uv_poll,
+    _uv_hook_close, associate_julia_struct, close, disassociate_julia_struct, eventloop,
+    getproperty, iolock_begin, iolock_end, isopen, isreadable, iswritable, notify_error,
+    preserve_handle, propertynames, unpreserve_handle, uv_error, uv_req_data, uv_req_set_data,
+    wait, |
 import Base.Filesystem: StatStruct, uv_fs_req_cleanup
-if Sys.iswindows()
+@static if Sys.iswindows()
     import Base.WindowsRawSocket
 end
 
@@ -64,7 +64,7 @@ struct FDEvent
     FDEvent(flags::Integer=0) = new(flags)
 end
 
-FDEvent(r::Bool, w::Bool, d::Bool, t::Bool) = FDEvent((UV_READABLE * r) | (UV_WRITABLE * w) | (UV_DISCONNECT * d)) # deprecated method
+FDEvent(r::Bool, w::Bool, d::Bool, ::Bool) = FDEvent((UV_READABLE * r) | (UV_WRITABLE * w) | (UV_DISCONNECT * d)) # deprecated method
 
 function getproperty(f::FDEvent, field::Symbol)
     events = getfield(f, :events)
@@ -76,7 +76,7 @@ function getproperty(f::FDEvent, field::Symbol)
     field === :events && return Int(events)
     getfield(f, field)::Union{}
 end
-propertynames(f::FDEvent) = (:readable, :writable, :disconnect, :prioritized, :timedout, :events)
+propertynames(::FDEvent) = (:readable, :writable, :disconnect, :prioritized, :timedout, :events)
 
 isreadable(f::FDEvent) = f.readable
 iswritable(f::FDEvent) = f.writable
@@ -84,7 +84,7 @@ iswritable(f::FDEvent) = f.writable
 
 # Callback functions
 
-function uv_fseventscb_file(handle::Ptr{Cvoid}, filename::Ptr, events::Int32, status::Int32)
+function uv_fseventscb_file(handle::Ptr{Cvoid}, ::Ptr, events::Int32, status::Int32)
     t = @handle_as handle FileMonitor
     lock(t.notify)
     try
@@ -262,11 +262,11 @@ mutable struct FolderMonitor
     @atomic handle::Ptr{Cvoid}
     # notify::Channel{Any} # eltype = Union{Pair{String, FileEvent}, IOError}
     const notify::Base.ThreadSynchronizer
-    const channel::Vector{Any} # eltype = Pair{String, FileEvent}
+    const channel::Vector{Pair{String, FileEvent}}
     FolderMonitor(folder::AbstractString) = FolderMonitor(String(folder))
     function FolderMonitor(folder::String)
         handle = Libc.malloc(_sizeof_uv_fs_event)
-        this = new(handle, Base.ThreadSynchronizer(), [])
+        this = new(handle, Base.ThreadSynchronizer(), Pair{String, FileEvent}[])
         associate_julia_struct(handle, this)
         iolock_begin()
         err = ccall(:uv_fs_event_init, Cint, (Ptr{Cvoid}, Ptr{Cvoid}), eventloop(), handle)
@@ -546,7 +546,7 @@ function close(t::Union{FileMonitor, FolderMonitor})
 end
 
 function close(pfw::PollingFileWatcher)
-    timer = nothing
+    local timer
     lock(pfw.notify)
     try
         pfw.closed = true
@@ -595,7 +595,7 @@ isopen(pfw::PollingFileWatcher) = !pfw.closed
 isopen(pfw::_FDWatcher) = pfw.refcount != (0, 0)
 isopen(pfw::FDWatcher) = !pfw.mask.timedout
 
-Base.stat(pfw::PollingFileWatcher) = Base.checkstat(@lock pfw.notify pfw.prev_stat)
+Base.stat(pfw::PollingFileWatcher) = Base.Filesystem.checkstat(@lock pfw.notify pfw.prev_stat)
 
 # n.b. this _wait may return spuriously early with a timedout event
 function _wait(fdw::_FDWatcher, mask::FDEvent, tok::Base.MaybeToken)
@@ -679,7 +679,7 @@ function wait(fd::RawFD, mask::FDEvent, tok::Base.MaybeToken=Base.default_cancel
 end
 
 
-if Sys.iswindows()
+@static if Sys.iswindows()
     function wait(socket::WindowsRawSocket; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
         tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
         return wait(socket, FDEvent(readable, writable, false, false), tok)
@@ -701,7 +701,7 @@ function wait(pfw::PollingFileWatcher; cancel::Base.CancelTokenArg=Base.DEFAULT_
     locked = true
     iolocked = true
     prevstat = pfw.prev_stat
-    havechange = false
+    local havechange
     timer = nothing
     try
         # we aren't too strict about the first interval after `wait`, but rather always
@@ -818,7 +818,7 @@ function wait(m::FolderMonitor; cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
             locked && unlock(m.notify)
             unpreserve_handle(m)
         end
-    return evt::Pair{String, FileEvent}
+    return evt
 end
 Base.take!(m::FolderMonitor) = wait(m) # Channel-like API
 
@@ -839,7 +839,7 @@ This is a thin wrapper over calling `wait` on a [`FDWatcher`](@ref), which imple
 functionality but requires the user to call `close` manually when finished with it, or risk
 serious crashes.
 """
-function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
+function poll_fd(s::Union{RawFD, @static Sys.iswindows() ? WindowsRawSocket : Union{}}, timeout_s::Real=-1; readable=false, writable=false, cancel::Base.CancelTokenArg=Base.DEFAULT_CANCEL)
     tok = Base.resolve_cancel_token(Base.precheck_cancel_arg(cancel))
     mask = FDEvent(readable, writable, false, false)
     mask.timedout && return mask
@@ -850,7 +850,7 @@ function poll_fd(s::Union{RawFD, Sys.iswindows() ? WindowsRawSocket : Union{}}, 
     try
         if timeout_s >= 0
             # delay creating the timer until shortly before we start the poll wait
-            timer = Timer(timeout_s) do t
+            timer = Timer(timeout_s) do _
                 timedout[] && return
                 @atomic timedout[] = true
                 close(fdw, mask)
@@ -912,7 +912,7 @@ function watch_file(s::String, timeout_s::Float64=-1.0; cancel::Base.CancelToken
     local timer
     try
         if timeout_s >= 0
-            timer = Timer(timeout_s) do t
+            timer = Timer(timeout_s) do _
                 close(fm)
             end
         end
@@ -966,7 +966,7 @@ function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg
             @lock fm.notify isempty(fm.channel) || return popfirst!(fm.channel)
             return "" => FileEvent() # timeout
         else
-            timer = Timer(timeout_s) do t
+            timer = Timer(timeout_s) do _
                 @lock fm.notify notify(fm.notify)
             end
         end
@@ -992,7 +992,7 @@ function watch_folder(s::String, timeout_s::Real=-1; cancel::Base.CancelTokenArg
             unpreserve_handle(fm)
             @isdefined(timer) && close(timer)
         end
-    return evt::Pair{String, FileEvent}
+    return evt
 end
 
 """
@@ -1041,7 +1041,7 @@ function poll_file(s::AbstractString, interval_seconds::Real=5.007, timeout_s::R
     local timer
     try
         if timeout_s >= 0
-            timer = Timer(timeout_s) do t
+            timer = Timer(timeout_s) do _
                 close(pfw)
             end
         end

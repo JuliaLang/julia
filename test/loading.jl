@@ -2595,12 +2595,16 @@ end
         open(joinpath(dir, "Child.jl"), "w") do io
             println(io, """
                 module Child
+                f() = 1
+                precompile(f, ())
                 end""")
         end
         open(joinpath(dir, "Parent.jl"), "w") do io
             println(io, """
                 module Parent
                 using Child
+                g() = Child.f()
+                precompile(g, ())
                 end""")
         end
 
@@ -2669,6 +2673,21 @@ end
         @test occursin(r"Loading object cache file .+ for Child", log)
         @test occursin(r"Generating object cache file for Parent", log)
         @test occursin(r"Loading object cache file .+ for Parent", log)
+
+        # a process with pkgimages on can make caches for a configuration without them
+        mkdepottempdir() do depot2
+            code = """
+                flags = `--pkgimages=no`
+                cacheflags = Base.CacheFlags(; use_pkgimages=false)
+                for name in ("Child", "Parent")
+                    _, ocachefile = Base.compilecache(Base.identify_package(name); flags, cacheflags)
+                    ocachefile === nothing || error("unexpected object cache file for ", name)
+                end
+                """
+            cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --pkgimages=yes -e $code`,
+                         "JULIA_LOAD_PATH" => dir, "JULIA_DEPOT_PATH" => depot2)
+            @test success(pipeline(cmd; stdout, stderr))
+        end
     end end
 end
 
@@ -2889,6 +2908,21 @@ end
     for _ in 1:2
         @test success(pipeline(cmd; stdout, stderr))
     end
+end
+
+@testset "extension of a stdlib that is not in the environment" begin
+    # Pkg mode loads Pkg's REPLExt in an environment that has REPL but not Pkg (#65221)
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), "[deps]\nREPL = \"3fa0cd96-eef1-5676-8a61-b3b8758bbffb\"\n")
+    script = """
+    using REPL
+    REPL.load_pkg() isa Module || exit(1)
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep, "JULIA_LOAD_PATH" => dir)
+    @test success(pipeline(cmd; stdout, stderr))
 end
 
 @testset "dependency loaded with require_stdlib is checked against the environment" begin
@@ -3133,5 +3167,36 @@ end
             @assert Base.maybe_fetch_cache(Base.PkgId("Fake"), $(repr(joinpath(pkgdir, "src", "CacheHookPkg.jl")))) === false
             @assert inner[] === false  # the nested call was refused by the guard
             """))
+    end
+end
+
+@testset "import from a submodule of a package loaded from source (#64555)" begin
+    mkdepottempdir() do depot
+        dir = mktempdir()
+        # One package per statement, so that each statement's `require` defines the
+        # modules (and bindings) that the rest of that same statement imports from.
+        for i in 1:5
+            write(joinpath(dir, "Outer64555_$i.jl"), """
+                module Outer64555_$i
+                module Inside
+                    export x$i
+                    x$i = $i
+                end
+                end
+                """)
+        end
+        code = """
+            using Outer64555_1.Inside: x1
+            import Outer64555_2.Inside: x2
+            import Outer64555_3.Inside.x3
+            using Outer64555_4.Inside
+            import Outer64555_5.Inside
+            print((x1, x2, x3, x4, Inside.x5))
+            """
+        cmd = `$(Base.julia_cmd()) --startup-file=no --compiled-modules=no --depwarn=error -e $code`
+        cmd = addenv(cmd, "JULIA_LOAD_PATH" => dir, "JULIA_DEPOT_PATH" => depot)
+        err = IOBuffer()
+        @test readchomp(pipeline(cmd; stderr=err)) == "(1, 2, 3, 4, 5)"
+        @test !occursin("WARNING", String(take!(err)))
     end
 end

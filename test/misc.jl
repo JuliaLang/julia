@@ -6,7 +6,7 @@ include("testhelpers/withlocales.jl")
 # Tests that do not really go anywhere else
 
 # Modify when (intentionally) changing the number of boxes in Base methods
-@test length(Test.detect_closure_boxes(Base)) == 2
+@test length(Test.detect_closure_boxes(Base)) == 0
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
@@ -658,6 +658,20 @@ end
 # issue #57506
 let len = 100, m1 = Memory{UInt8}(1:len), m2 = Memory{Union{Nothing,UInt8}}(1:len)
     @test summarysize(m2) == summarysize(m1) + len
+end
+# boxed elements with unassigned slots, in plain and atomic memory
+let r = Ref(1), m = Memory{Any}(undef, 4), a = AtomicMemory{Any}(undef, 4)
+    m[2] = r
+    @atomic a[2] = r
+    @test summarysize(m) == summarysize(Memory{Any}(undef, 4)) + summarysize(r)
+    @test summarysize(a) == summarysize(m)
+    # boxed atomic union elements, and inline elements behind a lock
+    u = AtomicMemory{Union{Int,Nothing}}(undef, 2)
+    @atomic u[1] = 1000
+    @test summarysize(u) == summarysize(AtomicMemory{Union{Int,Nothing}}(undef, 2)) + sizeof(Int)
+    l = AtomicMemory{Tuple{String,Int,Int}}(undef, 2)
+    @atomic l[2] = ("abcd", 1, 2)
+    @test summarysize(l) == summarysize(AtomicMemory{Tuple{String,Int,Int}}(undef, 2)) + summarysize("abcd")
 end
 
 ## test conversion from UTF-8 to UTF-16 (for Windows APIs)

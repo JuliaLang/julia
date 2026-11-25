@@ -171,6 +171,7 @@ end
 
 function credential_identifier(url::AbstractString)
     m = match(URL_REGEX, url)
+    m === nothing && throw(ArgumentError("Unable to parse URL"))
     scheme = something(m[:scheme], SubString(""))
     host = something(m[:host])
     credential_identifier(scheme, host)

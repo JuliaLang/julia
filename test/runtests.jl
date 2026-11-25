@@ -139,7 +139,8 @@ end
 # stdlibs cached the paths of, `precompile`: packages loaded and methods added to Base,
 # `threads`: exited adopted threads, `SparseArrays`/`SuiteSparse`: methods added to Base
 # functions like `hvcat`), which breaks later tests on the same worker, so the worker is
-# replaced once they finish
+# replaced once they finish. Without workers they run after all other tests instead, in
+# this order (see below)
 const recycle_worker_tests = ["Pkg", "precompile", "threads", "SparseArrays", "SuiteSparse"]
 
 # In a constrained memory environment, run the "distributed" test after all other tests
@@ -153,7 +154,7 @@ limited_worker_rss && move_to_node1("Distributed")
 const longest_tests = [
     "Pkg", "LinearAlgebra", "SparseArrays", "threads", "cmdlineargs", "subarray",
     "compileall", "Compiler/AbstractInterpreter", "precompile", "jit",
-    "JuliaLowering_stdlibs", "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
+    "loading", "arrayops", "JuliaLowering", "bitarray", "sorting",
     "Random", "abstractarray", "iterators", "core", "ranges", "LibGit2/libgit2",
     "FileWatching", "atomics", "math", "rounding", "apint", "JuliaSyntax",
     "Compiler/inference", "reducedim", "numbers", "misc", "broadcast", "REPL", "Profile",
@@ -186,15 +187,24 @@ cd(@__DIR__) do
     #   * https://github.com/JuliaLang/julia/issues/6722
     #   * https://github.com/JuliaLang/julia/pull/29384
     #   * https://github.com/JuliaLang/julia/pull/40348
-    n = 1
-    JULIA_TEST_USE_MULTIPLE_WORKERS = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", false)
     # If the `JULIA_TEST_USE_MULTIPLE_WORKERS` environment variable is set to `true`, we use
-    # multiple worker processes regardless of the value of `net_on`.
-    # Otherwise, we use multiple worker processes if and only if `net_on` is true.
-    if net_on || JULIA_TEST_USE_MULTIPLE_WORKERS
+    # worker processes regardless of the value of `net_on`. If it is set to `false`, we do
+    # not use them and run all tests in this process, e.g. to run a test under a debugger.
+    # Otherwise, we use worker processes if and only if `net_on` is true.
+    use_workers = Base.get_bool_env("JULIA_TEST_USE_MULTIPLE_WORKERS", net_on; throw=true)
+    # Number of workers that run tests. A serial run still uses one worker, so that this
+    # process only coordinates and the worker can be replaced (see `max_worker_rss` and
+    # `recycle_worker_tests`). If workers are not allowed, or if all tests only run on
+    # node 1, no workers are added and the tests run in this process.
+    n = 0
+    if use_workers
         n = min(Sys.EFFECTIVE_CPU_THREADS, length(tests))
-        n > 1 && addprocs_with_testenv(n)
+        n > 0 && addprocs_with_testenv(n)
         LinearAlgebra.BLAS.set_num_threads(1)
+    else
+        # Without workers, nothing can replace the process that the tests in
+        # `recycle_worker_tests` leave state behind in, so run them after all other tests
+        foreach(move_to_node1, recycle_worker_tests)
     end
     prefix_id_width[] = ndigits(n + 1) # worker ids start at 2, so `n + 1` is the widest
     skipped = 0
@@ -507,7 +517,7 @@ cd(@__DIR__) do
                             if exit_on_error
                                 skipped = length(tests)
                                 empty!(tests)
-                            elseif n > 1
+                            elseif n > 0
                                 # the worker encountered some failure, recycle it
                                 # so future tests get a fresh environment
                                 rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
@@ -523,14 +533,14 @@ cd(@__DIR__) do
                                 # the worker has reached the max-rss limit or holds state
                                 # left behind by the test, recycle it so future tests start
                                 # with a smaller working set and a fresh environment
-                                if n > 1
+                                if n > 0
                                     rmprocs_with_testenv(wrkr, waitfor=rmwait_timeout)
                                     p = addprocs_with_testenv(1; pool_size=n)[1]
                                     remotecall_fetch(include, p, "testdefs.jl")
                                     if use_revise
                                         Distributed.remotecall_eval(Main, p, revise_init_expr)
                                     end
-                                elseif resp[end] > max_worker_rss # single process testing
+                                elseif resp[end] > max_worker_rss # testing without workers
                                     error("Halting tests. Memory limit reached : $resp > $max_worker_rss")
                                 end
                             end
@@ -544,7 +554,7 @@ cd(@__DIR__) do
             end
         end
 
-        n > 1 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
+        n > 0 && length(node1_tests) > 1 && print("\nExecuting tests that run on node 1 only:\n")
         for t in node1_tests
             # As above, try to run each test
             # which must run on node 1. If

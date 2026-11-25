@@ -1361,10 +1361,9 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
                                     edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mresult = Future{MethodCallResult}()
-    push!(caller.tasks, function get_infer_result(interp, caller)
+    function get_infer_result(interp, caller)
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
         isinferred = is_inferred(frame)
-        effects = nothing
         call_result = nothing
         edge = edge_ci
         if isinferred
@@ -1411,7 +1410,8 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
             edge, edgecycle, edgelimited, edgerecursed, call_result;
             force_edgecycle=false, needs_mi_edge)
         return true
-    end)
+    end
+    push!(caller.tasks, get_infer_result)
     return mresult
 end
 

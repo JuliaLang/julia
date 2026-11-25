@@ -148,11 +148,10 @@ namespace jl_intrinsics {
     extern const IntrinsicDescription getGCFrameSlot;
 
     // `julia.gc_alloc_bytes`: an intrinsic that allocates
-    // the bytes for an object, but does not initialize the
-    // tag field. That is, its semantics and signature are
-    // the same as for `julia.gc_alloc_obj`, except that
-    // the object's tag field is neither initialized nor
-    // passed as an argument.
+    // the bytes for an object and initializes its tag field.
+    // Unlike `julia.gc_alloc_obj`, it takes the ptls rather
+    // than the current task, and the tag as an integer.
+    // FinalLowerGC lowers it to the allocator for its size.
     extern const IntrinsicDescription GCAllocBytes;
 
     // `julia.new_gc_frame`: creates a GC frame, honoring any return alignment attribute.

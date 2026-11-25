@@ -401,7 +401,6 @@ function ir_abstract_constant_propagation(interp::AbstractInterpreter, irsv::IRI
         if (any_refined && reprocess_instruction!(interp, inst, idx, bb, irsv)) ||
             (externally_refined !== nothing && idx in externally_refined)
             push!(ssa_refined, idx)
-            stmt = inst[:stmt]
             typ = inst[:type]
         end
         if typ === Bottom && !is_terminator_or_phi

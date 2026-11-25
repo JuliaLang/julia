@@ -496,8 +496,6 @@ function add_entrypoint(types::Type)
 end
 
 function add_ccallable_entrypoints!()
-    # Collect all methods with ccallable annotations
-    ccallable_methods = Any[]
     visit(Core.methodtable) do method
         method = method::Method
         if isdefined(method, :ccallable)

@@ -583,13 +583,8 @@ Rename basic block numbers in a DFS tree, removing the block if it is renamed
 to -1.
 """
 function rename_nodes!(D::DFSTree, rename_bb::Vector{BBNumber})
-    n_blocks = length(D.to_pre)
-    n_reachable_blocks = length(D.from_pre)
-
     old_to_pre = copy(D.to_pre)
-    old_from_pre = copy(D.from_pre)
     old_to_post = copy(D.to_post)
-    old_from_post = copy(D.from_post)
     max_new_bb = 0
     for (old_bb, new_bb) in enumerate(rename_bb)
         if new_bb != -1

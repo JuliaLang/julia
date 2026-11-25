@@ -486,6 +486,18 @@ end
 # sqrt DomainError
 @test_throws DomainError sqrt(BigFloat(-1))
 
+@testset "negative base to a non-integer power" begin
+    @test_throws DomainError BigFloat(-8)^BigFloat(1/3)
+    @test_throws DomainError BigFloat(-8)^(1/3)
+    @test_throws DomainError BigFloat(-1)^0.5
+    @test BigFloat(-8)^BigFloat(2) == 64
+    @test isnan(BigFloat(NaN)^BigFloat(0.5))
+    @test isnan(BigFloat(-8)^BigFloat(NaN))
+    @test_throws DomainError BigFloat(-Inf)^BigFloat(0.5)
+    @test_throws DomainError BigFloat(-Inf)^BigFloat(-0.5)
+    @test BigFloat(-Inf)^BigFloat(3) == -Inf
+end
+
 @testset "setprecision" begin
     old_precision = precision(BigFloat)
     x = BigFloat(0)

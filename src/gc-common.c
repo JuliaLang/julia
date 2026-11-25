@@ -613,7 +613,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_small_alloc_reset_safe(jl_ptls_t ptls, int offset
     jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
     jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     jl_value_t *val = jl_gc_small_alloc(ptls, offset, osize, type);
-    jl_set_typeof(val, type);
     reset_region_republish(ct, reset_ctx);
     return val;
 }
@@ -624,7 +623,6 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc_reset_safe(jl_ptls_t ptls, size_t sz,
     jl_task_t *ct = jl_atomic_load_relaxed(&ptls->current_task);
     jl_reset_ctx_t *reset_ctx = reset_region_unpublish(ct);
     jl_value_t *val = jl_gc_big_alloc(ptls, sz, type);
-    jl_set_typeof(val, type);
     reset_region_republish(ct, reset_ctx);
     return val;
 }

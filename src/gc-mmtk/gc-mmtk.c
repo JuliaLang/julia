@@ -1262,6 +1262,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_default(ptls, osize, 16, NULL);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
@@ -1273,6 +1274,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, jl_value_t *
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_big(ptls, sz);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
     return val;
 }

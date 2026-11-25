@@ -179,7 +179,6 @@ function scan_new_method!(method::Method, world::UInt, image_backedges_only::Boo
         return
     end
     src = _uncompressed_ir(method)
-    mod = method.module
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)
         if binding_changed_since_require_world(b, world)

@@ -7,13 +7,12 @@ module Pidfile
 export mkpidlock, trymkpidlock
 
 using Base:
-    IOError, UV_EEXIST, UV_ESRCH, UV_ENOENT,
-    Process,
+    IOError, Process, UV_EEXIST, UV_ENOENT, UV_ESRCH,
     unsafe_takestring
 
 using Base.Filesystem:
-    File, open, JL_O_CREAT, JL_O_RDWR, JL_O_RDONLY, JL_O_EXCL,
-    rename, samefile, path_separator
+    File, JL_O_CREAT, JL_O_EXCL, JL_O_RDONLY, JL_O_RDWR,
+    open, path_separator, rename, samefile
 
 using ..FileWatching: FileMonitor
 using Base.Sys: iswindows
@@ -272,7 +271,7 @@ function open_exclusive(path::String;
         timeout = nothing
         if watch isa FileMonitor && stale_age > 0
             let watch = watch
-                timeout = Timer(stale_age) do t
+                timeout = Timer(stale_age) do _
                     close(watch)
                 end
             end

@@ -1970,8 +1970,7 @@ end
             @test occursin("Cols", result)
         end
 
-        # Should not access arg-map for local variables
-        # TODO: worth the special case?
+        # reassigning a named self argument should not change `@__FUNCTION__`
         jl_eval(test_mod, raw"""
             function f_thisfunction_argmap end
             function (f_thisfunction_argmap::typeof(f_thisfunction_argmap))()
@@ -1979,7 +1978,7 @@ end
                 @__FUNCTION__
             end
         """; edition=JL_OLD_EDITION)
-        @test_broken test_mod.f_thisfunction_argmap() ===
+        @test test_mod.f_thisfunction_argmap() ===
             test_mod.f_thisfunction_argmap
     end
 

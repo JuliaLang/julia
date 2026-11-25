@@ -20,6 +20,9 @@ using Dates: ISOTimestampFormat, Timestamp, timestamp2unix, unix2timestamp
     # the unix epoch is the zero instant
     @test Dates.value(Timestamp(1970)) == 0
     @test Timestamp(Dates.UTInstant(Nanosecond(0))) == Timestamp(1970)
+    # an instant of another period type is not taken for a year
+    @test_throws ArgumentError("Timestamp{$Nanosecond} requires a UTInstant{$Nanosecond}, got a UTInstant{$Millisecond}") Timestamp{Nanosecond}(Dates.UTInstant(Millisecond(1)))
+    @test Timestamp(Dates.UTInstant(Millisecond(1))) === Timestamp{Millisecond}(1970, 1, 1, 0, 0, 0, 1)
     # 24:00 rolls over like DateTime
     @test Timestamp(2026, 8, 31, 24) == Timestamp(2026, 9, 1)
     # AM/PM

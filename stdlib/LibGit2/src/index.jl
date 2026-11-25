@@ -83,10 +83,11 @@ function write_tree_to!(repo::GitRepo, idx::GitIndex)
 end
 
 function repository(idx::GitIndex)
-    if idx.owner === nothing
+    owner = idx.owner
+    if owner === nothing
         throw(GitError(Error.Index, Error.ENOTFOUND, "Index does not have an owning repository."))
     else
-        return idx.owner
+        return owner
     end
 end
 
