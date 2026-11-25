@@ -107,6 +107,8 @@ end
     chr = Base.annotate!(Base.AnnotatedChar('m'), :attr, "h0m1")
     @test chr == Base.AnnotatedChar('m', [(:attr, "h0m1")])
     @test Base.annotate!(chr, :attr, "m1m2") == Base.AnnotatedChar('m', [(:attr, "h0m1"), (:attr, "m1m2")])
+    @test Base.annotatedstring("x", Base.AnnotatedChar('é', [(:a, 1)])) ==
+        Base.AnnotatedString("xé", [(2:3, :a, 1)])
 end
 
 @testset "Unstyled display fallback" begin
