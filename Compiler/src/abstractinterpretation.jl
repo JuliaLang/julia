@@ -285,15 +285,17 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
 
         seenall = state.inferidx > napplicable
         retinfo = state.matches.info
+        # The signatures of all matching methods constrain the arguments even when we bailed out
+        # before inferring some of them, so the refinement does not depend on callee return types.
+        local fargs = arginfo.fargs
+        if sv isa InferenceState && fargs !== nothing
+            state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
+        end
         if seenall # small optimization to skip some work that is already implied
             if !fully_covering(state.matches) || any_ambig(state.matches)
                 # Account for the fact that we may encounter a MethodError with a non-covered or ambiguous signature.
                 state.all_effects = Effects(state.all_effects; nothrow=false)
                 state.exctype = state.exctype ⊔ₚ MethodError
-            end
-            local fargs = arginfo.fargs
-            if sv isa InferenceState && fargs !== nothing
-                state.slotrefinements = collect_slot_refinements(𝕃ᵢ, applicable, argtypes, fargs, sv)
             end
             state.rettype = from_interprocedural!(interp, state.rettype, sv, arginfo, state.conditionals, vtypes)
             if widen_call_result(interp, si, state, sv)

@@ -5629,6 +5629,14 @@ let effects = Base.infer_effects(callsig_backprop_addinteger)
 end
 callsig_backprop_anti(::Any) = :any
 callsig_backprop_anti(::Int) = :int
+abstract type CallsigBackpropOrder end
+struct CallsigBackpropOrder1 <: CallsigBackpropOrder end
+struct CallsigBackpropOrder2 <: CallsigBackpropOrder end
+struct CallsigBackpropOrder3 <: CallsigBackpropOrder end
+callsig_backprop_order1(::CallsigBackpropOrder1) = undefvar # undefvar::Any triggers `bail_out_call`
+callsig_backprop_order1(::CallsigBackpropOrder2) = nothing
+callsig_backprop_order2(::CallsigBackpropOrder1) = nothing
+callsig_backprop_order2(::CallsigBackpropOrder2) = undefvar
 
 @testset "constraint back-propagation from call signature" begin
     # basic case
@@ -5652,9 +5660,16 @@ callsig_backprop_anti(::Int) = :int
         return a
     end == Nothing
 
-    # make sure to throw away an intermediate refinement information when we bail out early
+    # the signatures of all matching methods refine the argument even when we bail out early
     # (inference would bail out on `callsig_backprop_bailout(::Val{1})`)
-    @test Base.infer_return_type(a->(callsig_backprop_bailout(a); return a), (Any,)) == Any
+    @test Base.infer_return_type(a->(callsig_backprop_bailout(a); return a), (Any,)) == Val
+
+    # the refinement does not depend on which matching method triggers `bail_out_call`
+    # (whatever the lookup order, one of these two calls bails out before its last match)
+    @test Base.infer_return_type(a->(callsig_backprop_order1(a); return a), (CallsigBackpropOrder,)) ==
+        Union{CallsigBackpropOrder1,CallsigBackpropOrder2}
+    @test Base.infer_return_type(a->(callsig_backprop_order2(a); return a), (CallsigBackpropOrder,)) ==
+        Union{CallsigBackpropOrder1,CallsigBackpropOrder2}
 
     # if we see all the matching methods, we don't need to throw away refinement information
     # even if it's caught by `bail_out_call` check
@@ -5683,9 +5698,14 @@ end == Int
 # (even if the previous return type is annotated as `Any`)
 @eval callsig_backprop_invalidation_inner!(::Nothing) = $(gensym(:undefvar)) # ::Any
 @test Base.infer_return_type((Any,)) do a
-    # since inference will bail out at the first matched `_inner!` and so call signature constraint won't be available
+    # inference bails out at the first matched `_inner!`, but both signatures still constrain `a`
     callsig_backprop_invalidation_outer(a)
-end ≠ Int
+end == Union{Int,Nothing}
+# a new matching method must also invalidate the refinement computed after a bail-out
+@eval callsig_backprop_invalidation_inner!(::Float64) = nothing
+@test Base.infer_return_type((Any,)) do a
+    callsig_backprop_invalidation_outer(a)
+end == Union{Int,Nothing,Float64}
 
 # MustAlias signature constraint propagation:
 # when a call like `f(x.value)` constrains `x.value` via the method signature,
