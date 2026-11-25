@@ -445,6 +445,23 @@ function f(x)
 end
 
 ########################################
+# Callable object method declared global
+global (::T)(y) = y
+#---------------------
+1   TestMod.T
+2   (call core.svec %₁ core.Any)
+3   (call core.svec)
+4   SourceLocation:1
+5   (call core.svec %₂ %₃ %₄)
+6   (call core.define_method TestMod core.nothing %₅
+    --- code_info
+    slots: [slot₁/#self#(!read) slot₂/y]
+    1   slot₂/y
+    2   (return %₁)
+7   latestworld
+8   (return core.nothing)
+
+########################################
 # `where` params used in callable object type
 function (x::X1{T})() where T
     T
@@ -551,6 +568,35 @@ syntax: invalid function name
 function f[](x,y)
 #        └─┘
 end
+
+########################################
+# Error: Underscore function name
+function _(x)
+end
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+function _(x)
+#        ⊔
+end
+
+########################################
+# Error: Underscore function name, short form
+_(x) = x
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+_(x) = x
+⊔
+
+########################################
+# Error: Underscore function name declared global
+global _(x) = x
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+global _(x) = x
+#      ⊔
 
 ########################################
 # Simple positional args with defaults
@@ -2193,6 +2239,57 @@ function foo()
     end
 #─────┘
 end
+
+########################################
+# Error: if-generated outside of a function
+if @generated
+    1
+else
+    2
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :1
+if @generated
+#  └────────┘
+    1
+else
+
+########################################
+# Error: `@generated()` as a value
+function foo()
+    x = @generated()
+    x
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :2
+function foo()
+    x = @generated()
+#       └──────────┘
+    x
+end
+
+########################################
+# Error: `@generated` as an `elseif` condition
+function foo(x)
+    if x
+        1
+    elseif @generated
+        2
+    else
+        3
+    end
+end
+#---------------------
+syntax: `@generated` can only be used as an `if` condition inside a function
+@ :4
+    if x
+        1
+    elseif @generated
+#          └────────┘
+        2
+    else
 
 ########################################
 # Fully generated function

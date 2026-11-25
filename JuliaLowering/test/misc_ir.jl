@@ -48,6 +48,15 @@ _ + 1
 ⊔
 
 ########################################
+# Error: Placeholder used in `@isdefined`
+@isdefined _
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :1
+@isdefined _
+#          ⊔
+
+########################################
 # Named tuple
 (a=1, b=2)
 #---------------------
@@ -193,6 +202,15 @@ syntax: expected identifier, `=`, or `...` after semicolon
 #       └─┘
 
 ########################################
+# Error: Named tuple element with a dotted operator
+(.+, a=1)
+#---------------------
+syntax: invalid named tuple element
+@ :1
+(.+, a=1)
+#└┘
+
+########################################
 # Error: Modules not allowed inside blocks
 begin
     module C
@@ -241,6 +259,15 @@ syntax: `::` must be written `value::type` outside function argument lists
 @ :1
 ::T
 └─┘
+
+########################################
+# Error: Invalid :: syntax as a function definition
+::f(x) = 1
+#---------------------
+syntax: invalid syntax in left-hand side of assignment
+@ :1
+::f(x) = 1
+└────┘
 
 ########################################
 # Error: braces vector syntax

@@ -233,6 +233,24 @@ begin
 end
 
 ########################################
+# Error: `@goto` without a label name
+begin
+    @goto 1
+end
+#---------------------
+MacroExpansionError while expanding @goto in module Main.TestMod:
+begin
+    @goto 1
+#   └─────┘ ── Error expanding macro
+end
+Caused by: syntax: expected a label name
+@ :2
+begin
+    @goto 1
+#         ⊔
+end
+
+########################################
 # Error: using value of symbolic label
 x = @label foo
 #---------------------

@@ -552,7 +552,14 @@ function est_to_dst(ctx::SyntaxCompatContext, st::SyntaxTree)
             arg_meta, method_metas = collect_body_meta(r)
             r2 = rec(with(ctx; toplevel=false), r)
             isnothing(method_metas) || (r2 = setmeta(r2, :method_metas, method_metas))
-            @ast _ st [:macro rec(ctx, apply_arglist_meta(l, arg_meta)) r2]
+            # Unlike a call, a signature such as `var".+"(x)` names a macro
+            # `@.+` rather than broadcasting `+`
+            l2 = @stm (l = apply_arglist_meta(l, arg_meta)) begin
+                [:call f args...] ->
+                    @ast _ l [:call rec(ctx, f) dst_sink_parameters(ctx, args)...]
+                _ -> rec(ctx, l)
+            end
+            @ast _ st [:macro l2 r2]
         end
         [:do [:call f args...] lam] -> let
             @ast _ st [:call rec(ctx, f) rec(ctx, lam) dst_sink_parameters(ctx, args)...]

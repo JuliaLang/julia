@@ -1608,6 +1608,11 @@ end
         edition=JL_OLD_EDITION) == (1.5, Float64)
     @test_throws LoweringError jl_eval(
         test_mod, "f_anon_sp3(x) where {_, _} = x"; edition=JL_OLD_EDITION)
+    # ... which also lets the signature check it with `@isdefined`
+    @test jl_eval(test_mod, """
+        f_anon_sp_isdefined(x::Val{_}, y::Val{@isdefined(_)}) where _ = 7
+        f_anon_sp_isdefined(Val(1), Val(false))
+        """; edition=JL_OLD_EDITION) == 7
 
     # In the new edition, `_` static parameters are truly anonymous
     @test_nowarn @test jl_eval(

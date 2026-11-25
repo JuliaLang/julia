@@ -170,6 +170,17 @@ continue
 └──────┘
 
 ########################################
+# Error: splatted iterable in for loop
+for x in xs...
+end
+#---------------------
+syntax: `...` cannot be used on the iterable of a `for` loop
+@ :1
+for x in xs...
+#       └────┘
+end
+
+########################################
 # Error: `outer` without outer local variable
 let
     for outer i = 1:2
@@ -185,3 +196,67 @@ let
 #             ⊔
         nothing
     end
+
+########################################
+# Error: `outer` with destructuring
+function f(itr)
+    local i, j
+    for outer (i, j) in itr
+    end
+end
+#---------------------
+syntax: expected a single variable name after `outer`
+@ :3
+function f(itr)
+    local i, j
+    for outer (i, j) in itr
+#             └────┘
+    end
+end
+
+########################################
+# Error: `outer` with a type declaration
+function f(itr)
+    local x
+    for outer x::Int in itr
+    end
+end
+#---------------------
+syntax: expected a single variable name after `outer`
+@ :3
+function f(itr)
+    local x
+    for outer x::Int in itr
+#             └────┘
+    end
+end
+
+########################################
+# Error: `outer` with an indexed target
+function f(a, itr)
+    for outer a[1] in itr
+    end
+end
+#---------------------
+syntax: expected a single variable name after `outer`
+@ :2
+function f(a, itr)
+    for outer a[1] in itr
+#             └──┘
+    end
+end
+
+########################################
+# Error: `outer` with underscore
+function f(itr)
+    for outer _ in itr
+    end
+end
+#---------------------
+syntax: all-underscore identifiers are write-only and their values cannot be used in expressions
+@ :2
+function f(itr)
+    for outer _ in itr
+#             ⊔
+    end
+end

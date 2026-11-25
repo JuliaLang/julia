@@ -460,3 +460,16 @@ syntax: `goto` out of an `else` block is not permitted with `finally`
 #             └─┘
     finally
     end
+
+########################################
+# Error: interpolation as catch variable
+try
+catch $e
+end
+#---------------------
+syntax: `$` expression outside string or quote
+@ :2
+try
+catch $e
+#     └┘
+end

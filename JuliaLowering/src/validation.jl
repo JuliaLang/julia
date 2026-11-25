@@ -157,6 +157,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
         inner_vcx = vcx.toplevel ? with(vcx; inner_cond=true) : vcx
         @stm st begin
             [:if [:generated] t f] ->
+                (vcx.toplevel ? vst1(vcx, st[1]) : pass()) &
                 vst1(inner_vcx, t) & vst1(inner_vcx, f)
             [:if [:generated] _...] ->
                 @fail(st, "if-generated requires both true and false cases")
@@ -277,7 +278,7 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     # lowering TODO: 0 args segfaults
     [:gc_preserve_begin ids...] -> allv(vst1_ident, vcx, ids)
     [:gc_preserve_end ids...] -> allv(vst1_ident, vcx, ids)
-    [:isdefined [:identifier]] -> pass()
+    [:isdefined [:identifier]] -> vst1_ident(vcx, st[1])
     [:isdefined [:static_parameter [:value]]] -> pass()
     [:lambda _...] -> vst1_raw_lambda(vcx, st)
     [:generated_lambda _...] -> vst1_generated_lambda(vcx, st)
@@ -289,7 +290,10 @@ vst1(vcx::Validation1Context, st::SyntaxTree)::ValidationResult = @stm st begin
     end
     [:softscope _] -> pass()
     [:softscope] -> pass()
-    [:generated] -> pass()
+    # Only valid as the condition of an `if` in a function body, where the
+    # function is split into a generator and a non-generated fallback
+    [:generated] ->
+        @fail(st, "`@generated` can only be used as an `if` condition inside a function")
     [:foreigncall fname rt at cconv roots_args...] ->
         # TODO: could be stricter
         vst1(vcx, fname) &
@@ -425,7 +429,7 @@ end
 
 vst1_local_arg(vcx, st) = @stm st begin
     [:function _...] -> vst1_function(vcx, st)
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
+    _ -> vst1_dotted_or_op_assign(vcx, st) | vst1_symdecl_or_assign(vcx, st) |
         @fail(st, "invalid local declaration: expected identifier or assignment")
 end
 
@@ -433,7 +437,7 @@ vst1_global_arg(vcx, st) = @stm st begin
     [:function _...] -> vcx.toplevel ?
         vst1_function(vcx, st) :
         @fail(st, "global function needs to be placed at top level, or use eval")
-    _ -> vst1_symdecl_or_assign(vcx, st) | vst1_dotted_or_op_assign(vcx, st) |
+    _ -> vst1_dotted_or_op_assign(vcx, st) | vst1_symdecl_or_assign(vcx, st) |
         @fail(st, "invalid global declaration: expected identifier or assignment")
 end
 
@@ -505,6 +509,8 @@ end
 vst1_try_catchvar(vcx, st) = @stm st begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true)
     ([:value], when=st.value===false) -> pass()
+    [:$ _] -> vst1(vcx, st)
+    _ -> @fail(st, "expected identifier as `catch` variable")
 end
 
 # syntax TODO:
@@ -547,10 +553,12 @@ vst1_calldecl_dot_name_rhs(vcx, st) = @stm st begin
     _ -> @fail(st, "invalid `.` syntax")
 end
 
-vst1_symdecl_or_assign(vcx, st) = head(st) === :identifier ?
-    vst1_ident(vcx, st; lhs=true) :
-    @fail(st, "expected identifier or assignment") |
-    vst1_symdecl(vcx, st) | vst1_assign(vcx, st)
+vst1_symdecl_or_assign(vcx, st) = @stm st begin
+    [:identifier] -> vst1_ident(vcx, st; lhs=true)
+    # Report errors inside an assignment rather than the generic one below
+    [:(=) _...] -> vst1_assign(vcx, st)
+    _ -> @fail(st, "expected identifier or assignment") | vst1_symdecl(vcx, st)
+end
 
 vst1_symdecl(vcx, st) = @stm st begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true)
@@ -594,9 +602,11 @@ end
 
 vst1_call(vcx, st) = @stm st begin
     ([:call [:identifier] args...], when=syntax_name(st[1])==="cglobal") ->
-        (1 <= length(args) <= 2 ? pass() :
+        (1 <= count(a -> !(head(a) in (:parameters, :kw)), args) <= 2 ? pass() :
             @fail(st, "cglobal must have one or two arguments")) &
-        allv(vst1_call_arg, vcx, args)
+        vst1_ccall_args(vcx, st)
+    ([:call [:identifier] _...], when=syntax_name(st[1])==="ccall") ->
+        vst1_ccall_args(vcx, st)
     [:call f [:parameters kwargs...] args...] ->
         (vst1_ident(vcx, f) | vst1(vcx, f)) &
         allv(vst1_call_arg, vcx, args) &
@@ -622,6 +632,29 @@ end
 vst1_call_arg(vcx, st) = @stm st begin
     [:kw id val] -> vst1_ident(vcx, id; lhs=true) & vst1(vcx, val)
     _ -> vst1_splat_or_val(vcx, st)
+end
+
+# `ccall` and `cglobal` take their arguments positionally as written, so the
+# arguments can be neither splatted nor passed by keyword.  The exception is the
+# type in `cglobal(name, Ts...)`, which flisp lowers to `Ptr{Ts...}`.
+function vst1_ccall_args(vcx, st)
+    name = syntax_name(st[1])
+    ok = pass()
+    for (i, arg) in enumerate(children(st)[2:end])
+        ok &= @stm arg begin
+            ([:... _...], when=(name == "cglobal" && i == 2)) ->
+                vst1_splat_or_val(vcx, arg)
+            [:... _...] -> @fail(arg, name == "cglobal" ?
+                "splatting is only supported in the type argument of `cglobal`" :
+                "splatting is not supported in `ccall` arguments")
+            [:kw _...] ->
+                @fail(arg, "`$name` does not accept keyword arguments")
+            [:parameters _...] ->
+                @fail(arg, "`$name` does not accept keyword arguments")
+            _ -> vst1(vcx, arg)
+        end
+    end
+    return ok
 end
 
 # Arg to `parameters` (post-semicolon) in a call (not function decl).  Stricter
@@ -735,13 +768,24 @@ end
 
 # Macros may have either underscore or reserved (ccall, cglobal) names
 vst1_macro_calldecl_name(vcx, st) = @stm st begin
-    [:. _ _] -> vst1_calldecl_dot_name(vcx, st)
+    [:. _ _] -> vst1_macro_dot_name_strs(vcx, st) & vst1_calldecl_dot_name(vcx, st)
     m -> @fail(st, "invalid macro name") |
         vst1_ident(vcx, m; lhs=true) | vst1_ident(vcx, m; lhs=false)
 end
 
+# Unlike a function name, a macro name can't be qualified by a string, as in
+# `A."m"`
+vst1_macro_dot_name_strs(vcx, st) = @stm st begin
+    [:. l r] -> vst1_macro_dot_name_strs(vcx, l) & vst1_macro_dot_name_strs(vcx, r)
+    [:inert x] -> vst1_macro_dot_name_strs(vcx, x)
+    [:syntaxinert x] -> vst1_macro_dot_name_strs(vcx, x)
+    ([:value], when=st.value isa String) -> @fail(st, "invalid macro name")
+    _ -> pass()
+end
+
 vst1_calldecl_name(vcx, st) = @stm (st=strip_arg_meta(st)) begin
     [:identifier] -> vst1_ident(vcx, st; lhs=true) &
+        vst1_ident(with(vcx; readable_underscore=false), st) &
         (!is_dotted_operator(syntax_name(st)) ? pass() :
         @fail(st, "dotted operator is not a valid function name"))
     [:. _ _] -> vcx.toplevel ? vst1_calldecl_dot_name(vcx, st) :
@@ -1103,8 +1147,14 @@ vst1_generator(vcx, st) = let
 end
 
 vst1_iter(vcx, st) = @stm st begin
-    [:(=) [:outer i] v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
-    # rare, malformed, happens to work in desugaring
+    [:(=) [:outer [:identifier]] v] -> let i = st[1][1]
+        vst1_ident(vcx, i; lhs=true) &
+        vst1_ident(with(vcx; readable_underscore=false), i) & vst1(vcx, v)
+    end
+    [:(=) [:outer i] v] ->
+        @fail(i, "expected a single variable name after `outer`") & vst1(vcx, v)
+    # rare, malformed, happens to work for generators in desugaring (see
+    # `check_no_splatted_iterable`)
     [:(=) i [:... v]] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     [:(=) i v] -> vst1_assign_lhs(vcx, i) & vst1(vcx, v)
     _ -> @fail(st, "expected one of `=`, `in`, `∈`")
