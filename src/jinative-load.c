@@ -637,8 +637,7 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     for (uint32_t i = 0; i < hdr.nimports; i++) {
         imports[i] = import_names[i] < hdr.strtab_size ? native_resolve_import(strtab + import_names[i]) : NULL;
         if (imports[i] == NULL) {
-            // TODO: unconditional while this is brought up on CI
-            if (import_names[i] < hdr.strtab_size)
+            if (import_names[i] < hdr.strtab_size && getenv("JULIA_DEBUG_NATIVE_IMAGE") != NULL)
                 jl_safe_printf("native image %s: cannot resolve %s\n", path, strtab + import_names[i]);
             unresolved = 1;
         }
@@ -759,8 +758,8 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     return img;
 
 fail:
-    // TODO: unconditional while this is brought up on CI
-    jl_safe_printf("native image %s: %s\n", path, *err);
+    if (getenv("JULIA_DEBUG_NATIVE_IMAGE") != NULL)
+        jl_safe_printf("native image %s: %s\n", path, *err);
     free(imports);
 #ifdef _OS_WINDOWS_
     free(meta_mem);
