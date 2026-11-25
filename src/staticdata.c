@@ -284,9 +284,10 @@ typedef struct {
     size_t bits_start;          // Heap offset of the pointer-free (or "bits") section
     uintptr_t preferred_base;   // the address at which the heap expects to be placed
 
-    // (heap offset, item) pairs: the item is a bind, a serialization id (see `backref_id`), or
-    // BITS_ITEM plus an offset into the bits stream; `jl_finish_relocs` makes each a slide or a bind
-    arraylist_t relocs_list;
+    // We use "item" to mean a bind to an import, a serialization ID (that will
+    // become a slide after we have offsets for everything), or an offset into
+    // the pointer-free section marked with BITS_ITEM.
+    arraylist_t relocs_list;    // (heap offset, item) pairs for each relocation we'll eventually make
     arraylist_t fixup_types;    // a list of locations of types requiring (re)caching
     arraylist_t fixup_objs;     // a list of locations of objects requiring (re)caching
     jl_array_t *buildid_depmods_idxs; // image index => dependency index
@@ -300,14 +301,15 @@ typedef struct {
 } jl_serializer_state;
 
 typedef struct {
-    image_metadata_t **deps;    // the images that deprefs refer to: the system image, then the dependencies
-    uintptr_t slide;            // how far the heap is from its preferred base, added to each slide
-    uintptr_t *imports_resolved; // the address each import resolves to (provisional while it is pending)
-    // the words bound to a pending import, as pairs of the word's address and 1 + the index of
-    // the next pair bound to the same import
-    arraylist_t waiting;
-    size_t *first_waiting;      // for each import, 1 + the index of its latest pair in `waiting`
-    uint8_t *pending;           // whether each import is pending (see jl_apply_bind)
+    image_metadata_t **deps;     // The images that deprefs refer to
+    uintptr_t slide;             // Offset between the real heap address and its preferred base
+    uintptr_t *imports_resolved; // The address each import resolves to
+    // All of the binds waiting on a pending import form a linked list in
+    // `waiting`.  `next` is 1 + the index of the next pair bound to the same
+    // import.
+    arraylist_t waiting;         // list of (bind addr, next) pairs
+    size_t *first_waiting;       // for each import, 1 + the index of the head of its list in `waiting`
+    uint8_t *pending;            // whether each import is pending (see jl_apply_bind)
 } jl_loader_state;
 
 // The specials of an incremental image
@@ -2238,8 +2240,8 @@ static uintptr_t jl_resolve_import(jl_loader_state *s, import_t imp, const char 
     abort();
 }
 
-// Replace the bind at `pv` with what it refers to.  If that is a pending import, its value is
-// provisional, and the word is rewritten if it changes when the import is finalized.
+// Replace the bind at `pv` with what it refers to.  If the import is pending,
+// adds it to the linked list of binds waiting for that import.
 static void jl_apply_bind(jl_loader_state *s, uintptr_t *pv) JL_NOTSAFEPOINT
 {
     uintptr_t bind = *pv;
