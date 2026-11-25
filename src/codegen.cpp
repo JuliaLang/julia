@@ -11714,6 +11714,14 @@ extern "C" void jl_init_llvm(void)
     clopt = llvmopts.lookup("combiner-store-merge-dependence-limit");
     if (clopt && clopt->getNumOccurrences() == 0)
         cl::ProvidePositionalOption(clopt, "4", 1);
+    // the machine scheduler and SLP vectorizer take superlinear time on huge unrolled blocks
+    // (e.g. nested duals in static arrays), so bound how many instructions each considers
+    clopt = llvmopts.lookup("misched-limit");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "32", 1);
+    clopt = llvmopts.lookup("slp-schedule-budget");
+    if (clopt && clopt->getNumOccurrences() == 0)
+        cl::ProvidePositionalOption(clopt, "5000", 1);
 
     // compiler-rt/libgcc only provide FP conversion libcalls (e.g. __floattidf,
     // __fixdfti) up to the widest integer type the platform supports natively
