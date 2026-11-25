@@ -2,6 +2,7 @@
 #include "objcache.h"
 
 #include <chrono>
+#include <thread>
 
 #include <llvm/Support/Endian.h>
 #include <llvm/Support/FileSystem.h>
@@ -296,9 +297,7 @@ void ObjCache::initDB()
         [](void *arg) {
             auto *OC = static_cast<ObjCache *>(arg);
             OC->writerThread();
-            std::unique_lock<std::mutex> Lock{OC->WriterExitMutex};
-            OC->WriterExited = true;
-            OC->WriterExitCond.notify_all();
+            OC->WriterExited.store(true, memory_order_release);
         },
         this);
 #endif
@@ -719,9 +718,23 @@ void ObjCache::shutdown()
         // processes may hold for a long time, or while it commits. Leave it
         // to process exit in that case: an unfinished transaction is never
         // published, and LMDB recovers the lock from a dead owner.
-        std::unique_lock<std::mutex> Lock{WriterExitMutex};
-        if (WriterExitCond.wait_for(Lock, std::chrono::milliseconds(100),
-                                    [this] { return WriterExited; })) {
+        // Poll rather than wait on a condition variable: after a fatal signal
+        // this may run on a thread interrupted inside a condition variable
+        // wait, and FreeBSD aborts that thread's next one. Yield first: the
+        // writer normally exits within microseconds, and a sleep costs a timer
+        // tick.
+        using namespace std::chrono;
+        auto Start = steady_clock::now();
+        while (!WriterExited.load(memory_order_acquire)) {
+            auto Elapsed = steady_clock::now() - Start;
+            if (Elapsed >= milliseconds(100))
+                break;
+            if (Elapsed < milliseconds(1))
+                std::this_thread::yield();
+            else
+                std::this_thread::sleep_for(milliseconds(1));
+        }
+        if (WriterExited.load(memory_order_acquire)) {
             uv_thread_join(&WriterThread);
             Started = false;
         }
