@@ -469,14 +469,21 @@ static int jl_typemap_memory_visitor(jl_genericmemory_t *a, jl_typemap_visitor_f
 
 
 // calls fptr on each jl_typemap_entry_t in cache in sort order, until fptr returns false
+// (the list walks below root the entry they are at: a conversion may meanwhile have taken
+// a method table's list out of the typemap, see jl_method_convert_list_to_cache)
 static int jl_typemap_node_visitor(jl_typemap_entry_t *ml, jl_typemap_visitor_fptr fptr, void *closure) JL_CANSAFEPOINT
 {
+    int ret = 1;
+    JL_GC_PUSH1(&ml);
     while (ml != (void*)jl_nothing) {
-        if (!fptr(ml, closure))
-            return 0;
+        if (!fptr(ml, closure)) {
+            ret = 0;
+            break;
+        }
         ml = jl_atomic_load_relaxed(&ml->next);
     }
-    return 1;
+    JL_GC_POP();
+    return ret;
 }
 
 int jl_typemap_visitor(jl_typemap_t *cache, jl_typemap_visitor_fptr fptr, void *closure)
@@ -736,6 +743,8 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
     // mark this `register` because (for branch prediction)
     // that can be absolutely critical for speed
     register jl_typemap_intersection_visitor_fptr fptr = closure->fptr;
+    int ret = 1;
+    JL_GC_PUSH1(&ml);
     for (;  ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
         if (closure->max_valid < jl_atomic_load_relaxed(&ml->min_world))
             continue;
@@ -768,12 +777,16 @@ static int jl_typemap_intersection_node_visitor(jl_typemap_entry_t *ml, struct t
             // for intersect(A, B) even though A is a dispatch tuple and !(A <: B).
             // For dispatch purposes in such a case we know there's no match. This check
             // fixes issue #30394.
-            if (closure->issubty || !jl_is_dispatch_tupletype(closure->type))
-                if (!fptr(ml, closure))
-                    return 0;
+            if (closure->issubty || !jl_is_dispatch_tupletype(closure->type)) {
+                if (!fptr(ml, closure)) {
+                    ret = 0;
+                    break;
+                }
+            }
         }
     }
-    return 1;
+    JL_GC_POP();
+    return ret;
 }
 
 // if TypeVar tv is used covariantly, it cannot be Union{}
@@ -1163,6 +1176,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
     int isua = jl_is_unionall(types);
     size_t n = jl_nparams(unw);
     int typesisva = n == 0 ? 0 : jl_is_vararg(jl_tparam(unw, n-1));
+    JL_GC_PUSH1(&ml);
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
         if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
             continue;
@@ -1190,6 +1204,7 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
                     }
                 }
                 if (ismatch) {
+                    JL_GC_POP();
                     return ml;
                 }
             }
@@ -1197,12 +1212,14 @@ static jl_typemap_entry_t *jl_typemap_entry_assoc_by_type(
                 search->env = jl_emptysvec;
         }
     }
+    JL_GC_POP();
     return NULL;
 }
 
 static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
         jl_typemap_entry_t *ml, struct jl_typemap_assoc *search) JL_CANSAFEPOINT
 {
+    JL_GC_PUSH1(&ml);
     for (; ml != (void*)jl_nothing; ml = jl_atomic_load_relaxed(&ml->next)) {
         if (search->world < jl_atomic_load_relaxed(&ml->min_world) || search->world > jl_atomic_load_relaxed(&ml->max_world))
             continue;
@@ -1231,9 +1248,12 @@ static jl_typemap_entry_t *jl_typemap_entry_lookup_by_type(
                 }
             }
         }
-        if (jl_types_equal(types, (jl_value_t*)ml->sig))
+        if (jl_types_equal(types, (jl_value_t*)ml->sig)) {
+            JL_GC_POP();
             return ml;
+        }
     }
+    JL_GC_POP();
     return NULL;
 }
 
@@ -1596,18 +1616,49 @@ static void jl_typemap_memory_insert_(
         jl_typemap_t *map, _Atomic(jl_genericmemory_t*) *pcache, jl_value_t *key, jl_typemap_entry_t *newrec,
         jl_value_t *parent, int8_t tparam, int8_t offs, jl_value_t *doublesplit) JL_CANSAFEPOINT;
 
+static jl_typemap_entry_t *jl_typemap_entry_copy(jl_typemap_entry_t *ml) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    jl_typemap_entry_t *newrec =
+        (jl_typemap_entry_t*)jl_gc_alloc(ct->ptls, sizeof(jl_typemap_entry_t),
+                                         jl_typemap_entry_type);
+    newrec->sig = ml->sig;
+    newrec->func.value = ml->func.value;
+    newrec->guardsigs = ml->guardsigs;
+    jl_atomic_store_relaxed(&newrec->next, (jl_typemap_entry_t*)jl_nothing);
+    jl_atomic_store_relaxed(&newrec->min_world, jl_atomic_load_relaxed(&ml->min_world));
+    jl_atomic_store_relaxed(&newrec->max_world, jl_atomic_load_relaxed(&ml->max_world));
+    newrec->va = ml->va;
+    newrec->issimplesig = ml->issimplesig;
+    newrec->isleafsig = ml->isleafsig;
+    return newrec;
+}
+
+// Moving an entry into the level changes its `next`, so a walk of the list without the lock
+// meanwhile could stop early. A method table's definitions are copied instead, which leaves
+// the old list intact for such walks (ml_matches does them); this relies on nothing changing
+// a published definition except under world_counter_lock, which every insertion into a live
+// method table (so every conversion of its lists) also holds. Cache entries are still
+// moved in place, since other structures (call sites, the call cache) hold them by identity:
+// a lookup that misses one retries under the lock, and other lock-free walks of caches can
+// still be cut short as before.
 static jl_value_t *jl_method_convert_list_to_cache(
         jl_typemap_t *map, jl_typemap_entry_t *ml, int8_t tparam, int8_t offs, int8_t doublesplit) JL_CANSAFEPOINT
 {
     _Atomic(jl_genericmemory_t*) dblcache = (jl_genericmemory_t*)jl_an_empty_memory_any;
     jl_typemap_level_t *cache = doublesplit ? NULL : jl_new_typemap_level();
     jl_typemap_entry_t *next = NULL;
-    JL_GC_PUSH4(&cache, &dblcache, &next, &ml);
+    jl_typemap_entry_t *entry = NULL;
+    JL_GC_PUSH5(&cache, &dblcache, &next, &ml, &entry);
     while (ml != (void*)jl_nothing) {
         next = jl_atomic_load_relaxed(&ml->next);
-        jl_gc_write_atomic(ml, ml->next, jl_typemap_entry_t, (jl_typemap_entry_t*)jl_nothing, relaxed);
-        // n.b. this is being done concurrently with lookups!
-        // TODO: is it safe to be doing this concurrently with lookups?
+        if (jl_is_method(ml->func.value)) {
+            entry = jl_typemap_entry_copy(ml);
+        }
+        else {
+            entry = ml;
+            jl_gc_write_atomic(ml, ml->next, jl_typemap_entry_t, (jl_typemap_entry_t*)jl_nothing, relaxed);
+        }
         if (doublesplit) {
             jl_value_t *key = jl_unwrap_unionall((jl_value_t*)ml->sig);
             size_t len = jl_nparams(key);
@@ -1621,10 +1672,10 @@ static jl_value_t *jl_method_convert_list_to_cache(
                 assert(jl_is_some_Type(key));
                 key = jl_some_Type_T(key);
             }
-            jl_typemap_memory_insert_(map, &dblcache, key, ml, NULL, 0, offs, NULL);
+            jl_typemap_memory_insert_(map, &dblcache, key, entry, NULL, 0, offs, NULL);
         }
         else
-            jl_typemap_level_insert_(map, cache, ml, offs);
+            jl_typemap_level_insert_(map, cache, entry, offs);
         ml = next;
     }
     JL_GC_POP();

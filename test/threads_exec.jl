@@ -2023,3 +2023,42 @@ if threadpoolsize(:default) > 1
         @test (@atomic c.x) == 1
     end
 end
+
+# A lookup without the lock must see every method while another thread's insertion converts
+# the function's method list into a typemap level (more than MAX_METHLIST_COUNT = 6 entries).
+struct RelinkRaceArg{N} end
+function relink_race_misses(m::Module, rounds::Int)
+    sigs = Vector{Any}(undef, rounds)
+    worlds = zeros(UInt, rounds)
+    cur = Threads.Atomic{Int}(0)
+    stop = Threads.Atomic{Bool}(false)
+    misses = Threads.Atomic{Int}(0)
+    reader = spawn_pinned(other_default_tid()) do
+        while !stop[]
+            GC.safepoint()
+            r = cur[]
+            r == 0 && continue
+            ms = Base._methods_by_ftype(sigs[r], -1, worlds[r])
+            (ms isa Vector && !isempty(ms)) || Threads.atomic_add!(misses, 1)
+        end
+    end
+    for r in 1:rounds
+        f = Symbol(:relink_race_, r)
+        # looked up by the reader, and the last entry of the list once the others are added
+        Core.eval(m, :($f(::NamedTuple, ::Symbol) = 0))
+        for i in 1:6
+            Core.eval(m, :($f(::NamedTuple, ::$RelinkRaceArg{$i}) = $i))
+        end
+        sigs[r] = Tuple{typeof(Base.invokelatest(getglobal, m, f)), NamedTuple{(:a,),Tuple{Int}}, Symbol}
+        worlds[r] = Base.get_world_counter()
+        cur[] = r
+        # the 8th method converts the list
+        Core.eval(m, :($f(::NamedTuple, ::$RelinkRaceArg{7}) = 7))
+    end
+    stop[] = true
+    wait(reader)
+    return misses[]
+end
+if threadpoolsize(:default) > 1
+    @test relink_race_misses(Module(), 5000) == 0
+end
