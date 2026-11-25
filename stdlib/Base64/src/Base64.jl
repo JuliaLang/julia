@@ -10,7 +10,7 @@ streams.
 """
 module Base64
 
-using Base: require_one_based_indexing
+using Base: require_one_based_indexing, MutableDenseArrayType
 
 export
     Base64DecodePipe,
