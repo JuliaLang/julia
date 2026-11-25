@@ -6355,6 +6355,14 @@ else
     ENV["JULIA_NUM_PRECOMPILE_TASKS"] = original_num_precompile_tasks
 end
 
+# the native code of package images is mapped from their cache files, not copied
+if !haskey(ENV, "JULIA_NATIVE_IMAGE_COPY") && get(ENV, "ENABLE_JITPROFILING", "0") == "0"
+    let time = zeros(UInt64, 4), count = zeros(UInt64, 4)
+        ccall(:jl_native_image_stats, Cvoid, (Ptr{UInt64}, Ptr{UInt64}), time, count)
+        @test ccall(:jl_native_image_mapped, UInt64, ()) == count[1]
+    end
+end
+
 # Dumping native code with no output and no parameters frees it, which is what
 # packages that compile with their own pipeline do.
 let params = Ref(Base.CodegenParams())

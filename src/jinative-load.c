@@ -14,6 +14,7 @@
 
 #ifdef _OS_WINDOWS_
 #include <windows.h>
+#include <io.h>
 #else
 #include <sys/mman.h>
 #include <unistd.h>
@@ -455,11 +456,18 @@ static void native_write_perf_map(jl_native_image_t *img) JL_NOTSAFEPOINT
 
 static uint64_t native_time[4]; // map, imports, fixups, registration (ns)
 static uint64_t native_count[4]; // images, rebases, binds, bytes of text
+static uint64_t native_mapped; // images whose code is mapped from the file
 
 JL_DLLEXPORT void jl_native_image_stats(uint64_t *time, uint64_t *count) JL_NOTSAFEPOINT
 {
     memcpy(time, native_time, sizeof(native_time));
     memcpy(count, native_count, sizeof(native_count));
+}
+
+// The number of images whose code is mapped from the file and not a copy of it
+JL_DLLEXPORT uint64_t jl_native_image_mapped(void) JL_NOTSAFEPOINT
+{
+    return native_mapped;
 }
 
 // The file is as trusted as a shared library would be, but a truncated or damaged
@@ -534,6 +542,9 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     // `meta` is such that the offsets of the tables, which follow the segments in
     // the file, can be used as they are; `meta_mem` is where they really are
     char *base = NULL, *meta = NULL, *meta_mem = NULL;
+#ifdef _OS_WINDOWS_
+    char *view = NULL;
+#endif
     void **imports = NULL;
     size_t pagesz = jl_getpagesize(), text_end = 0, meta_size = 0;
     int perf = 0, copy = 0, mapped = 0, unresolved = 0;
@@ -579,15 +590,48 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     perf = native_env_flag("ENABLE_JITPROFILING", 0);
     copy = perf || getenv("JULIA_NATIVE_IMAGE_COPY") != NULL;
 #ifdef _OS_WINDOWS_
-    // TODO: map the code from the file (MapViewOfFile3 onto a placeholder), so
-    // that it is shared between processes. For now everything is a private copy.
-    (void)copy; (void)mapped;
-    base = (char*)VirtualAlloc(NULL, hdr.vm_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-    if (base == NULL || !native_read(&f, base, hdr.vm_size, off))
-        goto fail;
-    meta_mem = (char*)malloc(meta_size);
-    if (meta_mem == NULL || !native_read(&f, meta_mem, meta_size, off + hdr.vm_size))
-        goto fail;
+    // One copy-on-write view of the segments and the tables: the code is shared
+    // with every process that has the file mapped and is only read when it runs,
+    // and a page that is fixed up becomes a private copy. A view starts on a
+    // multiple of the allocation granularity in the file, which can be before
+    // the section.
+    if (!copy) {
+        SYSTEM_INFO si;
+        GetSystemInfo(&si);
+        size_t before = off % si.dwAllocationGranularity;
+        HANDLE hexec = ReOpenFile((HANDLE)_get_osfhandle(f.fd), GENERIC_READ | GENERIC_EXECUTE,
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, 0);
+        HANDLE hmap = hexec == INVALID_HANDLE_VALUE ? NULL :
+            CreateFileMappingW(hexec, NULL, PAGE_EXECUTE_WRITECOPY, 0, 0, NULL);
+        if (hmap != NULL) {
+            uint64_t voff = off - before;
+            view = (char*)MapViewOfFile(hmap, FILE_MAP_COPY | FILE_MAP_EXECUTE, (DWORD)(voff >> 32), (DWORD)voff,
+                                        before + hdr.codesig_off);
+            CloseHandle(hmap);
+        }
+        if (hexec != INVALID_HANDLE_VALUE)
+            CloseHandle(hexec);
+        if (view != NULL) {
+            DWORD old;
+            mapped = 1;
+            base = view + before;
+            meta_mem = base + hdr.vm_size;
+            // what is not the image needs no more access than this
+            if (before != 0)
+                VirtualProtect(view, before, PAGE_NOACCESS, &old);
+            if (meta_size != 0)
+                VirtualProtect(meta_mem, meta_size, PAGE_READONLY, &old);
+        }
+    }
+    if (!mapped) {
+        // e.g. a file that cannot be opened for execution: use a private copy
+        base = (char*)VirtualAlloc(NULL, hdr.vm_size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+        if (base == NULL || !native_read(&f, base, hdr.vm_size, off))
+            goto fail;
+        meta_mem = (char*)malloc(meta_size);
+        if (meta_mem == NULL || !native_read(&f, meta_mem, meta_size, off + hdr.vm_size))
+            goto fail;
+    }
 #else
     base = (char*)mmap(NULL, hdr.vm_size, PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (base == MAP_FAILED) {
@@ -702,6 +746,9 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
         if (!VirtualProtect(base, text_end, PAGE_EXECUTE_READ, &old) ||
             (hdr.data_off > text_end && !VirtualProtect(base + text_end, hdr.data_off - text_end, PAGE_READONLY, &old)))
             goto fail;
+        // the view is executable as a whole; the data does not have to be
+        if (mapped && hdr.vm_size > hdr.data_off)
+            VirtualProtect(base + hdr.data_off, hdr.vm_size - hdr.data_off, PAGE_WRITECOPY, &old);
         FlushInstructionCache(GetCurrentProcess(), base, text_end);
     }
 #else
@@ -761,6 +808,7 @@ jl_native_image_t *jl_native_image_load(const char *path, int fd, uint64_t off, 
     native_count[1] += hdr.nrebase;
     native_count[2] += hdr.nbind;
     native_count[3] += hdr.text_size;
+    native_mapped += mapped != 0;
     JL_UNLOCK_NOGC(&native_lock);
     ios_close(&f);
     if (native_env_flag("ENABLE_GDBLISTENER", gdb_default))
@@ -775,9 +823,14 @@ fail:
         jl_safe_printf("native image %s: %s\n", path, *err);
     free(imports);
 #ifdef _OS_WINDOWS_
-    free(meta_mem);
-    if (base != NULL)
-        VirtualFree(base, 0, MEM_RELEASE);
+    if (view != NULL) {
+        UnmapViewOfFile(view);
+    }
+    else {
+        free(meta_mem);
+        if (base != NULL)
+            VirtualFree(base, 0, MEM_RELEASE);
+    }
 #else
     if (meta_mem != NULL)
         munmap(meta_mem, meta_size);
