@@ -187,6 +187,12 @@ delimiter and a fractional second. Returns what `tryparsenext_core` returns for 
 or `nothing` when the text has another shape, such as a one-digit month, a signed year, or
 a missing field. The caller then reads it with `tryparsenext_core`, which also reports any
 error.
+
+It reads the same fields as `tryparsenext_core`, one and a half to two times as fast,
+which is why both exist. `tryparsenext_core` reads one token at a time and finds where each
+one ends while it runs, because a field can have any width that its format allows. Here
+every offset is a constant, so the digits are read without loops, and all of the checks
+are combined into one branch. Most text that programs write has this shape.
 """
 @generated function tryparsenext_fixed(bytes::AbstractVector{UInt8}, pos::Int, len::Int, df::DateFormat)
     directives = _directives(df)
@@ -457,7 +463,7 @@ end
     end
 end
 
-@inline function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
+function Base.parse(::Type{DateTime}, s::AbstractString, df::typeof(ISODateTimeFormat))
     # Read text with every field at full width at fixed offsets. Below 24 bytes it has at
     # most three fraction digits, which is all this method accepts.
     if s isa Union{String, SubString{String}} && ncodeunits(s) <= 23
@@ -467,8 +473,8 @@ end
     return parse_isodatetime(s)
 end
 
-# The rest of `parse(DateTime, s, ISODateTimeFormat)`, out of line so that only the fast
-# path is inlined into callers
+# The rest of `parse(DateTime, s, ISODateTimeFormat)`, in its own function so that the
+# fixed-offset reader before it compiles without it
 @noinline function parse_isodatetime(s::AbstractString)
     i, end_pos = firstindex(s), lastindex(s)
     i > end_pos && throw(ArgumentError("Cannot parse an empty string as a DateTime"))
@@ -559,10 +565,25 @@ end
     throw(ArgumentError("Invalid DateTime string"))
 end
 
-# The value of the parsed fields of a `T`, or a `ParseFailure`: `INVALID` where `validargs`
-# would return an error, or `OVERFLOW` for a `Timestamp` outside the range of its type.
-# These make the checks of `validargs` and the arithmetic of the constructors, without
-# building an error.
+"""
+    fromparts(T, fields...)
+
+The `T` that the parsed `fields` make, or a `ParseFailure`: `INVALID` for fields that
+`validargs` rejects, or `OVERFLOW` for a `Timestamp` outside the range of its type. When a
+field is not an `Int64`, as a token that a package defines can make, it returns `nothing`,
+and the caller uses the constructor.
+
+It repeats the checks of `validargs` and the arithmetic of the constructors because those
+do more than parsing needs: `validargs` builds an `ArgumentError` for each failure, and the
+constructors run `validargs` again before they build the value. Checking once, without an
+error, makes parsing about one and a half times as fast, and gives the `ParseFailure` that
+`Base.Parsers.parsevalue` returns. `validargs` reports a `Timestamp` out of range as it does
+an invalid field, so only this can tell `OVERFLOW` from `INVALID`. The testset "Fields
+parse as the constructors build them" checks that it accepts and builds what the
+constructors do.
+"""
+function fromparts end
+
 @inline function fromparts(::Type{Date}, y::Int64, m::Int64, d::Int64)
     0 < m < 13 && 0 < d <= daysinmonth(y, m) || return INVALID
     return Date(UTD(totaldays(y, m, d)))
@@ -634,13 +655,16 @@ the general reader then reads.
     fields === nothing && return nothing
     return fromparts(T, fields...)
 end
-@inline parsefixed(::Type{T}, str::Union{String, SubString{String}}, df::DateFormat) where {T<:Union{Date, DateTime, Time, Timestamp}} =
+parsefixed(::Type{T}, str::Union{String, SubString{String}}, df::DateFormat) where {T<:Union{Date, DateTime, Time, Timestamp}} =
     parsefixed(T, codeunits(str), ncodeunits(str), df)
 parsefixed(::Type, ::AbstractString, ::DateFormat) = nothing
 
-# `parse`, `tryparse`, and `parsevalue` inline the fixed-offset reader into callers, where
-# a constant format folds its checks, and call the general reader out of line
-@inline function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
+# `parse`, `tryparse` and `parsevalue` try the fixed-offset reader, then the general one.
+# The readers and their helpers are marked `@inline`, which makes parsing about a fifth
+# faster. Their code is compiled into these functions, once for each type and format, and
+# not into the code that calls them. The general reader is a separate function, because
+# compiled into the same function, it makes the fixed-offset reader up to a fifth slower.
+function Base.parse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     x = parsefixed(T, str, df)
     x isa T && return x
     return parse_general(T, str, df)
@@ -661,7 +685,7 @@ end
     return T(values...)::T
 end
 
-@inline function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
+function Base.tryparse(::Type{T}, str::AbstractString, df::DateFormat=default_format(T)) where T<:TimeType
     x = parsefixed(T, str, df)
     # The general reader reads the same fields from text that the fixed offsets read
     x === nothing || return x isa ParseFailure ? nothing : x
@@ -711,7 +735,7 @@ Base.Parsers.INVALID
 !!! compat "Julia 1.15"
     These methods require Julia 1.15 or later.
 """
-@inline function Base.Parsers.parsevalue(::Type{T}, bytes::AbstractVector{UInt8};
+function Base.Parsers.parsevalue(::Type{T}, bytes::AbstractVector{UInt8};
                                  dateformat::DateFormat = default_format(T)) where {T<:Union{Date, DateTime, Time, Timestamp}}
     require_one_based_indexing(bytes)
     len = length(bytes)
