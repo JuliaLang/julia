@@ -10,7 +10,21 @@ function core_lowering_hook(mod::Module, @nospecialize(code), world::UInt,
         _core_lowering_hook, mod, code, world, warn, loc)
 end
 
-function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc)
+"""
+    portable_lowering_hook(mod, code, world, warn, loc)
+
+As `core_lowering_hook`, but produces output that a runtime can evaluate
+without this JuliaLowering (or Base) loaded, as a frontend serving another
+runtime must (see `DesugaringContext`).
+"""
+function portable_lowering_hook(mod::Module, @nospecialize(code), world::UInt,
+                                warn::Bool, loc::LineNumberNode)
+    return __script_exit_invoke_in_lowering_world(
+        _core_lowering_hook, mod, code, world, warn, loc, true)
+end
+
+function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc,
+                             portable::Bool=false)
     if !(code isa SyntaxTree || code isa Expr)
         return Core.svec(code)
     end
@@ -22,7 +36,7 @@ function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc)
         end
         st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
-        ctx2, st2 = expand_forms_2(st1, world)
+        ctx2, st2 = expand_forms_2(st1, world, portable)
         ctx3, st3 = resolve_scopes(ctx2, st2, warn, false)
         ctx4, st4 = convert_closures(ctx3, st3)
         ctx5, st5 = linearize_ir(ctx4, st4)
