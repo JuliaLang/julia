@@ -875,6 +875,8 @@ end
 @test complex(2,2)^2 === complex(0,8)
 let p = -2
     @test_throws DomainError complex(2,2)^p
+    @test_throws DomainError complex(0xff,0x00)^p
+    @test_throws DomainError complex(0xff,0x00)^(p+1)
 end
 @test complex(2,2)^(-2) === complex(2.0,2.0)^(-2) === complex(0.0, -0.125)
 

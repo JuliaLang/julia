@@ -775,7 +775,7 @@ function string(n::BigInt; base::Integer = 10, pad::Integer = 1)
 end
 
 function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:Integer}
-    if base ≥ 2
+    if base ≥ 2 && (T <: Signed || !isnegative(n))
         if base ≤ 62
             # fast path using mpz_get_str via string(n; base)
             s = codeunits(string(n; base))
@@ -790,7 +790,7 @@ function digits!(a::AbstractVector{T}, n::BigInt; base::Integer = 10) where {T<:
             lasti = lastindex(a)
             while i < lasti; a[i+=1] = zero(T); end
             return isnegative(n) ? map!(-,a,a) : a
-        elseif a isa StridedVector{<:Base.BitInteger} && stride(a,1) == 1 && ispow2(base) && base-1 ≤ typemax(T)
+        elseif a isa Vector{<:Base.BitInteger} && ispow2(base) && base-1 ≤ typemax(T)
             # fast path using mpz_export
             origlen = length(a)
             _, writelen = MPZ.export!(a, n; nails = 8sizeof(T) - trailing_zeros(base))

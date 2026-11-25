@@ -267,6 +267,10 @@ end
     @test_throws DivideError checked_mod(typemax(T), T(0))
     @test checked_cld(typemax(T), T(1)) === typemax(T)
     @test_throws DivideError checked_cld(typemax(T), T(0))
+
+    @test checked_pow(T(1), -1) === T(1)
+    @test_throws DomainError checked_pow(typemax(T), -1)
+    @test_throws DomainError checked_pow(typemax(T), -2)
 end
 
 @testset "Boolean" begin
