@@ -2291,6 +2291,22 @@ static void jl_apply_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFE
     }
 }
 
+// TODO: remove the de Bruijn multiply once we only target RISC-V variants with Zbb (RVA23).
+static inline int jl_lowest_bit(uint64_t x) JL_NOTSAFEPOINT
+{
+#if defined(__riscv) && __riscv_xlen == 64 && !defined(__riscv_zbb)
+    static const uint8_t debruijn[64] = {
+         0,  1,  2, 53,  3,  7, 54, 27,  4, 38, 41,  8, 34, 55, 48, 28,
+        62,  5, 39, 46, 44, 42, 22,  9, 24, 35, 59, 56, 49, 18, 29, 11,
+        63, 52,  6, 26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+        51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12,
+    };
+    return debruijn[((x & -x) * 0x022fdd63cc95386dULL) >> 58];
+#else
+    return __builtin_ctzll(x);
+#endif
+}
+
 // NOINLINE to avoid some bad decisions by LLVM (very hot loops).
 static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t slide, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
@@ -2301,7 +2317,7 @@ static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t slide, const cha
         uintptr_t *words = heap;
         for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
             for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1)
-                words[__builtin_ctzll(bits)] += slide;
+                words[jl_lowest_bit(bits)] += slide;
         }
         return;
     }
@@ -2318,7 +2334,7 @@ static NOINLINE void jl_apply_binds(jl_loader_state *s, uintptr_t *heap, const c
         uintptr_t *words = heap;
         for (const char *end = sec + size; sec != end; sec += sizeof(uint64_t), words += 64) {
             for (uint64_t bits = jl_load_unaligned_i64(sec); bits; bits &= bits - 1)
-                jl_apply_bind(s, &words[__builtin_ctzll(bits)]);
+                jl_apply_bind(s, &words[jl_lowest_bit(bits)]);
         }
         return;
     }
@@ -2998,7 +3014,7 @@ static void write_relocs_section(ios_t *f, size_t payload, jl_image_section_t *o
     int fits = 1;
     for (size_t i = 0; i < nwords; i++) {
         for (uint64_t bits = jl_load_unaligned_i64(bitmap->buf + i * sizeof(uint64_t)); bits; bits &= bits - 1) {
-            size_t word = 64 * i + __builtin_ctzll(bits), gap = word - prev;
+            size_t word = 64 * i + jl_lowest_bit(bits), gap = word - prev;
             prev = word;
             fits &= gap <= UINT32_MAX;
             if (0 < gap && gap < 256) {
