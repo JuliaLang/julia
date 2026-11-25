@@ -208,7 +208,10 @@ JL_DLLEXPORT_FRONTEND void jl_frontend_init_impl(void) JL_NOTSAFEPOINT
     if (flisp_lock_ready)
         return;
     flisp_lock_ready = 1;
-    libsupport_init();
+    // This library has its own copy of libsupport, whose standard streams
+    // flisp uses. The process-wide setup in `libsupport_init` (locale, file
+    // descriptor limit) was already done by the runtime.
+    ios_init_stdstreams();
     uv_mutex_init(&flisp_lock);
 }
 JL_DLLEXPORT_FRONTEND void jl_lisp_prompt_impl(void) JL_CANSAFEPOINT

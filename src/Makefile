@@ -256,6 +256,10 @@ RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/support/l
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 # NB: FE needs uv_mutex_* symbols, but we expect to export them from libjulia-internal
 FE_LIBS := $(OSLIBS) $(LIBTRACYCLIENT) $(LIBITTAPI)
+ifeq (${USE_THIRD_PARTY_GC},mmtk)
+# the inline write barrier calls into MMTk
+FE_LIBS += $(MMTK_LIB)
+endif
 FE_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp-debug.a) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) $(FE_LIBS) -ljulia-debug -ljulia-internal-debug
 FE_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) $(FE_LIBS) -ljulia -ljulia-internal
 
