@@ -6,8 +6,8 @@ cols(io) = displaysize(io)[2]
 
 function term(io::IO, content::Vector, cols)
     isempty(content) && return
-    for md in content[1:end-1]
-        term(io, md, cols)
+    for i in firstindex(content):lastindex(content)-1
+        term(io, content[i], cols)
         print(io, '\n', '\n')
     end
     term(io, content[end], cols)
@@ -105,8 +105,8 @@ function term(io::IO, md::List, columns, depth::Int = 1)
         print(io, ' '^margin, styled"{markdown_list:$list_marker}")
         buf = AnnotatedIOBuffer()
         if point isa Vector && !isempty(point)
-            for (i, elt) in enumerate(point[1:end-1])
-                dterm(buf, elt, columns, depth + 1)
+            for i in firstindex(point):lastindex(point)-1
+                dterm(buf, point[i], columns, depth + 1)
                 println(buf)
                 (!(point[i+1] isa List) || point[i+1].loose) && println(buf)
             end
