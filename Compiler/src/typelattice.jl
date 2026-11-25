@@ -755,7 +755,7 @@ Checks for the common lattice elements first, so that the call avoids a dynamic 
 in the common case.
 """
 function widenconst_split(@nospecialize x)
-    isa(x, AnyType) && return x
+    isa(x, Type) && return x # `Type == AnyType`, and only `isa(x, Type)` is a tag test
     isa(x, Const) && return widenconst(x)
     isa(x, PartialStruct) && return widenconst(x)
     isa(x, AnyConditional) && return Bool
