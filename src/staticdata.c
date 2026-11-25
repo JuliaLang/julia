@@ -2264,8 +2264,9 @@ static size_t waiting_next(jl_loader_state *s, size_t i) JL_NOTSAFEPOINT
     return (size_t)s->waiting.items[2 * i - 1];
 }
 
-// Finalize the pending import `idx` to `v`, and rewrite the words bound to it, keeping the bits
-// that were added to its value (the low bits of the bind, or the GC bits of a type tag)
+// Called when we have resolved the final value of the import with index `idx`
+// to `v`.  Rewrites all of the bind relocations that were waiting for the
+// import to be resolved.
 static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_NOTSAFEPOINT
 {
     uintptr_t old = s->imports_resolved[idx];
@@ -2281,8 +2282,6 @@ static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_N
     }
 }
 
-// Replace each of the `n` relocs at `p` by its value: 0 stays NULL, a bind is applied, and
-// anything else is a slide
 static void jl_apply_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFEPOINT
 {
     for (size_t i = 0; i < n; i++) {
@@ -2293,9 +2292,7 @@ static void jl_apply_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFE
     }
 }
 
-// jl_apply_slides and jl_apply_binds walk the two forms of a section in separate loops rather than
-// with one iterator, whose test of the form for every word compilers do not hoist out of the
-// loop.  NOINLINE to avoid some bad decisions by LLVM (very hot loops).
+// NOINLINE to avoid some bad decisions by LLVM (very hot loops).
 static NOINLINE void jl_apply_slides(uintptr_t *heap, uintptr_t slide, const char *sec, size_t size, size_t nwords) JL_NOTSAFEPOINT
 {
     if (slide == 0)
