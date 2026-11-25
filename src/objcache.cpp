@@ -116,13 +116,38 @@ static std::optional<std::string> getCachePath() JL_CANSAFEPOINT
         .str();
 }
 
+// Errors that mean the database is damaged, which MDB_NOSYNC allows after a system
+// crash. MDB_BAD_TXN is one: mdb_cursor_init discards the error from reading a named
+// database's root, and the next operation only sees the failed transaction.
+static bool isFatalMDB(int Err) JL_NOTSAFEPOINT
+{
+    return Err == MDB_CORRUPTED || Err == MDB_PAGE_NOTFOUND || Err == MDB_PANIC ||
+           Err == MDB_INVALID || Err == MDB_PROBLEM || Err == MDB_BAD_TXN;
+}
+
+// The first fatal LMDB error, which disables the cache for the rest of the process.
+static std::atomic<int> Damaged = 0;
+// LMDB frees its copy when mdb_env_open fails. Never destroyed, as the writer thread
+// can outlive static destructors.
+static std::string &DBPath = *new std::string;
+
 #define checkMDB(Err) (checkMDB_(Err, __LINE__))
 
 static int checkMDB_(int Err, int Line) JL_NOTSAFEPOINT
 {
     if (Err == 0)
         return Err;
-    jl_safe_printf("objcache error (%d): %s\n", Line, mdb_strerror(Err));
+    if (!isFatalMDB(Err)) {
+        jl_safe_printf("objcache error (%d): %s\n", Line, mdb_strerror(Err));
+        return Err;
+    }
+    // Other processes may still have the database open, so leave removal to the user.
+    int Expected = 0;
+    if (Damaged.compare_exchange_strong(Expected, Err, memory_order_relaxed))
+        jl_safe_printf("objcache: the database in %s appears to be corrupted (for example "
+                       "by a system crash), so the cache is disabled; if this message "
+                       "persists, remove that directory (%s)\n",
+                       DBPath.c_str(), mdb_strerror(Err));
     return Err;
 }
 
@@ -211,7 +236,8 @@ void ObjCache::initDB()
         goto done;
     }
 
-    llvm::sys::fs::create_directories(*CachePath);
+    DBPath = std::move(*CachePath);
+    llvm::sys::fs::create_directories(DBPath);
     for (int Attempt = 0;; Attempt++) {
         if (checkMDB(mdb_env_create(&Env))) {
             Env = nullptr;
@@ -220,7 +246,7 @@ void ObjCache::initDB()
         checkMDB(mdb_env_set_maxreaders(Env, 510));
         checkMDB(mdb_env_set_maxdbs(Env, 128));
         checkMDB(mdb_env_set_mapsize(Env, OBJCACHE_CAPACITY * 2));
-        OpenErr = mdb_env_open(Env, CachePath->c_str(), MDB_NOSYNC | MDB_NOTLS, 0640);
+        OpenErr = mdb_env_open(Env, DBPath.c_str(), MDB_NOSYNC | MDB_NOTLS, 0640);
         // the last other user may have removed the semaphores as it exited; a retry makes new ones
         if (Attempt == 0 && (OpenErr == EINVAL || OpenErr == EIDRM)) {
             mdb_env_close(Env);
@@ -319,6 +345,18 @@ ObjCache::~ObjCache()
     mdb_dbi_close(Env, ObjCacheDbi);
     mdb_dbi_close(Env, ObjMetaDbi);
     mdb_env_close(Env);
+}
+
+bool ObjCache::enqueue(const Hash &H, std::unique_ptr<llvm::MemoryBuffer> Obj) JL_NOTSAFEPOINT
+{
+    {
+        std::unique_lock<std::mutex> Lock{Mutex};
+        if (Damaged.load(memory_order_relaxed))
+            return false;
+        ObjQueue.push_back({H, std::move(Obj)});
+    }
+    QueueCond.notify_one();
+    return true;
 }
 
 MDBTxn ObjCache::beginTxn(unsigned Flags) JL_NOTSAFEPOINT
@@ -425,7 +463,7 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
     if (!Initialized.load(memory_order_acquire))
         initDB();
 
-    if (!Env)
+    if (!isEnabled())
         return doCompile();
 
     size_t Weight = 0;
@@ -469,21 +507,12 @@ std::unique_ptr<llvm::MemoryBuffer> ObjCache::get(llvm::Module &M, CompileFn Com
                     Obj->getBufferSize(), Weight);
         }
 
-        auto ObjCopy = llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer());
-        {
-            std::unique_lock<std::mutex> Lock{Mutex};
-            ObjQueue.push_back({Hash, std::move(ObjCopy)});
-        }
-        QueueCond.notify_one();
+        enqueue(Hash, llvm::MemoryBuffer::getMemBufferCopy(Obj->getBuffer()));
 
         return Obj;
     }
 
-    {
-        std::unique_lock<std::mutex> Lock{Mutex};
-        ObjQueue.push_back({Hash, nullptr});
-    }
-    QueueCond.notify_one();
+    enqueue(Hash, nullptr);
 
     auto Buf = std::make_unique<MDBMemoryBuffer>(
         std::move(Txn), llvm::StringRef{(const char *)Data.mv_data, Data.mv_size});
@@ -521,7 +550,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
-    if (!Env)
+    if (!isEnabled())
         return jl_nothing;
 
     auto Hash = hashKVKey(Ns, Key, KeyLen);
@@ -556,11 +585,7 @@ jl_value_t *ObjCache::kvGet(const char *Ns, const uint8_t *Key,
     NRead.fetch_add(jl_array_len(Ret), memory_order_relaxed);
 
     // Queue an atime refresh for LRU bookkeeping.
-    {
-        std::unique_lock<std::mutex> Lock{Mutex};
-        ObjQueue.push_back({Hash, nullptr});
-    }
-    QueueCond.notify_one();
+    enqueue(Hash, nullptr);
 
     return (jl_value_t *)Ret;
 }
@@ -570,36 +595,33 @@ int ObjCache::kvPut(const char *Ns, const uint8_t *Key, size_t KeyLen,
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
-    if (!Env)
+    if (!isEnabled())
         return 0;
 
     auto Hash = hashKVKey(Ns, Key, KeyLen);
     auto Buf = llvm::MemoryBuffer::getMemBufferCopy(
         llvm::StringRef((const char *)Val, ValLen));
-    {
-        std::unique_lock<std::mutex> Lock{Mutex};
-        ObjQueue.push_back({Hash, std::move(Buf)});
-    }
-    QueueCond.notify_one();
-    return 1;
+    return enqueue(Hash, std::move(Buf));
 }
 
 int ObjCache::kvEnabled() JL_CANSAFEPOINT_ENTER_LEAVE
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
-    return Env != nullptr;
+    return isEnabled();
 }
 
 bool ObjCache::isEnabled() const
 {
-    return Env;
+    return Env && !Damaged.load(memory_order_relaxed);
 }
 
 const char *ObjCache::disabledNotice()
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
+    if (Damaged.load(memory_order_relaxed))
+        return "its database appears to be corrupted";
     return DisabledNotice;
 }
 
@@ -607,7 +629,7 @@ int64_t ObjCache::prune(int64_t Cutoff)
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
-    if (!Env)
+    if (!isEnabled())
         return 0;
 
     // Access times are only refreshed when they are older than the granularity,
@@ -685,7 +707,7 @@ std::string ObjCache::compact(const char *Dir)
 {
     if (!Initialized.load(memory_order_acquire))
         initDB();
-    if (!Env)
+    if (!isEnabled())
         return "the native code cache is disabled";
     if (std::error_code EC = llvm::sys::fs::create_directories(Dir))
         return EC.message();
@@ -696,8 +718,11 @@ std::string ObjCache::compact(const char *Dir)
     std::shared_lock<std::shared_mutex> TxnGuard{TxnLock};
     if (LocksReleased)
         return "the native code cache is shutting down";
-    if (int Err = mdb_env_copy2(Env, Dir, MDB_CP_COMPACT))
+    if (int Err = mdb_env_copy2(Env, Dir, MDB_CP_COMPACT)) {
+        if (isFatalMDB(Err))
+            checkMDB(Err);
         return mdb_strerror(Err);
+    }
     return {};
 }
 
@@ -773,6 +798,10 @@ void ObjCache::writerThread()
             });
             if (Exiting.load(memory_order_relaxed))
                 return;
+            if (Damaged.load(memory_order_relaxed)) {
+                ObjQueue.clear();
+                return;
+            }
             std::swap(LocalQueue, ObjQueue);
         }
 
@@ -1061,8 +1090,9 @@ bool ObjCache::maybeEvictLRU(MDBTxn &Txn, size_t RoomFor)
 
 size_t ObjCache::dbiSize(MDBTxn &Txn, MDB_dbi Dbi)
 {
-    MDB_stat Stat;
-    mdb_stat(Txn.Txn, Dbi, &Stat);
+    // zero on an error, so that nothing is evicted; the next write fails as well
+    MDB_stat Stat{};
+    checkMDB(mdb_stat(Txn.Txn, Dbi, &Stat));
     return (Stat.ms_leaf_pages + Stat.ms_branch_pages + Stat.ms_overflow_pages) *
            Stat.ms_psize;
 }
