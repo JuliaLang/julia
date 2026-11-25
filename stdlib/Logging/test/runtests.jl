@@ -197,6 +197,14 @@ end
         ┌ PREFIX xxxx
         └             SUFFIX
         """
+        @test genmsg("界", width=200, right_justify=20) ==
+        """
+        [ PREFIX 界   SUFFIX
+        """
+        @test genmsg("e\u0301", width=200, right_justify=20) ==
+        """
+        [ PREFIX e\u0301    SUFFIX
+        """
     end
 
     # Keywords

@@ -78,12 +78,25 @@ using Random
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), (1, "nonalphanumeric!"))
 
 @test_throws ArgumentError VersionNumber(4, 3, 2, (), ("", 1))
+@test_throws ArgumentError VersionNumber(4, 3, 2, ("a\n",), ())
+@test_throws ArgumentError VersionNumber(4, 3, 2, (), ("a\n",))
+@test_throws ArgumentError VersionNumber(4, 3, 2, ("\u212a",), ())
+@test_throws ArgumentError VersionNumber(4, 3, 2, (), ("\u017f",))
 
 # parse()/tryparse()
 @test parse(VersionNumber, "1.2.3") == v"1.2.3"
 @test_throws ArgumentError parse(VersionNumber, "not a version")
 @test tryparse(VersionNumber, "3.2.1") == v"3.2.1"
 @test tryparse(VersionNumber, "not a version") === nothing
+@test tryparse(VersionNumber, "1.2.3-a\n") === nothing
+@test tryparse(VersionNumber, "1.2.3-\u212a") === nothing
+@test tryparse(VersionNumber, "١.2.3") === nothing
+@test tryparse(VersionNumber, "V1.2.3") == v"1.2.3"
+@test tryparse(VersionNumber, "99999999999.2.3") === nothing
+@test tryparse(VersionNumber, "1.99999999999.3") === nothing
+@test tryparse(VersionNumber, "1.2.3-99999999999999999999") === nothing
+@test tryparse(VersionNumber, "1.2.3+99999999999999999999") === nothing
+@test_throws ArgumentError parse(VersionNumber, "99999999999.2.3")
 
 # show
 io = IOBuffer()
