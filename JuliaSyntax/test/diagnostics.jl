@@ -83,6 +83,8 @@ end
     @test diagnostic("(x, y \nz") == Diagnostic(6, 5, :error, "Expected `)` or `,`")
     @test diagnostic("function f(x, y \nz end") == Diagnostic(16, 15, :error, "Expected `)` or `,`")
 
+    @test diagnostic("a .:= b") ==
+        Diagnostic(1, 7, :error, "invalid dotted operator `.:=`")
     @test diagnostic("sin. (1)") ==
         Diagnostic(5, 5, :error, "whitespace is not allowed here")
     @test diagnostic("x [i]") ==

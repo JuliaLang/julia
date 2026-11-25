@@ -66,6 +66,7 @@ tests = [
         "a .= b"      =>  "(.= a b)"
         "a += b"      =>  "(op= a + b)"
         "a .+= b"     =>  "(.op= a + b)"
+        "a .:= b"     =>  "(error (:= a b))"
         with_version(v"1.14", "a +%= b" => "(op= a +% b)")
         with_version(v"1.14", "a -%= b" => "(op= a -% b)")
         with_version(v"1.14", "a *%= b" => "(op= a *% b)")

@@ -640,9 +640,15 @@ function parse_assignment_with_initial_ex(ps::ParseState, mark, down::T) where {
         # Syntax Edition TODO: We'd like to call `down` here when
         # is_short_form_func is true, to prevent `f() = 1 = 2` from parsing.
         parse_assignment(ps, down)
-        emit(ps, mark,
-             is_short_form_func ? K"function" : (isdot ? dotted(k) : k),
-             is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
+        if isdot && !(k in KSet"= op=")
+            # a .:= b  ==>  (error (:= a b))
+            emit(ps, mark, k, flags(t))
+            emit(ps, mark, K"error", error="invalid dotted operator `.$(untokenize(k))`")
+        else
+            emit(ps, mark,
+                 is_short_form_func ? K"function" : (isdot ? dotted(k) : k),
+                 is_short_form_func ? SHORT_FORM_FUNCTION_FLAG : flags(t))
+        end
     end
 end
 
