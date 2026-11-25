@@ -1108,7 +1108,7 @@ cleanup:
 }
 
 jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED = NULL;
-jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED = NULL;
+jl_value_t *jl_collect_and_infer_func JL_GLOBALLY_ROOTED = NULL;
 JL_DLLEXPORT size_t jl_typeinf_world = 1;
 
 // Force Compiler (and staticdata serialization) not to throw away Julia IR,
@@ -1176,9 +1176,57 @@ JL_DLLEXPORT void jl_set_typeinf_func(jl_value_t *f) JL_CANSAFEPOINT
     jl_typeinf_world = jl_get_tls_world_age();
 }
 
-JL_DLLEXPORT void jl_set_compile_and_emit_func(jl_value_t *f)
+JL_DLLEXPORT void jl_set_collect_and_infer_func(jl_value_t *f)
 {
-    jl_compile_and_emit_func = (jl_value_t*)f;
+    jl_collect_and_infer_func = (jl_value_t*)f;
+}
+
+// Select and infer the code to store in an output image.
+// Returns svec(codeinfos, ci_order): the interleaved CodeInstance/CodeInfo list
+// to compile, and the ordered CodeInstances for the image's method caches.
+jl_value_t *jl_collect_and_infer_code(int trim, int external_linkage, size_t world,
+                                      jl_array_t *mod_array, jl_array_t *worklist, int all,
+                                      jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
+{
+    JL_TIMING(INFERENCE, INFERENCE);
+    jl_task_t *ct = jl_current_task;
+    if (!jl_collect_and_infer_func)
+        jl_error("inference not available for generating compiled output");
+    jl_value_t **fargs;
+    JL_GC_PUSHARGS(fargs, 9);
+#ifdef _P64
+    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
+#else
+    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
+#endif
+    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
+    fargs[0] = jl_collect_and_infer_func;
+    fargs[1] = (jl_value_t*)worlds;
+    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
+    int compiler_world = 1;
+    if (trim || jl_array_data(worlds, size_t)[0] == 0 || jl_array_data(worlds, size_t)[0] == world || external_linkage)
+        compiler_world = 0;
+    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
+    worlds->dimsize[0] = 1 + compiler_world;
+    fargs[2] = jl_box_uint8(trim);
+    fargs[3] = jl_box_bool(external_linkage);
+    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing;
+    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing;
+    fargs[6] = jl_box_bool(all);
+    fargs[7] = (jl_value_t*)module_init_order;
+    fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing;
+    uint64_t start = jl_typeinf_timing_begin();
+    size_t last_age = ct->world_age;
+    ct->world_age = jl_typeinf_world;
+    jl_value_t *result = jl_apply(fargs, 9);
+    fargs[0] = result;
+    ct->world_age = last_age;
+    jl_typeinf_timing_end(start, 0);
+    assert(jl_is_svec(result) && jl_svec_len(result) == 2);
+    JL_TYPECHK(jl_collect_and_infer_code, array_any, jl_svecref(result, 0));
+    JL_TYPECHK(jl_collect_and_infer_code, array_any, jl_svecref(result, 1));
+    JL_GC_POP();
+    return result;
 }
 
 static int very_general_type(jl_value_t *t) JL_CANSAFEPOINT

@@ -3015,6 +3015,53 @@ precompile_test_harness("Invalidation through a cached recursion cycle") do load
     end
 end
 
+# Caches written without native code keep the same inferred code as those with it (#63752)
+precompile_test_harness("inferred code without pkgimages") do load_path
+    write(joinpath(load_path, "InferredCache63752.jl"),
+        """
+        module InferredCache63752
+        struct T; x::Int; end
+        Base.:+(a::T, b::T) = T(a.x + b.x)
+        @noinline own(x) = sum(abs2, [x, x + 1])
+        # runtime-dispatched call into Base
+        findT(x, list) = findfirst(==(Base.inferencebarrier(x)), Base.inferencebarrier(list))
+        findT(T(2), [T(1), T(2)])
+        # explicit directives for an external method and an own method
+        precompile(sum, (Vector{T},))
+        precompile(own, (Int,))
+        end
+        """)
+    testcode = """
+        insert!(LOAD_PATH, 1, $(repr(load_path)))
+        insert!(DEPOT_PATH, 1, $(repr(load_path)))
+        using InferredCache63752
+        const T = InferredCache63752.T
+        function usable(ci)
+            ci.max_world == typemax(UInt) || return false
+            ci.invoke != C_NULL && return true
+            inferred = @atomic :monotonic ci.inferred
+            return inferred isa String || inferred isa Core.CodeInfo
+        end
+        function cached(f, A)
+            for m in methods(f), mi in Base.specializations(m)
+                A in mi.specTypes.parameters || continue
+                isdefined(mi, :cache) || continue
+                ci = mi.cache
+                while true
+                    usable(ci) && return true
+                    isdefined(ci, :next) || break
+                    ci = ci.next
+                end
+            end
+            return false
+        end
+        (cached(findfirst, Vector{T}), cached(sum, Vector{T}), cached(InferredCache63752.own, Int))
+    """
+    for pkgimages in ("yes", "no")
+        @test readchomp(`$(Base.julia_cmd()) --startup-file=no --pkgimages=$pkgimages -E $(testcode)`) == "(true, true, true)"
+    end
+end
+
 precompile_test_harness("llvmcall validation") do load_path
     write(joinpath(load_path, "LLVMCall.jl"),
         """

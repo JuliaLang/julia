@@ -349,8 +349,8 @@ function enqueue_specialization!(all::Bool, worklist, mi::MethodInstance)
     return true
 end
 
-# Main unified compilation and emission function
-function compile_and_emit_native(worlds::Vector{UInt},
+# Collect and infer the code to store in an output image (see jl_collect_and_infer_code)
+function collect_and_infer_code(worlds::Vector{UInt},
                                  trim_mode::UInt8,
                                  external_linkage::Bool,
                                  newmodules, # Vector{Module} or Nothing

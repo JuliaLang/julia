@@ -637,6 +637,9 @@ end
 
 # A cache without native code needs the source of every compileable signature, or
 # loading it means inferring them all again. Caches with native code drop it on save.
+# FIXME: this and `precompile_keep_ir` are two rules for the same thing, keeping source
+# until the code for an output image is collected. `precompile_keep_ir` only applies
+# to a package image with native code, and keeps the source uncompressed.
 keep_source_for_output(mi::MethodInstance) =
     ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
 
@@ -2420,7 +2423,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # (see jl_rewrite_mi_caches in staticdata.c).
     #
     # First the compiled entries, in compilation order: every entry paired with a
-    # CodeInfo in `codeinfos` is inferred and about to be compiled, so it lands in
+    # CodeInfo in `codeinfos` is inferred and selected for compilation, so it lands in
     # the single invoke+inferred group that jl_mi_cache_insert (gf.c) keeps at the
     # front, and the compilation order already lists higher-`max_world` entries
     # first (worlds are processed newest-first).

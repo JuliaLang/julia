@@ -7,8 +7,7 @@
 
 function activate_codegen!()
     ccall(:jl_set_typeinf_func, Cvoid, (Any,), typeinf_ext_toplevel)
-    # Register the new unified compile and emit function
-    ccall(:jl_set_compile_and_emit_func, Cvoid, (Any,), compile_and_emit_native)
+    ccall(:jl_set_collect_and_infer_func, Cvoid, (Any,), collect_and_infer_code)
     Core.eval(Compiler, quote
         Core.OptimizedGenerics.CompilerPlugins.typeinf(::Nothing, mi::MethodInstance, source_mode::UInt8) =
             Base.invoke_in_world(unsafe_load(cglobal(:jl_typeinf_world, UInt)), typeinf_ext_toplevel, mi, Base.tls_world_age(), source_mode, Compiler.TRIM_NO)

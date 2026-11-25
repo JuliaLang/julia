@@ -172,7 +172,7 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
 #define INSERT_TAG(sym) tags[i++] = (jl_value_t**)&(sym)
     INSERT_TAG(jl_method_table);
     INSERT_TAG(jl_typeinf_func);
-    INSERT_TAG(jl_compile_and_emit_func);
+    INSERT_TAG(jl_collect_and_infer_func);
     INSERT_TAG(jl_libdl_dlopen_func);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
@@ -355,6 +355,7 @@ JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTS
 static htable_t fptr_to_id;
 
 void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching data from LLVM
+static jl_array_t *image_ci_order; // ordered CodeInstances for the image's method caches, or NULL to save the caches as they are
 
 // table of struct field addresses to rewrite during saving
 static htable_t object_replace;
@@ -639,7 +640,7 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_CANSA
 
 // Rewrite the `cache` field of each MethodInstance (and the `next` chain of the
 // CodeInstances it points to) so the image stores exactly the ordered list of
-// CodeInstances `cis` that codegen produced, converted to a linked list via the
+// CodeInstances `cis` collected for the image, converted to a linked list via the
 // `next` field, instead of whatever the live runtime cache happened to contain.
 // CodeInstances are grouped by their owning MethodInstance, preserving the order
 // in which they appear in `cis`. These changes are recorded through the normal
@@ -861,7 +862,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // chosen ordering for those MethodInstances. Any MethodInstance whose
         // cache was not rewritten gets an empty cache here, rather than leaking
         // whatever the live runtime cache happened to contain. Builtin functions
-        // are an exception: their cache is not part of the codegen ordering and
+        // are an exception: their cache is not part of the collected ordering and
         // is not repopulated at load, so keep it. Builtin-like functions are
         //  recognized by their method having neither source nor a generator
         // (cf. the jl_is_builtinfunc computation).
@@ -869,7 +870,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         int is_builtin = jl_is_method(midef) &&
             ((jl_method_t*)midef)->source == NULL &&
             ((jl_method_t*)midef)->generator == NULL;
-        if (native_functions && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+        if (image_ci_order && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
             record_field_change((jl_value_t*)mi, (jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         // pruned once queueing is done
@@ -3318,17 +3319,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
 
-    if (native_functions) {
+    if (image_ci_order) {
         // Rewrite each MethodInstance's cache to the ordered list of
-        // CodeInstances codegen emitted for this image (see jl_rewrite_mi_caches).
-        size_t num_ci_order = 0;
-        jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, NULL);
-        if (num_ci_order) {
-            jl_code_instance_t **ci_order = (jl_code_instance_t**)malloc_s(num_ci_order * sizeof(jl_code_instance_t*));
-            jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, ci_order);
-            jl_rewrite_mi_caches(ci_order, num_ci_order);
-            free(ci_order);
-        }
+        // CodeInstances selected for this image (see jl_rewrite_mi_caches).
+        jl_rewrite_mi_caches(jl_array_data(image_ci_order, jl_code_instance_t*), jl_array_nrows(image_ci_order));
+    }
+    if (native_functions) {
         size_t num_gvars, num_external_fns;
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);
@@ -3755,33 +3751,50 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     ios_mem(f, 0);
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *extext_records = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
+    jl_value_t *image_code = NULL; // svec(codeinfos, ci_order), see jl_collect_and_infer_code
     int64_t datastartpos = 0;
-    JL_GC_PUSH5(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis);
+    JL_GC_PUSH6(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis, &image_code);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    // Collect and infer the code to store in the image.
+    // A sysimage is inferred when its native code is emitted, a package image always.
+    int external_linkage = worklist != NULL; // package images link to the code of other images
+    if (worklist || _native_data != NULL) {
+        int trim = 0, all = 0;
+        jl_array_t *newmodules = NULL, *allmodules = NULL;
+        if (worklist) {
+            if (suppress_precompile)
+                newly_inferred = NULL;
+            newmodules = suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist;
+        }
+        else {
+            trim = jl_options.trim;
+            all = jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL;
+            allmodules = mod_array;
+        }
+        image_code = jl_collect_and_infer_code(trim, external_linkage, jl_atomic_load_acquire(&jl_world_counter),
+                                               allmodules, newmodules, all, module_init_order, ext_foreign_cis);
+        image_ci_order = (jl_array_t*)jl_svecref(image_code, 1);
+    }
+    if (_native_data != NULL)
+        *_native_data = jl_create_native((jl_array_t*)jl_svecref(image_code, 0), external_linkage);
+
     int64_t checksumpos;
     if (worklist) {
         uint32_t flags = JI_FLAG_PKGIMAGE | (emit_split ? JI_FLAG_SPLIT : 0);
-        if (_native_data != NULL) {
-            if (suppress_precompile)
-                newly_inferred = NULL;
-            *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
-            // an image without code gets no shared library, so loading it does not open one,
-            // and its .ji is left uncompressed so that it can be mapped like any other
-            if (emit_split && jl_native_code_is_empty(*_native_data)) {
-                flags |= JI_FLAG_NO_NATIVE;
-                compress = 0;
-            }
+        // an image without code gets no shared library, so loading it does not open one,
+        // and its .ji is left uncompressed so that it can be mapped like any other .ji
+        if (_native_data != NULL && emit_split && jl_native_code_is_empty(*_native_data)) {
+            flags |= JI_FLAG_NO_NATIVE;
+            compress = 0;
         }
         checksumpos = write_header(f, flags);
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
     }
     else {
         checksumpos = write_header(f, emit_split ? JI_FLAG_SPLIT : 0);
-        if (_native_data != NULL)
-            *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
@@ -3803,6 +3816,16 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
             jl_get_llvm_cis(native_functions, &num_cis, NULL);
             arraylist_grow(&CIs, num_cis);
             jl_get_llvm_cis(native_functions, &num_cis, (jl_code_instance_t**)CIs.items);
+        }
+        else {
+            // The CodeInstances that native code would have been emitted for
+            jl_array_t *codeinfos = (jl_array_t*)jl_svecref(image_code, 0);
+            for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
+                jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+                if (jl_is_code_instance(item) &&
+                    !(jl_atomic_load_relaxed(&((jl_code_instance_t*)item)->flags) & JL_CI_FLAGS_FROM_IMAGE))
+                    arraylist_push(&CIs, item);
+            }
         }
         // Create a filtered list of the compiled code instances that are
         // possibly not referenced via any other way but valid for the
@@ -3848,6 +3871,7 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
+    image_ci_order = NULL;
     // make sure we don't run any Julia code concurrently before this point
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);

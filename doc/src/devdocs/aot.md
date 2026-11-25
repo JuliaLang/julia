@@ -21,7 +21,7 @@ Firstly, the methods that need to be compiled to native code must be identified.
 
     Currently when compiling images, Julia runs the trace generation in a different process than the process performing the AOT compilation. This can have impacts when attempting to use a debugger during precompilation. The best way to debug precompilation with a debugger is to use the rr debugger, record the entire process tree, use `rr ps` to identify the relevant failing process, and then use `rr replay -p PID` to replay just the failing process.
 
-Once the methods to be compiled have been identified, they are passed to the `jl_create_system_image` function. This function sets up a number of data structures that will be used when serializing native code to a file, and then calls `jl_create_native` with the array of methods. `jl_create_native` runs codegen on the methods and produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
+The image is then written by the `jl_create_system_image` function. It first calls `jl_collect_and_infer_code`, which collects the methods to store in the image and infers them. When native code is requested, it then calls `jl_create_native` with the inferred code. `jl_create_native` runs codegen on it and produces one or more LLVM modules. `jl_create_system_image` then records some useful information about what codegen produced from the module(s).
 
 The module(s) are then passed to `jl_dump_native`, along with the information recorded by `jl_create_system_image`. `jl_dump_native` contains the code necessary to serialize the module(s) to bitcode, object, or assembly files depending on the command-line options passed to Julia. The serialized code and information are then written to a file as an archive.
 
@@ -43,7 +43,7 @@ Julia has a command-line flag to record all of the methods that are compiled by 
 
 ### `jl_create_system_image`
 
-`jl_create_system_image` saves all of the Julia-specific metadata necessary to later restore the state of the runtime. This includes data such as code instances, method instances, method tables, and type information. This function also sets up the data structures necessary to serialize the native code to a file. Finally, it calls `jl_create_native` to create one or more LLVM modules containing the native code for the methods passed to it. `jl_create_native` is responsible for running codegen on the methods passed to it.
+`jl_create_system_image` saves all of the Julia-specific metadata necessary to later restore the state of the runtime. This includes data such as code instances, method instances, method tables, and type information. This function also sets up the data structures necessary to serialize the native code to a file. The code to store is collected and inferred by `jl_collect_and_infer_code`, whether or not native code is emitted for it. When it is, `jl_create_native` creates one or more LLVM modules containing the native code for the inferred code passed to it.
 
 ### `jl_dump_native`
 
