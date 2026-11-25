@@ -642,6 +642,8 @@ static const uint32_t JI_FLAG_SPLIT = 1 << 1;
 static const uint32_t JI_FLAG_NO_NATIVE = 1 << 2;
 // This .ji has native code, in a section of it (see jinative.h).
 static const uint32_t JI_FLAG_NATIVE_EMBEDDED = 1 << 3;
+// The heap of this .ji, which is loaded on its own, is compressed.
+static const uint32_t JI_FLAG_COMPRESSED = 1 << 4;
 
 static int64_t write_header(ios_t *s, uint32_t flags) JL_CANSAFEPOINT
 {

@@ -2148,6 +2148,7 @@ end
 # (which precompile workers inherit through julia_cmd) on and off in each.
 # Compression requires a split layout, so with --pkgimages=no the worker must
 # warn and emit an uncompressed heap. A package with no code gets no section.
+# The section with the native code is never compressed, since it is mapped.
 @testset "pkgimage: native=$native code=$code compress=$compress" for (native, code) in ((true, true), (true, false), (false, false)), compress in (true, false)
     mktempdir() do dir
         pkgdir = joinpath(dir, "CompressMe")
@@ -2179,7 +2180,8 @@ end
         ji_file = only(filter(endswith(".ji"), readdir(compiled; join=true)))
         @test Base.cache_embeds_native_code(ji_file) == (native && code)
 
-        # The heap of a package image is mapped from the .ji, so it is never compressed.
+        # The heap payload in the .ji must be zstd-compressed exactly when a
+        # compressed package image was requested.
         open(ji_file) do io
             flags = Ref{UInt32}()
             checksum = Ref{UInt32}()
@@ -2192,7 +2194,7 @@ end
             @test (flags[] & Base.JI_FLAG_NO_NATIVE != 0) == native
             seek(io, datastartpos[])
             zstd_magic = UInt8[0x28, 0xb5, 0x2f, 0xfd]
-            @test read(io, 4) != zstd_magic
+            @test (read(io, 4) == zstd_magic) == (native && compress)
         end
 
         # Load again in a fresh process from the existing cache, without
