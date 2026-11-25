@@ -1893,7 +1893,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         }
         if (cy) {
             APInt iy = cy->getValue();
-            return iy.isNonNegative() ? x : ctx.builder.CreateSub(ConstantInt::get(t, 0), x);
+            return iy.isNonNegative() ? x : ctx.builder.CreateNeg(x);
         }
         Value *tmp = ctx.builder.CreateAShr(y, ConstantInt::get(t, cast<IntegerType>(t)->getBitWidth() - 1));
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);

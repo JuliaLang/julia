@@ -1873,7 +1873,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ConstantInt::get(in_pure_callback->getType(), 0));
 
         Value *world_counter = emit_world_counter_load(ctx);
-        Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
+        Value *ret = ctx.builder.CreateSelect(cond, world_counter, Constant::getAllOnesValue(ctx.types().T_size));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)

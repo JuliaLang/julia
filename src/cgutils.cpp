@@ -5069,7 +5069,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     }
     Value *negnel = ctx.builder.CreateICmpSLT(nel_unboxed, ConstantInt::get(T_size, 0));
     overflow = ctx.builder.CreateOr(overflow, negnel);
-    auto cg_typemax_int = ConstantInt::get(T_size, (((size_t)-1)>>1)-1);
+    auto cg_typemax_int = ConstantInt::get(T_size, APInt::getSignedMaxValue(T_size->getIntegerBitWidth()) - 1);
     Value *tobignel = ctx.builder.CreateICmpSLT(cg_typemax_int, elsz == 0 ? nel_unboxed: nbytes);
     overflow = ctx.builder.CreateOr(overflow, tobignel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);
