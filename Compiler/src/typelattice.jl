@@ -399,6 +399,10 @@ ignorelimited(typ::LimitedAccuracy) = typ.typ
 # =============
 
 @nospecializeinfer function ⊑(lattice::InferenceLattice, @nospecialize(a), @nospecialize(b))
+    if isa(a, Type) && isa(b, Type)
+        # plain types are ordered by subtyping in every layer
+        return a <: b
+    end
     ⊑(widenlattice(lattice), ignorelimited(a), ignorelimited(b)) || return false
 
     isa(b, LimitedAccuracy) || return true
