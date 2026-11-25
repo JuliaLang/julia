@@ -8564,47 +8564,12 @@ static Function *gen_cfun_wrapper(
 
         fargt_sig.insert(fargt_sig.begin() + sig.sret, JuliaType::get_pprjlvalue_ty(M->getContext()));
 
-        // Shift LLVM attributes for parameters one to the right, as
-        // we are adding the extra nest parameter after sret arg.
-        SmallVector<std::pair<unsigned, AttributeSet>, 0> newAttributes;
-        newAttributes.reserve(attributes.getNumAttrSets() + 1);
-        auto it = *attributes.indexes().begin();
-        const auto it_end = *attributes.indexes().end();
-
-        // Skip past FunctionIndex
-        if (it == AttributeList::AttrIndex::FunctionIndex) {
-            ++it;
-        }
-
-        // Move past ReturnValue and parameter return value
-        for (;it < AttributeList::AttrIndex::FirstArgIndex + sig.sret; ++it) {
-            if (attributes.hasAttributesAtIndex(it)) {
-                newAttributes.emplace_back(it, attributes.getAttributes(it));
-            }
-        }
-
-        // Add the new nest attribute
-        AttrBuilder attrBuilder(M->getContext());
-        attrBuilder.addAttribute(Attribute::Nest);
-        newAttributes.emplace_back(it, AttributeSet::get(M->getContext(), attrBuilder));
-
-        // Shift forward the rest of the attributes
-        if (attributes.getNumAttrSets() > 0) { // without this check the loop range below is invalid
-            for(; it != it_end; ++it) {
-                if (attributes.hasAttributesAtIndex(it)) {
-                    newAttributes.emplace_back(it + 1, attributes.getAttributes(it));
-                }
-            }
-        }
-
-        // Remember to add back FunctionIndex
-        if (attributes.hasAttributesAtIndex(AttributeList::AttrIndex::FunctionIndex)) {
-            newAttributes.emplace_back(AttributeList::AttrIndex::FunctionIndex,
-                                       attributes.getFnAttrs());
-        }
-
-        // Create the new AttributeList
-        attributes = AttributeList::get(M->getContext(), newAttributes);
+        // Insert the nest attribute likewise.
+        SmallVector<AttributeSet, 0> paramattrs;
+        for (size_t i = 0; i < sig.fargt_sig.size(); i++)
+            paramattrs.push_back(attributes.getParamAttrs(i));
+        paramattrs.insert(paramattrs.begin() + sig.sret, Attributes(M->getContext(), {Attribute::Nest}));
+        attributes = AttributeList::get(M->getContext(), attributes.getFnAttrs(), attributes.getRetAttrs(), paramattrs);
         functype = FunctionType::get(sig.sret ? getVoidTy(M->getContext()) : sig.prt, fargt_sig, /*isVa*/false);
     }
     else {

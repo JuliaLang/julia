@@ -886,6 +886,17 @@ end
 cfunction_undef_sparam_env(::Union{Nothing,Ref{S}}) where {S} = @cfunction(identity, Ptr{Cvoid}, (Ptr{S},))
 @test_throws UndefVarError(:S, :static_parameter) cfunction_undef_sparam_env(nothing)
 
+# closure cfunction which never returns and has no parameter attributes of its own
+let cfun_noreturn_int(@nospecialize f) = @cfunction($f, Union{}, (Int,)),
+    cfun_noreturn_u8(@nospecialize f) = @cfunction($f, Union{}, (UInt8,)),
+    y = 7
+    f = x -> error("got $x $y")
+    cf = cfun_noreturn_int(f)
+    @test_throws ErrorException("got 3 7") GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Union{}, (Int,), 3)
+    cf = cfun_noreturn_u8(f)
+    @test_throws ErrorException("got 3 7") GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Union{}, (UInt8,), 3)
+end
+
 verbose && println("Testing cfunction roundtrip: ")
 
 cf64 = 2.84+5.2im
