@@ -1125,7 +1125,7 @@ end
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
     @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    @boundscheck checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw_boundserror(src, sstart)
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
