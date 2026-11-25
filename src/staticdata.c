@@ -356,8 +356,8 @@ static htable_t bits_replace;
 static htable_t image_owned;
 // fields deferred until queueing is done (address => owner)
 static htable_t deferred_fields;
-#endif
 static int queueing_done;
+#endif
 // internal arrays whose memory is written only up to the array length (memory => array)
 static htable_t memory_trims;
 
@@ -3215,8 +3215,8 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
 #ifndef NDEBUG
     htable_new(&image_owned, 0);
     htable_new(&deferred_fields, 0);
-#endif
     queueing_done = 0;
+#endif
     htable_new(&memory_trims, 0);
     // the replacements recorded below are only reachable from these tables
     int en = jl_gc_enable(0);
@@ -3453,7 +3453,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
             jl_queue_for_serialization(&s, global_roots_keyset);
             jl_serialize_reachable(&s);
         }
+#ifndef NDEBUG
         queueing_done = 1;
+#endif
         // step 1.5: prune (garbage collect) some special weak references known caches
         for (i = 0; i < serialization_queue.len; i++) {
             jl_value_t *v = (jl_value_t*)serialization_queue.items[i];
