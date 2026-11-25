@@ -452,6 +452,12 @@ inbounds_copyto!(a, b, c, d, e, f) = @inbounds copyto!(a, b, c, d, e, f)
     else
         @test inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4) === dest
     end
+    dest = falses(2)
+    if bc_opt == bc_on
+        @test_throws BoundsError inbounds_copyto!(dest, view(trues(3), :))
+    else
+        @test inbounds_copyto!(dest, view(trues(3), :)) === dest
+    end
 end
 
 end
