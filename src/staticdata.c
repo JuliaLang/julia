@@ -1398,26 +1398,25 @@ static uintptr_t _backref_id(jl_serializer_state *s, jl_value_t *v) JL_GC_DISABL
     return from_seroder_entry(idx);
 }
 
-#define VISITING ((void*)2) // not 1, which is HT_NOTFOUND
-#define VISITED ((void*)3)
 
-// Add the imports of the types and singletons that need uniquing among `v` and what the lookup of
-// a type compares by identity through it (its parameters, and the types of values), each after the
-// ones it reaches, so that the loader can resolve them in import order (see
-// doc/src/devdocs/sysimg.md).
-// This follows the objects as they are written, after deduplication and field replacements, and
-// stops at objects of other images.  `visited` maps an object to VISITING, then to VISITED.
+// The loader resolves IMPORT_DATATYPE entries in the import table in order,
+// because we will use `jl_lookup_or_defer_type_` to find types that exist
+// already.  This lookup depends on the type's name and parameters, which may
+// consist of other types that came from an IMPORT_DATATYPE.  We avoid making
+// the loader keep track of dependencies between DataTypes by doing a postorder
+// traversal of the parameters of all the DataTypes that will become an import.
+// Note we only need to follow Julia values that might contain something that
+// was an IMPORT_DATATYPE (tuples are valid parameters, but ones that satisfy
+// jl_valid_type_param can't contain DataTypes).
 static void add_uniquing_imports(jl_serializer_state *s, jl_value_t *v, htable_t *visited) JL_GC_DISABLED JL_CANSAFEPOINT
 {
     if (!jl_needs_serialization(s, v))
         return;
     v = written_copy(v);
-    void *state = ptrhash_get(visited, v);
-    if (state != HT_NOTFOUND) {
-        assert((state == VISITED || !needs_uniquing(v, s->query_cache)) && "a type that needs uniquing reaches itself");
+    void **bp = ptrhash_bp(visited, v);
+    if (*bp != HT_NOTFOUND)
         return;
-    }
-    ptrhash_put(visited, v, VISITING);
+    *bp = v;
 #define FIELD(T, x, f) get_replaceable_field((jl_value_t**)&((T*)(x))->f, 0)
     if (jl_is_datatype(v)) {
         add_uniquing_imports(s, FIELD(jl_datatype_t, v, parameters), visited);
@@ -1451,7 +1450,6 @@ static void add_uniquing_imports(jl_serializer_state *s, jl_value_t *v, htable_t
 #undef FIELD
     if (needs_uniquing(v, s->query_cache))
         backref_id(s, v);
-    ptrhash_put(visited, v, VISITED); // the visits above may have moved the slot of `v`
 }
 
 static void record_reloc(jl_serializer_state *s, uintptr_t pos, uintptr_t target)
@@ -2215,7 +2213,7 @@ static uintptr_t jl_resolve_import(jl_loader_state *s, import_t imp, const char 
             return addr;
         return (uintptr_t)jl_atomic_load_relaxed(&((jl_code_instance_t*)addr)->specptr.fptr);
     }
-    case IMPORT_SPECIAL: // the only special is the root task
+    case IMPORT_SPECIAL: // For now, the only special is the root task
         return (uintptr_t)jl_current_task->ptls->root_task;
     case IMPORT_FUNCTION: {
         size_t idx = payload & (((import_t)1 << IMPORT_FUNCTION_KIND_OFFSET) - 1);
@@ -3289,8 +3287,9 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
 
     { // step 2: build all the sysimg sections
         if (s.incremental) {
-            // add the imports of the types that need uniquing first, in the order the loader
-            // resolves them
+            // IMPORT_DATATYPE has restrictions on the order it can appear in
+            // the table, so we'll make all of those imports up front.  See the
+            // comment on add_uniquing_imports.
             htable_t visited;
             htable_new(&visited, 0);
             for (size_t i = 0; i < serialization_queue.len; i++) {
@@ -3329,7 +3328,10 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
                 write_reloc(&s, &specials, ((jl_value_t**)&pkg)[i]);
         }
         h->gvar_objects = write_gvars(&s, &gvar_refs, &gvars, &external_fns);
-        // write the records, at the offsets their imports were given
+
+        // At this point we've assigned offsets for every auxdata record (see
+        // _backref_id), and now that we've serialized everything we can write
+        // the contents of the records.
         for (size_t i = 0; i < s.uniquing_records.len; i++) {
             jl_value_t *v = (jl_value_t*)s.uniquing_records.items[i];
             JL_GC_PROMISE_ROOTED(v);
@@ -3361,6 +3363,7 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_ji_header_t *h, jl_array
                 ios_write(&auxdata, (char*)&rec, sizeof(rec));
             }
         }
+
         assert(auxdata.size == s.auxdata_size);
         jl_image_section_t bits_section;
         write_section(&sysimg, 0, &bits_section, &bits, "pointer-free");
