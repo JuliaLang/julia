@@ -38,10 +38,37 @@ has_extended_info(@nospecialize x) = (!isa(x, Type) && !isvarargtype(x)) || isTy
 isnotbrokensubtype(@nospecialize(a), @nospecialize(b)) = (!iskindtype(b) || !isType(a) || b <: a)
 
 function argtypes_to_type(argtypes::Vector{Any})
-    argtypes = anymap(@nospecialize(a) -> isvarargtype(a) ? a : widenconst_split(a), argtypes)
-    filter!(@nospecialize(x) -> !isvarargtype(x) || valid_as_lattice(unwrapva(x), true), argtypes)
-    all(@nospecialize(x) -> isvarargtype(x) || valid_as_lattice(x, true), argtypes) || return Bottom
-    return Tuple{argtypes...}
+    n = length(argtypes)
+    types = Vector{Any}(undef, n)
+    nt = 0
+    vararg_at = 0 # where the first `Vararg` is in `types`
+    for i = 1:n
+        a = argtypes[i]
+        if isvarargtype(a)
+            valid_as_lattice(unwrapva(a), true) || continue
+            vararg_at == 0 && (vararg_at = nt + 1)
+        else
+            a = widenconst_split(a)
+            valid_as_lattice(a, true) || return Bottom
+        end
+        types[nt += 1] = a
+    end
+    if vararg_at != 0 && vararg_at != nt
+        # a `Vararg` that is not last is an error, which `apply_type` throws
+        return Tuple{resize!(types, nt)...}
+    end
+    # every parameter was checked above, so skip the checks and the splat of `apply_type`
+    return ccall(:jl_apply_tuple_type_v, Any, (Ptr{Any}, Csize_t), types, nt)
+end
+
+# whether `argtypes_to_type(argtypes) !== Bottom`, without constructing the type
+function is_valid_argtypes(argtypes::Vector{Any})
+    for i = 1:length(argtypes)
+        a = argtypes[i]
+        isvarargtype(a) && continue
+        valid_as_lattice(widenconst_split(a), true) || return false
+    end
+    return true
 end
 
 function isknownlength(t::DataType)

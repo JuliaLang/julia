@@ -578,12 +578,18 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
+# Fast path: the operands of any `Expr` except `=` are its `args`.
+@inline is_call_like_expr(@nospecialize(stmt)) = isa(stmt, Expr) && stmt.head !== :(=)
+
 # Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
 # types only have a single operand, so the op==1 path can return directly without
 # checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
 # to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
-function _useref_getindex(@nospecialize(stmt), op::Int)
-    if op == 1
+@inline function _useref_getindex(@nospecialize(stmt), op::Int)
+    if is_call_like_expr(stmt)
+        args = stmt.args
+        return op > length(args) ? OOB_TOKEN : args[op]
+    elseif op == 1
         return _useref_getindex_op1(stmt)
     else
         return _useref_getindex_opN(stmt, op)
@@ -656,14 +662,13 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :invoke_modify,
-                      :new, :splatnew, :(=), :(&),
-                      :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :foreignglobal, :isdefined, :copyast,
-                      :throw_undef_if_not,
-                      :cfunction, :pop_exception,
-                      :leave,
-                      :new_opaque_closure)
+    head = e.head
+    return head === :call || head === :invoke || head === :new || head === :foreigncall ||
+           head === :gc_preserve_begin || head === :gc_preserve_end ||
+           head === :leave || head === :foreignglobal || head === :splatnew ||
+           head === :pop_exception || head === :isdefined || head === :invoke_modify ||
+           head === :throw_undef_if_not || head === :cfunction || head === :copyast ||
+           head === :(=) || head === :(&) || head === :new_opaque_closure
 end
 
 @noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
@@ -714,7 +719,12 @@ end
 end
 
 @inline function setindex!(x::UseRef, @nospecialize(v))
-    x.urs.stmt = _useref_setindex!(x.urs.stmt, x.op, v)
+    stmt = x.urs.stmt
+    if is_call_like_expr(stmt)
+        stmt.args[x.op] = v
+    else
+        x.urs.stmt = _useref_setindex!(stmt, x.op, v)
+    end
     return x
 end
 
@@ -736,7 +746,18 @@ end
 
 @inline function iterate(it::UseRefIterator, op::Int=0)
     it.relevant || return nothing
-    op = _advance(it.stmt, op)
+    stmt = it.stmt
+    if is_call_like_expr(stmt)
+        op += 1
+        op > length(stmt.args) && return nothing
+        return (UseRef(it, op), op)
+    elseif op == 0
+        isa(stmt, GotoIfNot) && return (UseRef(it, 1), 1)
+        isa(stmt, ReturnNode) && return isdefined(stmt, :val) ? (UseRef(it, 1), 1) : nothing
+    elseif !(isa(stmt, PhiNode) || isa(stmt, PhiCNode) || isa(stmt, Expr))
+        return nothing # every other node has at most one operand
+    end
+    op = _advance(stmt, op)
     op === nothing && return nothing
     return (UseRef(it, op), op)
 end
@@ -1436,12 +1457,15 @@ function renumber_ssa2!(@nospecialize(stmt), ssanums::Vector{Any}, used_ssas::Ve
     urs = userefs(stmt)
     for op in urs
         val = op[]
-        if isa(val, OldSSAValue) || isa(val, NewSSAValue)
+        if isa(val, OldSSAValue)
+            push!(late_fixup, result_idx)
+            continue
+        end
+        isa(val, Union{SSAValue, NewSSAValue}) || continue
+        if isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
         end
-        if isa(val, Union{SSAValue, NewSSAValue})
-            val = renumber_ssa2(val, ssanums, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
-        end
+        val = renumber_ssa2(val, ssanums, used_ssas, new_new_used_ssas, do_rename_ssa, mark_refined!)
         if isa(val, OldSSAValue) || isa(val, NewSSAValue)
             push!(late_fixup, result_idx)
         end
@@ -1576,7 +1600,41 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
     (; cfg_transforms_enabled, fold_constant_branches, bb_rename_succ, bb_rename_pred, result_bbs) = compact.cfg_transform
     mark_refined! = Refiner(result.flag, result_idx)
     already_inserted_phi_arg = already_inserted_ssa(compact, processed_idx)
-    if stmt === nothing
+    if isa(stmt, Expr) # the most common statement, so checked first
+        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
+        if isexpr(stmt, :throw_undef_if_not)
+            cond = stmt.args[2]
+            if isa(cond, Bool) && cond === true
+                # cond was folded to true - this statement
+                # is dead.
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        elseif isexpr(stmt, :leave)
+            let i = 1
+                while i <= length(stmt.args)
+                    if stmt.args[i] === nothing
+                        deleteat!(stmt.args, i)
+                    else
+                        i += 1
+                    end
+                end
+            end
+            if isempty(stmt.args)
+                # This :leave is dead
+                ssa_rename[idx] = nothing
+                return result_idx
+            end
+        end
+        typ = inst[:type]
+        if isa(typ, Const) && is_inlineable_constant(typ.val)
+            ssa_rename[idx] = quoted(typ.val)
+        else
+            ssa_rename[idx] = SSAValue(result_idx)
+        end
+        result[result_idx][:stmt] = stmt
+        result_idx += 1
+    elseif stmt === nothing
         ssa_rename[idx] = stmt
     elseif isa(stmt, OldSSAValue)
         ssa_rename[idx] = ssa_rename[stmt.id]
@@ -1657,40 +1715,6 @@ function process_node!(compact::IncrementalCompact, result_idx::Int, inst::Instr
             result[result_idx][:stmt] = stmt
         end
         ssa_rename[idx] = SSAValue(result_idx)
-        result_idx += 1
-    elseif isa(stmt, Expr)
-        stmt = renumber_ssa2!(stmt, ssa_rename, used_ssas, new_new_used_ssas, late_fixup, result_idx, do_rename_ssa, mark_refined!)::Expr
-        if isexpr(stmt, :throw_undef_if_not)
-            cond = stmt.args[2]
-            if isa(cond, Bool) && cond === true
-                # cond was folded to true - this statement
-                # is dead.
-                ssa_rename[idx] = nothing
-                return result_idx
-            end
-        elseif isexpr(stmt, :leave)
-            let i = 1
-                while i <= length(stmt.args)
-                    if stmt.args[i] === nothing
-                        deleteat!(stmt.args, i)
-                    else
-                        i += 1
-                    end
-                end
-            end
-            if isempty(stmt.args)
-                # This :leave is dead
-                ssa_rename[idx] = nothing
-                return result_idx
-            end
-        end
-        typ = inst[:type]
-        if isa(typ, Const) && is_inlineable_constant(typ.val)
-            ssa_rename[idx] = quoted(typ.val)
-        else
-            ssa_rename[idx] = SSAValue(result_idx)
-        end
-        result[result_idx][:stmt] = stmt
         result_idx += 1
     elseif isa(stmt, PiNode)
         # As an optimization, we eliminate any trivial pinodes. For performance, we use ===
