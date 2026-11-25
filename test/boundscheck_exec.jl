@@ -452,12 +452,22 @@ inbounds_copyto!(a, b, c, d, e, f) = @inbounds copyto!(a, b, c, d, e, f)
     else
         @test inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4) === dest
     end
-    dest = falses(2)
-    if bc_opt == bc_on
-        @test_throws BoundsError inbounds_copyto!(dest, view(trues(3), :))
-    else
-        @test inbounds_copyto!(dest, view(trues(3), :)) === dest
+    for src in ([1, 2, 3, 4], [1.0, 2.0, 3.0, 4.0], Memory{Int}(1:4), Memory{Float64}(1:4))
+        dest = Base.wrap(Array, Memory{Int}(undef, 8), (2,))
+        if bc_opt == bc_on
+            @test_throws BoundsError inbounds_copyto!(dest, src)
+        else
+            @test inbounds_copyto!(dest, src) === dest
+        end
     end
+    dest = falses(2)
+    src = view(BitVector([true, true, false]), :)
+    if bc_opt == bc_on
+        @test_throws BoundsError inbounds_copyto!(dest, src)
+    else
+        @test inbounds_copyto!(dest, src) === dest
+    end
+    @test_throws ArgumentError inbounds_copyto!(zeros(3), CartesianIndices((1:0,)), zeros(3), CartesianIndices((1:2,)))
 end
 
 end
