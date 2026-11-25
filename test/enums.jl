@@ -77,6 +77,9 @@ end
 @enum Negative _neg1=-1 _neg2=-2
 @test Int(_neg1) === -1
 @test Int(_neg2) === -2
+# Enum extrema follow numeric value regardless of declaration order (#64217).
+@test typemin(Negative) === _neg2
+@test typemax(Negative) === _neg1
 @test_throws InexactError UInt8(_neg1)
 @enum Negative2 _neg5=-5 _neg4 _neg3
 @test Int(_neg5) === -5
@@ -163,6 +166,8 @@ let b = IOBuffer()
 end
 
 @enum UI8::UInt8 ten=0x0A thr=0x03 sevn=0x07 fiftn=0xF0
+@test typemin(UI8) === thr
+@test typemax(UI8) === fiftn
 @test repr("text/plain", UI8)   == "Enum $(string(UI8)):\nten = 0x0a\nthr = 0x03\nsevn = 0x07\nfiftn = 0xf0"
 @test repr("text/plain", ten)   == "$(string(ten))::UI8 = 0x0a"
 @test repr("text/plain", thr)   == "$(string(thr))::UI8 = 0x03"
