@@ -326,6 +326,8 @@ static jl_value_t *jl_bigint_type = NULL;
 static jl_debuginfo_t *jl_nulldebuginfo;
 static int gmp_limb_size = 0;
 
+typedef uintptr_t reloc_t;
+
 #define BIND_BIT ((uintptr_t)1 << (8 * sizeof(void*) - 1))
 #define BIND_LOW_BITS 4
 #define BIND_LOW_MASK (((uintptr_t)1 << BIND_LOW_BITS) - 1)
@@ -355,18 +357,18 @@ typedef enum { FUNCTION_BUILTIN, FUNCTION_RUNTIME } function_kind_t;
 #define DEPREF_OFFSET(x) ((x) & (((uint64_t)1 << DEPREF_OFFSET_BITS) - 1))
 
 typedef struct {
-    uintptr_t name, parameters, types, layout, instance, super; // relocs
+    reloc_t name, parameters, types, layout, instance, super;
     uint32_t hash;
-    uint16_t flags; // the bit fields of jl_datatype_t, which follow `hash`, as the compiler lays them out
+    uint16_t flags;
     uint16_t padding;
 } jl_type_record_t;
 typedef struct {
-    uintptr_t mod, name; // relocs
+    reloc_t mod, name;
 } jl_binding_record_t;
 typedef struct {
-    uintptr_t def, specTypes, sparam_vals; // relocs
+    reloc_t def, specTypes, sparam_vals;
 } jl_mi_record_t;
-static_assert(sizeof(jl_type_record_t) == 6 * sizeof(uintptr_t) + 8, "a type record has no implicit padding");
+static_assert(sizeof(jl_type_record_t) == 6 * sizeof(reloc_t) + 8, "a type record has no implicit padding");
 static_assert(sizeof(jl_type_record_t) % sizeof(void*) == 0 && sizeof(jl_binding_record_t) % sizeof(void*) == 0 &&
               sizeof(jl_mi_record_t) % sizeof(void*) == 0, "records are pointer-aligned without padding between them");
 static_assert(sizeof(jl_datatype_t) == offsetof(jl_datatype_t, hash) + 2 * sizeof(uint32_t), "the bit fields of jl_datatype_t fit in the 4 bytes after `hash`");
@@ -2104,7 +2106,7 @@ static void jl_write_values(jl_serializer_state *s) JL_CANSAFEPOINT JL_GC_DISABL
 
 // Returns the reloc for `item` (see `backref_id`) plus `offset`: a bind, or the address of a slide
 // when the heap is at `s->heap_base`
-static uintptr_t get_reloc_for_item(jl_serializer_state *s, uintptr_t item, size_t offset)
+static reloc_t get_reloc_for_item(jl_serializer_state *s, uintptr_t item, size_t offset)
 {
     if (item & BIND_BIT) {
         assert(offset <= BIND_LOW_MASK);
@@ -2279,7 +2281,7 @@ static void jl_finalize_import(jl_loader_state *s, size_t idx, uintptr_t v) JL_N
 
 // Replace each of the `n` relocs at `p` by its value: 0 stays NULL, a bind is filled in, and
 // anything else is a slide
-static void jl_resolve_relocs(jl_loader_state *s, uintptr_t *p, size_t n) JL_NOTSAFEPOINT
+static void jl_resolve_relocs(jl_loader_state *s, reloc_t *p, size_t n) JL_NOTSAFEPOINT
 {
     for (size_t i = 0; i < n; i++) {
         if (p[i] & BIND_BIT)
@@ -2390,7 +2392,7 @@ static void jl_update_all_fptrs(jl_image_t *image, char *heap, const uintptr_t *
 
 // The reloc for `v`: 0 for NULL, a bind, or otherwise the address of `v` when the heap is at
 // `s->heap_base`
-static uintptr_t reloc_for(jl_serializer_state *s, jl_value_t *v) JL_CANSAFEPOINT JL_GC_DISABLED
+static reloc_t reloc_for(jl_serializer_state *s, jl_value_t *v) JL_CANSAFEPOINT JL_GC_DISABLED
 {
     return v ? get_reloc_for_item(s, backref_id(s, v), 0) : 0;
 }
@@ -4202,14 +4204,14 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         }
         if (type == IMPORT_BINDING) {
             jl_binding_record_t *rec = (jl_binding_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-            jl_resolve_relocs(&s, (uintptr_t*)rec, sizeof(*rec) / sizeof(uintptr_t));
+            jl_resolve_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
             jl_finalize_import(&s, i, (uintptr_t)jl_get_module_binding((jl_module_t*)rec->mod, (jl_sym_t*)rec->name, 1));
             continue;
         }
         if (type != IMPORT_DATATYPE)
             continue;
         jl_type_record_t *rec = (jl_type_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-        jl_resolve_relocs(&s, (uintptr_t*)rec, offsetof(jl_type_record_t, hash) / sizeof(uintptr_t));
+        jl_resolve_relocs(&s, (reloc_t*)rec, offsetof(jl_type_record_t, hash) / sizeof(reloc_t));
         jl_datatype_t *dt = jl_new_uninitialized_datatype();
         jl_astaggedvalue(dt)->bits.gc = GC_OLD; // the heap refers to it without a write barrier
         s.imports_resolved[i] = (uintptr_t)dt;
@@ -4232,7 +4234,7 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
     jl_apply_binds(&s, (uintptr_t*)image_base, image_section(buf, h->binds), h->binds.size, nwords);
 
     // step 3: get references to special values
-    jl_resolve_relocs(&s, (uintptr_t*)(image_section(buf, h->specials)), h->specials.size / sizeof(void*));
+    jl_resolve_relocs(&s, (reloc_t*)(image_section(buf, h->specials)), h->specials.size / sizeof(reloc_t));
     jl_value_t **specials = (jl_value_t**)(image_section(buf, h->specials));
     if (!pkg) {
         size_t i;
@@ -4322,11 +4324,11 @@ static void jl_restore_system_image_from_stream_(const jl_image_buf_t *buf, jl_i
         if (IMPORT_TYPE(imports[i]) != IMPORT_METHOD_INSTANCE)
             continue;
         jl_mi_record_t *rec = (jl_mi_record_t*)(records + IMPORT_PAYLOAD(imports[i]));
-        jl_resolve_relocs(&s, (uintptr_t*)rec, sizeof(*rec) / sizeof(uintptr_t));
+        jl_resolve_relocs(&s, (reloc_t*)rec, sizeof(*rec) / sizeof(reloc_t));
         jl_finalize_import(&s, i, (uintptr_t)jl_specializations_get_linfo((jl_method_t*)rec->def, (jl_value_t*)rec->specTypes, (jl_svec_t*)rec->sparam_vals));
     }
-    uintptr_t *gvars = (uintptr_t*)(image_section(buf, h->gvars));
-    jl_resolve_relocs(&s, gvars, h->gvars.size / sizeof(void*));
+    reloc_t *gvars = (reloc_t*)(image_section(buf, h->gvars));
+    jl_resolve_relocs(&s, gvars, h->gvars.size / sizeof(reloc_t));
 #ifndef NDEBUG
     for (size_t i = 0; i < nimports; i++)
         assert(!s.pending[i] && "an import was never resolved");
