@@ -1,0 +1,66 @@
+From 9115b79e7e06ff6c75ab5ef191a29520f9a38ac6 Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Thu, 26 Nov 2026 09:41:14 -0500
+Subject: [PATCH 1/2] [SLP] Remember which blocks are EH pads
+
+BasicBlock::isEHPad walks the block's PHIs to find its first non-PHI
+instruction. getTreeCost asks it for the block of every external user, and
+getScalarsVectorizationLegality for every bundle, so in a loop header with
+thousands of PHIs each tree costs a walk of all of them per external use.
+The pass never adds or removes EH pads, so cache the answer per block. No
+change in the generated code.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+index defb50f..946851d 100644
+--- a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
++++ b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+@@ -6450,6 +6450,16 @@ private:
+   DominatorTree *DT;
+   AssumptionCache *AC;
+   DemandedBits *DB;
++
++  /// Whether each block is an EH pad. Finding out walks the block's PHIs,
++  /// and the pass never adds or removes EH pads, so remember the answer.
++  mutable SmallDenseMap<const BasicBlock *, bool> EHPadBlocks;
++  bool isEHPadBlock(const BasicBlock *BB) const {
++    auto [It, Inserted] = EHPadBlocks.try_emplace(BB, false);
++    if (Inserted)
++      It->second = BB->isEHPad();
++    return It->second;
++  }
+   const DataLayout *DL;
+   OptimizationRemarkEmitter *ORE;
+ 
+@@ -12848,7 +12858,8 @@ BoUpSLP::getScalarsVectorizationLegality(ArrayRef<Value *> VL, unsigned Depth,
+   // schedulable.
+   BasicBlock *BB = S.getMainOp()->getParent();
+ 
+-  if (BB->isEHPad() || isa_and_nonnull<UnreachableInst>(BB->getTerminator()) ||
++  if (isEHPadBlock(BB) ||
++      isa_and_nonnull<UnreachableInst>(BB->getTerminator()) ||
+       !DT->isReachableFromEntry(BB)) {
+     // Don't go into unreachable blocks. They may contain instructions with
+     // dependency cycles which confuse the final scheduling.
+@@ -20112,7 +20123,7 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
+     if (EphValues.count(EU.User))
+       continue;
+     BasicBlock *UserParent = cast<Instruction>(EU.User)->getParent();
+-    if (!DT->isReachableFromEntry(UserParent) || UserParent->isEHPad() ||
++    if (!DT->isReachableFromEntry(UserParent) || isEHPadBlock(UserParent) ||
+         isa_and_present<UnreachableInst>(UserParent->getTerminator()))
+       continue;
+     BasicBlock *UseBlock = nullptr;
+@@ -20169,7 +20180,7 @@ InstructionCost BoUpSLP::getTreeCost(InstructionCost TreeCost,
+     if (BasicBlock *UserParent =
+             EU.User ? cast<Instruction>(EU.User)->getParent() : nullptr;
+         UserParent &&
+-        (!DT->isReachableFromEntry(UserParent) || UserParent->isEHPad() ||
++        (!DT->isReachableFromEntry(UserParent) || isEHPadBlock(UserParent) ||
+          isa_and_present<UnreachableInst>(UserParent->getTerminator())))
+       continue;
+ 
