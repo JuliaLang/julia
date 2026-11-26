@@ -596,6 +596,38 @@ fakehistory = """
 \t2 + 2
 """
 
+# History exclusion accepts literal strings, regular expressions, and vectors of either.
+@testset "History exclusion" begin
+    @test REPL.Options().hist_ignore_patterns === nothing
+    fake_repl() do _, _, repl
+        repl.history_file = false
+        repl.interface = REPL.setup_interface(repl)
+        mode = repl.interface.modes[1]
+        hp = mode.hist
+        cases = [
+            (nothing, "#NOHISTORY", false),
+            ("a.*b", "1 + 1 #a.*b", true),
+            ("a.*b", "axxb", false),
+            (r"^#NOHISTORY\R", "#NOHISTORY\n1 + 1", true),
+            (r"^#NOHISTORY", "1 + 1 #NOHISTORY", false),
+            (r"#NOHISTORY$", "2 + 2 #NOHISTORY \n", true),
+            (["#IGNORE", r"^#NOHISTORY"], "2 + 2 #IGNORE", true),
+            (["#IGNORE", r"^#NOHISTORY"], "#NOHISTORY\n2 + 2", true),
+            (["#IGNORE", r"^#NOHISTORY"], "2 + 2", false),
+            ([], "#NOHISTORY", false),
+            ("", "3 + 3", true),
+        ]
+        for (patterns, input, ignored) in cases
+            repl.options.hist_ignore_patterns = patterns
+            s = LineEdit.init_state(repl.t, mode)
+            write(s.input_buffer, input)
+            n = length(hp.history)
+            REPL.add_history(hp, s)
+            @test length(hp.history) == n + !ignored
+        end
+    end
+end
+
 # Test various history related issues
 for prompt = ["TestΠ", () -> randstring(rand(1:10))]
     fake_repl() do stdin_write, stdout_read, repl

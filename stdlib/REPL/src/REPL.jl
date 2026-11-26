@@ -1012,6 +1012,12 @@ REPLHistoryProvider(mode_mapping::Dict{Symbol}) =
 function add_history(hist::REPLHistoryProvider, s::PromptState)
     str = rstrip(takestring!(copy(s.input_buffer)))
     isempty(strip(str)) && return
+    patterns = LineEdit.options(s).hist_ignore_patterns
+    if patterns !== nothing
+        ignored = patterns isa AbstractVector ?
+            any(pattern -> occursin(pattern, str), patterns) : occursin(patterns, str)
+        ignored && return
+    end
     mode = mode_idx(hist, LineEdit.mode(s))
     !isempty(hist.history) && isequal(mode, hist.history[end].mode) &&
         str == hist.history[end].content && return
