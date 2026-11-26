@@ -86,16 +86,18 @@ void FinalLowerGC::lowerGetGCFrameSlot(CallInst *target, Function &F)
     ++GetGCFrameSlotCount;
     assert(target->arg_size() == 2);
     auto gcframe = target->getArgOperand(0);
-    auto index = target->getArgOperand(1);
+    uint64_t index = cast<ConstantInt>(target->getArgOperand(1))->getZExtValue();
 
     // Initialize an IR builder.
     IRBuilder<> builder(target);
 
-    // The first two slots are reserved, so we'll add two to the index.
-    index = builder.CreateAdd(index, ConstantInt::get(Type::getInt32Ty(F.getContext()), 2));
-
-    // Lower the intrinsic as a GEP.
-    auto gep = builder.CreateInBoundsGEP(T_prjlvalue, gcframe, index);
+    // Lower the intrinsic as a GEP. The first two slots are reserved, so we'll add two to
+    // the index. Use the byte-offset form InstCombine canonicalizes to: if it had to rewrite
+    // each slot address, every rewrite would revisit the frame alloca and all of its uses.
+    const DataLayout &DL = F.getDataLayout();
+    auto offset = ConstantInt::get(DL.getIndexType(gcframe->getType()), (index + 2) * DL.getPointerSize());
+    auto gep = builder.CreatePtrAdd(gcframe, offset, "",
+                                    GEPNoWrapFlags::inBounds() | GEPNoWrapFlags::noUnsignedWrap());
     gep->takeName(target);
     target->replaceAllUsesWith(gep);
     target->eraseFromParent();
