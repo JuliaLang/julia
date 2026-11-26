@@ -187,7 +187,9 @@ end
 
     (src, _) = only(code_typed(sum27403, Tuple{Vector{Int}}))
     @test !any(src.code) do x
-        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x))
+        isexpr(x, :invoke) && !(isinvoke(:throw_boundserror, x) || isinvoke(:_throw_boundserror_indices, x) ||
+                                # an outlined error path (see `outline_cold_regions!`)
+                                (x.args[1] isa Core.CodeInstance && Base.StackTraces.is_outlined_code(x.args[1])))
     end
 end
 
