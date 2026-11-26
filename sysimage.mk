@@ -215,7 +215,8 @@ $$(build_private_libdir)/sys$1-o.a $$(build_private_libdir)/sys$1-bc.a : $$(buil
 		echo '*** This error is usually fixed by running `make clean`. If the error persists$$(COMMA) try `make cleanall`. ***'; \
 		false; \
 	fi )
-	@mv $$@.tmp $$@ $$(call split_sysimage_ji,&& mv $$(build_private_libdir)/sys$1.ji.tmp $$(build_private_libdir)/sys$1.ji) \
+# sys$1.ji is replaced first: if that fails, sys$1-o.a stays out of date and both are rebuilt.
+	@$$(call split_sysimage_ji,mv $$(build_private_libdir)/sys$1.ji.tmp $$(build_private_libdir)/sys$1.ji &&) mv $$@.tmp $$@ \
 		$$(call nosplit_sysimage_ji,&& rm -f $$(build_private_libdir)/sys$1.ji)
 $$(build_private_libdir)/sys$1-o.a: $$(split_sysimage_stamp)
 ifneq ($$(split_sysimage),)
