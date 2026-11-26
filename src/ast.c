@@ -859,7 +859,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-JL_DLLEXPORT int jl_is_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -868,7 +868,7 @@ JL_DLLEXPORT int jl_is_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_unary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -877,7 +877,7 @@ JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_unary_and_binary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -886,7 +886,7 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_syntactic_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -895,13 +895,79 @@ JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_operator_precedence(const char *sym)
+JL_DLLEXPORT int jl_frontend_operator_precedence(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
     int res = numval(fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "operator-precedence")), symbol(fl_ctx, sym)));
     jl_ast_ctx_leave(ctx);
     return res;
+}
+
+// Operator queries: whether a name is an operator (and of which kind), and its
+// precedence, which printing uses to decide how to show code. They come from
+// the frontend: from the classification of operators of the loaded JuliaSyntax
+// once Base has registered it (`JuliaSyntax.register_operator_queries`), and
+// before that, as while bootstrapping, from flisp (jl_frontend_is_operator
+// etc. above).
+enum { OPQ_IS_OPERATOR, OPQ_IS_UNARY, OPQ_IS_UNARY_AND_BINARY, OPQ_IS_SYNTACTIC, OPQ_PRECEDENCE, OPQ_COUNT };
+static _Atomic(jl_operator_query_t) registered_operator_queries[OPQ_COUNT];
+
+JL_DLLEXPORT void jl_set_operator_queries(jl_operator_query_t is_operator,
+                                          jl_operator_query_t is_unary_operator,
+                                          jl_operator_query_t is_unary_and_binary_operator,
+                                          jl_operator_query_t is_syntactic_operator,
+                                          jl_operator_query_t operator_precedence) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_release(&registered_operator_queries[OPQ_IS_OPERATOR], is_operator);
+    jl_atomic_store_release(&registered_operator_queries[OPQ_IS_UNARY], is_unary_operator);
+    jl_atomic_store_release(&registered_operator_queries[OPQ_IS_UNARY_AND_BINARY], is_unary_and_binary_operator);
+    jl_atomic_store_release(&registered_operator_queries[OPQ_IS_SYNTACTIC], is_syntactic_operator);
+    jl_atomic_store_release(&registered_operator_queries[OPQ_PRECEDENCE], operator_precedence);
+}
+
+// The registered queries are Julia functions, which can only run on a thread
+// that is running Julia code (e.g., not during GC, nor on a foreign thread).
+// Otherwise, flisp answers.
+static jl_operator_query_t registered_operator_query(int which) JL_NOTSAFEPOINT
+{
+    jl_operator_query_t f = jl_atomic_load_acquire(&registered_operator_queries[which]);
+    if (f == NULL)
+        return NULL;
+    jl_task_t *ct = jl_get_current_task();
+    if (ct == NULL || jl_atomic_load_relaxed(&ct->ptls->gc_state) != JL_GC_STATE_UNSAFE)
+        return NULL;
+    return f;
+}
+
+JL_DLLEXPORT int jl_is_operator(const char *sym) JL_CANSAFEPOINT
+{
+    jl_operator_query_t f = registered_operator_query(OPQ_IS_OPERATOR);
+    return f ? f(sym) : jl_frontend_is_operator(sym);
+}
+
+JL_DLLEXPORT int jl_is_unary_operator(const char *sym) JL_CANSAFEPOINT
+{
+    jl_operator_query_t f = registered_operator_query(OPQ_IS_UNARY);
+    return f ? f(sym) : jl_frontend_is_unary_operator(sym);
+}
+
+JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym) JL_CANSAFEPOINT
+{
+    jl_operator_query_t f = registered_operator_query(OPQ_IS_UNARY_AND_BINARY);
+    return f ? f(sym) : jl_frontend_is_unary_and_binary_operator(sym);
+}
+
+JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym) JL_CANSAFEPOINT
+{
+    jl_operator_query_t f = registered_operator_query(OPQ_IS_SYNTACTIC);
+    return f ? f(sym) : jl_frontend_is_syntactic_operator(sym);
+}
+
+JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_CANSAFEPOINT
+{
+    jl_operator_query_t f = registered_operator_query(OPQ_PRECEDENCE);
+    return f ? f(sym) : jl_frontend_operator_precedence(sym);
 }
 
 int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT

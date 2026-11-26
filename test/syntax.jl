@@ -4889,3 +4889,67 @@ end
     # but only there: the names are ordinary variables elsewhere
     @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end
+
+# The runtime's operator queries, which printing relies on, come from the
+# frontend: from Base's JuliaSyntax (`JuliaSyntax.operator_info`), and before it
+# has started, as while bootstrapping, from flisp (jl_frontend_is_operator
+# etc.). The two must agree.
+module OperatorQueries
+const _JS = Base.JuliaSyntax
+frontend_info(s) = (
+    ccall(:jl_frontend_is_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_frontend_is_unary_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_frontend_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_frontend_is_syntactic_operator, Cint, (Cstring,), s) != 0,
+    Int(ccall(:jl_frontend_operator_precedence, Cint, (Cstring,), s)))
+runtime_info(s) = (
+    ccall(:jl_is_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0,
+    ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0,
+    Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s)))
+juliasyntax_info(s) = let info = _JS.operator_info(s)
+    (info.isop, info.unary, info.unary_binary, info.syntactic, Int(info.prec))
+end
+# The names of operators, and many that are not
+function candidates()
+    cands = String[]
+    for c in 0x21:0x2ffff
+        ((0xd800 <= c <= 0xdfff) || !isvalid(Char, c)) && continue
+        push!(cands, string(Char(c)))
+    end
+    for i in 0:Int(typemax(UInt16))
+        k = try _JS.Kind(i) catch; continue end
+        _JS.is_operator(k) || continue
+        str = _JS.untokenize(k)
+        str === nothing || push!(cands, str)
+    end
+    append!(cands, ["==", "===", "!==", "!=", "<=", ">=", "->", "-->", "<--", "<-->",
+                    "<<", ">>", ">>>", "//", "..", "...", "....", "::", ":::", "'", "''",
+                    "&&", "||", "|>", "<|", "++", "%", "÷", "⊻", "==>", "<==", "<==>",
+                    "isa", "in", "where", "im", "foo", "if", "=", ":=", "~", "?", "\$"])
+    for op in ["+", "-", "*", "/", "//", "\\", "^", "÷", "%", "<<", ">>", ">>>",
+               "|", "&", "⊻", "\$", "==", "<", "..."]
+        push!(cands, op * "=")
+    end
+    for s in copy(cands)
+        push!(cands, "." * s, s * "₁", s * "ᵀ")
+    end
+    opchars = collect("+-*/\\^<>=!~&|%:?.\$")
+    for a in opchars, b in opchars
+        push!(cands, string(a, b), string(a, b, b))
+    end
+    return unique!(cands)
+end
+end
+@testset "operator queries" begin
+    # n.b. in no particular order: flisp interns every name it is asked about,
+    # in a binary tree that sorted names would degenerate
+    cands = sort!(OperatorQueries.candidates(), by=hash)
+    @test isempty(filter(s -> OperatorQueries.frontend_info(s) != OperatorQueries.juliasyntax_info(s), cands))
+    # the runtime asks JuliaSyntax (n.b. each name it is asked about becomes a Symbol)
+    ops = filter(s -> OperatorQueries.juliasyntax_info(s)[1], cands)[1:min(end, 5000)]
+    @test isempty(filter(s -> OperatorQueries.runtime_info(s) != OperatorQueries.juliasyntax_info(s),
+                         [ops; ["x", "if", "foo", "in", "isa"]]))
+    @test Base.isoperator(:+) && Base.isunaryoperator(:-) && Base.operator_precedence(:*) == 12
+end
