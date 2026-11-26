@@ -212,7 +212,8 @@ function choosetests(choices = [])
 
     # Avoid swapping during a full suite on small machines. Explicitly requested
     # tests still run; measured x86-64 peaks are about 13 GiB and 9 GiB respectively.
-    memory_hungry = ("compileall" => 16, "jit" => 12) # minimum total memory, in GiB
+    # The other workers keep running beside them, so 16 GiB is too little for compileall.
+    memory_hungry = ("compileall" => 20, "jit" => 12) # minimum total memory, in GiB
     total_gib = Sys.total_memory() / 2^30
     too_hungry = [t for (t, gib) in memory_hungry if t in tests && !(t in choices) && total_gib < gib]
     if !isempty(too_hungry)
