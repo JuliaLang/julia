@@ -434,6 +434,8 @@ static void jl_publish_compiled_ci(jl_code_instance_t *ci,
     }
 }
 
+// GC-unsafe only: jl_static_show reads Julia objects and roots some on the GC stack, which must
+// not change while the thread is GC-safe, as a GC may be walking it meanwhile
 static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_NOTSAFEPOINT
 {
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
@@ -1081,11 +1083,6 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
-        for (auto [CI, _] : Out.linker_info->ci_funcs) {
-            JL_GC_PROMISE_ROOTED(CI);
-            jl_do_dump_compile(CI, end_time - start_time);
-        }
-
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
@@ -1105,6 +1102,10 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+        for (auto [CI, _] : Out.linker_info->ci_funcs) {
+            JL_GC_PROMISE_ROOTED(CI);
+            jl_do_dump_compile(CI, end_time - start_time);
+        }
         JIT.publishCIs(CIs);
         jl_gc_unsafe_leave(ct->ptls, gc_state);
 
