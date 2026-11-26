@@ -975,6 +975,40 @@ end
         @test count(==(2), values(d2)) == 3
         @test count(==(1), values(d2)) == 1
     end
+
+    @testset "replace! lossy conversion validation (#64158)" begin
+        d = Dict{Float32, Int}(1f0 => 1)
+        @test_throws TypeError replace!(p -> 0.1 => 2, d)
+        @test d == Dict{Float32, Int}(1f0 => 1)
+        @test haskey(d, 1f0)
+        replace!(p -> 2 => 2, d)
+        @test d == Dict{Float32, Int}(2f0 => 2)
+
+        s = Set{Float32}([1f0])
+        @test_throws TypeError replace!(x -> 0.1, s)
+        @test s == Set{Float32}([1f0])
+        @test 1f0 in s
+        replace!(x -> 2, s)
+        @test s == Set{Float32}([2f0])
+
+        d2 = Dict{Float32, Int}(1f0 => 1)
+        @test_throws TypeError replace(p -> 0.1 => 2, d2)
+        @test d2 == Dict{Float32, Int}(1f0 => 1)
+        @test replace(p -> 2 => 2, d2) == Dict{Float32, Int}(2f0 => 2)
+
+        s2 = Set{Float32}([1f0])
+        @test_throws TypeError replace(x -> 0.1, s2)
+        @test s2 == Set{Float32}([1f0])
+        @test replace(x -> 2, s2) == Set{Float32}([2f0])
+
+        # Test count=0 does not perform replacements or throw
+        d3 = Dict{Float32, Int}(1f0 => 1)
+        @test replace!(p -> 0.1 => 2, d3; count=0) == d3
+        @test replace(p -> 0.1 => 2, d3; count=0) == d3
+        s3 = Set{Float32}([1f0])
+        @test replace!(x -> 0.1, s3; count=0) == s3
+        @test replace(x -> 0.1, s3; count=0) == s3
+    end
 end
 
 @testset "⊆, ⊊, ⊈, ⊇, ⊋, ⊉, <, <=, issetequal" begin
