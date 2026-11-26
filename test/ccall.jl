@@ -2401,3 +2401,166 @@ let f() = ccall((:foo, "libnonexistent"), Cvoid, ())
     @test m !== nothing
     @test occursin(Regex("attributes #$(m[1]) = [^\n]*\"frame-pointer\"=\"all\""), ir)
 end
+
+# Runtime-free callbacks: `@cfunction(f, rt, at, runtime_free=true)` is code that does not
+# use the Julia runtime, so that C may call it on any thread and in any state.
+module RuntimeFreeCFunction
+using Test
+
+# Everything that the callback calls has to be inlined into it, which nothing is with `--inline=no`
+const can_inline = Base.JLOptions().can_inline != 0
+
+add(x::Cint, y::Cint) = x + y
+@inline double(x) = x + x
+@inline known(b::UInt8) = b == 0x03 || b == 0x05 || b == 0x08 || b == 0x0d || b == 0x15
+# loops, calls that are inlined, and what its arguments point to
+function sum_known(p::Ptr{UInt8})
+    s = Cint(0)
+    i = 1
+    while (b = unsafe_load(p, i)) != 0x00
+        known(b) && (s += double(Cint(b)))
+        i += 1
+    end
+    return s
+end
+# a constant table, which is part of the code
+const TABLE = (0x00000003, 0x00000005, 0x00000008, 0x0000000d, 0x00000015)
+lookup(i::Cint) = @inbounds TABLE[(i & 3) + 1]
+store(p::Ptr{Cint}, v::Cint) = (unsafe_store!(p, v); nothing)
+struct Pair2
+    a::Int64
+    b::Float64
+end
+struct Big
+    a::NTuple{6,Int64}
+end
+swap(p::Pair2) = Pair2(unsafe_trunc(Int64, p.b), Float64(p.a))
+shift(x::Big, n::Int32) = Big(map(v -> v + n, x.a))
+constant() = Cint(7)
+
+can_inline || @testset "runtime-free @cfunction without inlining" begin
+    @test_throws "which is not inlined" @cfunction(add, Cint, (Cint, Cint), runtime_free=true)
+end
+
+can_inline && @testset "runtime-free @cfunction" begin
+    @test ccall(@cfunction(add, Cint, (Cint, Cint), runtime_free=true), Cint, (Cint, Cint), 1, 2) === Cint(3)
+    @test ccall(@cfunction(add, Cint, (Cint, Cint), runtime_free=false), Cint, (Cint, Cint), 1, 2) === Cint(3)
+    @test ccall(@cfunction(sum_known, Cint, (Ptr{UInt8},), runtime_free=true), Cint, (Ptr{UInt8},),
+                UInt8[0x03, 0x04, 0x15, 0x03, 0x00]) === Cint(2 * (3 + 21 + 3))
+    let r = Ref{Cint}(0)
+        ccall(@cfunction(store, Cvoid, (Ptr{Cint}, Cint), runtime_free=true), Cvoid, (Ptr{Cint}, Cint), r, 5)
+        @test r[] === Cint(5)
+    end
+    @test ccall(@cfunction(swap, Pair2, (Pair2,), runtime_free=true), Pair2, (Pair2,), Pair2(1, 2.0)) === Pair2(2, 1.0)
+    @test ccall(@cfunction(shift, Big, (Big, Int32), runtime_free=true), Big, (Big, Int32),
+                Big((1, 2, 3, 4, 5, 6)), 10) === Big((11, 12, 13, 14, 15, 16))
+    @test ccall(@cfunction(constant, Cint, (), runtime_free=true), Cint, ()) === Cint(7)
+    if Base.JLOptions().check_bounds == 1
+        # with `--check-bounds=yes`, every index is checked, and so can throw
+        @test_throws "it can throw" @cfunction(lookup, UInt32, (Cint,), runtime_free=true)
+    else
+        @test ccall(@cfunction(lookup, UInt32, (Cint,), runtime_free=true), UInt32, (Cint,), 6) === 0x00000008
+    end
+    # it is one function for as long as its code is the same
+    getadd() = @cfunction(add, Cint, (Cint, Cint), runtime_free=true)
+    @test getadd() === getadd() != C_NULL
+end
+
+# C may call it where Julia code cannot run:
+# while the GC is running, with the world stopped,
+const ngc = Ref(0)
+count_gc(full::Cint) = (ngc[] += 1; nothing)
+# and on a thread that the runtime does not know, which it leaves that way
+thread_entry(arg::Ptr{Cvoid}) = (unsafe_store!(Ptr{Int}(arg), unsafe_load(Ptr{Int}(arg)) + 41); nothing)
+can_inline && @testset "runtime-free @cfunction without the runtime" begin
+    cb = @cfunction(count_gc, Cvoid, (Cint,), runtime_free=true)
+    ccall(:jl_gc_set_cb_pre_gc, Cvoid, (Ptr{Cvoid}, Cint), cb, 1)
+    try
+        before = ngc[]
+        GC.gc(); GC.gc(false)
+        @test ngc[] >= before + 2
+    finally
+        ccall(:jl_gc_set_cb_pre_gc, Cvoid, (Ptr{Cvoid}, Cint), cb, 0)
+    end
+
+    nthreads = Threads.maxthreadid()
+    result = Ref(1)
+    tid = Ref{UInt}(0)
+    GC.@preserve result begin
+        err = @ccall uv_thread_create(tid::Ptr{UInt},
+                                      @cfunction(thread_entry, Cvoid, (Ptr{Cvoid},), runtime_free=true)::Ptr{Cvoid},
+                                      result::Ptr{Cvoid})::Cint
+        err == 0 || Base.uv_error("uv_thread_create", err)
+        err = @ccall uv_thread_join(tid::Ptr{UInt})::Cint
+        err == 0 || Base.uv_error("uv_thread_join", err)
+    end
+    @test result[] == 42
+    @test Threads.maxthreadid() == nthreads
+end
+
+# Code that needs the runtime is refused, when the `@cfunction` is evaluated
+const sink = Ref{Any}()
+allocates(x::Cint) = (sink[] = Ref(x); x)
+divides(x::Cint, y::Cint) = div(x, y)
+indexes(i::Cint) = TABLE[i] % Cint
+@noinline helper(x) = x + one(x)
+calls(x::Cint) = helper(x)
+dispatches(x::Cint) = ((sink[] + x) % Cint)::Cint
+ccalls(p::Ptr{UInt8}) = ccall(:strlen, Csize_t, (Ptr{UInt8},), p)
+catches(x::Cint) = try divides(x, x) catch; x end
+struct Callable
+    x::Cint
+end
+(c::Callable)(x::Cint) = c.x + x
+const callable = Callable(1)
+takes_any(@nospecialize(x)) = Cint(1)
+takes_ref(x::Cint) = x
+
+can_inline && @testset "runtime-free @cfunction that needs the runtime" begin
+    refused(why) = Regex("cfunction: `\\w+` cannot be a runtime-free callback: .*" * why)
+    @test_throws refused("it allocates") @cfunction(allocates, Cint, (Cint,), runtime_free=true)
+    @test_throws refused("it can throw") @cfunction(divides, Cint, (Cint, Cint), runtime_free=true)
+    if Base.JLOptions().check_bounds != 2 # not with `--check-bounds=no`
+        @test_throws refused("it can throw") @cfunction(indexes, Cint, (Cint,), runtime_free=true)
+    end
+    @test_throws refused("it calls `helper`, which is not inlined") @cfunction(calls, Cint, (Cint,), runtime_free=true)
+    # (what it finds first: the check that `sink` is assigned, or the call)
+    @test_throws refused("(it can throw|not resolved statically)") @cfunction(dispatches, Cint, (Cint,), runtime_free=true)
+    @test_throws refused("it has a `ccall`") @cfunction(ccalls, Csize_t, (Ptr{UInt8},), runtime_free=true)
+    @test_throws refused("it has a `try` block") @cfunction(catches, Cint, (Cint,), runtime_free=true)
+    @test_throws refused("declared return type") @cfunction(add, Cdouble, (Cint, Cint), runtime_free=true)
+    @test_throws refused("declared return type") @cfunction(add, Cvoid, (Cint, Cint), runtime_free=true)
+    @test_throws refused("no unique matching method") @cfunction(add, Cint, (Cint, Cdouble), runtime_free=true)
+    @test_throws refused("closure") @cfunction(callable, Cint, (Cint,), runtime_free=true)
+    # values that are passed as references
+    isbits_only = "cfunction: a runtime-free callback needs a constant function, and argument and return types that are `isbits` types"
+    @test_throws isbits_only @cfunction(takes_any, Cint, (Any,), runtime_free=true)
+    @test_throws isbits_only @cfunction(takes_ref, Cint, (Ref{Cint},), runtime_free=true)
+    @test_throws isbits_only @cfunction(takes_ref, Ref{Cint}, (Cint,), runtime_free=true)
+    @test_throws isbits_only @cfunction(takes_ref, Any, (Cint,), runtime_free=true)
+    # the errors of the macro
+    @test_throws "closure" macroexpand(@__MODULE__, :(@cfunction($(Expr(:$, :add)), Cint, (Cint, Cint), runtime_free=true)))
+    @test_throws "runtime_free" macroexpand(@__MODULE__, :(@cfunction(add, Cint, (Cint, Cint), runtime_free=1)))
+    @test_throws "option" macroexpand(@__MODULE__, :(@cfunction(add, Cint, (Cint, Cint), gc_safe=true)))
+    # the function is the one that an ordinary `@cfunction` calls all the same
+    @test ccall(@cfunction(divides, Cint, (Cint, Cint)), Cint, (Cint, Cint), 7, 2) === Cint(3)
+end
+
+# It is the code of the method in the world in which the `@cfunction` is evaluated
+redefined(x::Cint) = x + Cint(1)
+getredefined() = @cfunction(redefined, Cint, (Cint,), runtime_free=true)
+can_inline && let before = getredefined()
+    @test ccall(before, Cint, (Cint,), 1) === Cint(2)
+    @eval redefined(x::Cint) = x + Cint(2)
+    after = getredefined()
+    @test after != before
+    @test ccall(after, Cint, (Cint,), 1) === Cint(3)
+    @test ccall(before, Cint, (Cint,), 1) === Cint(2)
+    @test getredefined() === after
+    # and refused from then on, if it then needs the runtime
+    @eval redefined(x::Cint) = divides(x, x)
+    @test_throws "it can throw" getredefined()
+    @test ccall(after, Cint, (Cint,), 1) === Cint(3)
+end
+
+end # module RuntimeFreeCFunction

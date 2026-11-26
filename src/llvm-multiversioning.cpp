@@ -587,6 +587,10 @@ Function *CloneCtx::create_trampoline(Function *F, GlobalVariable *slot, bool au
     // drop multiversioning attributes
     trampoline->removeFnAttr("julia.mv.reloc");
     trampoline->removeFnAttr("julia.mv.clones");
+    // and what is only true of F itself: this calls it through a slot, and
+    // may start the runtime first, so it is not code that a runtime-free
+    // function could call (see llvm-runtime-free.cpp)
+    trampoline->removeFnAttr("julia.runtime_free");
 
     auto BB = BasicBlock::Create(F->getContext(), "top", trampoline);
     IRBuilder<> irbuilder(BB);

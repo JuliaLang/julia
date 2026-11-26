@@ -565,7 +565,9 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
-static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
+// `get_src` gives the source that a CodeInstance of `out` was compiled from, if it has it
+static void generate_cfunc_thunks(jl_codegen_output_t &out,
+                                  function_ref<jl_code_info_t *(jl_code_instance_t *)> get_src) JL_CANSAFEPOINT
 {
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
@@ -575,11 +577,58 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out) JL_CANSAFEPOINT
             compiled_mi[mi] = ci;
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
-    for (cfunc_decl_t &cfunc : out.cfuncs) {
+    // the runtime-free callbacks of each CodeInstance, which several `cfunction`s may be for
+    DenseMap<jl_code_instance_t*, SmallVector<std::pair<jl_value_t*, Function*>, 1>> runtime_free;
+    for (size_t i = 0; i < out.cfuncs.size(); i++) {
+        cfunc_decl_t cfunc = out.cfuncs[i];
         jl_value_t *sigt = cfunc.abi.sigt;
         JL_GC_PROMISE_ROOTED(sigt);
         jl_value_t *declrt = cfunc.abi.rt;
         JL_GC_PROMISE_ROOTED(declrt);
+        if (cfunc.runtime_free) {
+            // A callback that does not need the runtime is compiled from the
+            // source of its method, on its own (emit_runtime_free_cfunction).
+            // Do that here if that method is compiled here, so that the
+            // runtime only has to see that this is the code to call
+            // (jl_get_runtime_free_cfunction). Otherwise, and if that code
+            // cannot be such a callback, leave it to the runtime, which then
+            // says why.
+            jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
+            if ((jl_value_t*)mi == jl_nothing)
+                continue;
+            auto it = compiled_mi.find(mi);
+            if (it == compiled_mi.end())
+                continue;
+            jl_code_instance_t *codeinst = it->second;
+            JL_GC_PROMISE_ROOTED(codeinst);
+            jl_code_info_t *src = get_src(codeinst);
+            if (src == nullptr)
+                continue;
+            JL_GC_PROMISE_ROOTED(src);
+            Function *f = nullptr;
+            auto &known = runtime_free[codeinst];
+            for (auto &[rt, known_f] : known)
+                if (jl_egal(rt, declrt))
+                    f = known_f;
+            if (f == nullptr) {
+                std::string err;
+                f = emit_runtime_free_cfunction(out, declrt, sigt, mi, src, err);
+                if (f == nullptr)
+                    continue;
+                runtime_free[codeinst].push_back({declrt, f});
+            }
+            ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
+            SmallVector<Constant*,8> initvals;
+            for (unsigned j = 0; j < init->getNumOperands(); ++j)
+                initvals.push_back(init->getOperand(j));
+            assert(initvals.size() == 8);
+            assert(initvals[0]->isNullValue());
+            assert(initvals[2]->isNullValue());
+            initvals[0] = f;
+            initvals[2] = literal_pointer_val_slot(out, (jl_value_t*)codeinst); // plast_codeinst
+            cfunc.cfuncdata->setInitializer(ConstantArray::get(init->getType(), initvals));
+            continue;
+        }
         Function *unspec = aot_abi_converter(out, cfunc.abi, nullptr, nullptr, nullptr, false);
         jl_code_instance_t *codeinst = nullptr;
         auto assign_fptr = [&out, &cfunc, &codeinst, &unspec](Function *f) JL_CANSAFEPOINT {
@@ -1032,7 +1081,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks
-    generate_cfunc_thunks(out);
+    generate_cfunc_thunks(out,
+                          [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
@@ -2794,7 +2844,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     continue;
                 jl_emit_codedecls(output, codeinst);
             }
-            generate_cfunc_thunks(output);
+            generate_cfunc_thunks(output, jl_get_method_ir);
             output.temporary_roots_set.clear();
             output.temporary_roots = nullptr;
             JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it

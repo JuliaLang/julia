@@ -632,6 +632,9 @@ static void buildIntrinsicLoweringPipeline(ModulePassManager &MPM, PassBuilder *
             FPM.addPass(InferAlignmentPass());
             MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         }
+        // The code is final as far as the runtime is concerned: what follows
+        // only adds calls of plain functions (sanitizers, Float16 conversions)
+        JULIA_PASS(MPM.addPass(createModuleToFunctionPassAdaptor(VerifyRuntimeFreePass())));
     }
     else if (!options.remove_ni) {
         JULIA_PASS(MPM.addPass(RemoveNIPass()));

@@ -60,6 +60,10 @@ New library functions
 New library features
 --------------------
 
+* `@cfunction` has a new option `runtime_free=true`, for a C function pointer whose code does not
+  use the Julia runtime, so that C can call it on any thread and at any time, such as while the
+  garbage collector is running. The compiler refuses code that it cannot compile that way (code
+  that allocates, can throw, or has a call that is not inlined), when the `@cfunction` is evaluated.
 * An unquoted `*`, `?` or `[` in a command literal makes a glob, which expands to the matching
   paths when the command is created. Julia calls a `glob` function provided by a package,
   such as Glob.jl, to match the pattern, so globbing works after `using Glob` ([#20401]).

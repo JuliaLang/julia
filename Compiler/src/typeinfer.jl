@@ -2285,6 +2285,15 @@ end
 function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
     interp = NativeInterpreter(world; inf_params)
+    if source_mode == SOURCE_MODE_GET_SOURCE
+        # for a caller that compiles the code itself (`jl_type_infer_source`):
+        # the CodeInstance with its optimized source, which only `interp` may have
+        ci = typeinf_ext(interp, mi, source_mode)
+        ci isa CodeInstance || return nothing
+        src = ci_get_source(interp, ci)
+        src isa CodeInfo || return nothing
+        return svec(ci, src)
+    end
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 

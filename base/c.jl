@@ -24,6 +24,7 @@ unsafe_convert(::Type{Ptr{Cvoid}}, cf::CFunction) = cf.ptr
 """
     @cfunction(callable, ReturnType, (ArgumentTypes...,)) -> Ptr{Cvoid}
     @cfunction(\$callable, ReturnType, (ArgumentTypes...,)) -> CFunction
+    @cfunction(callable, ReturnType, (ArgumentTypes...,), runtime_free=true) -> Ptr{Cvoid}
 
 Generate a C-callable function pointer from the Julia function `callable`
 for the given type signature.
@@ -37,6 +38,37 @@ over the local variable `callable` (this is not supported on all architectures).
 
 See [manual section on ccall and cfunction usage](@ref Calling-C-and-Fortran-Code).
 
+# Runtime-free callbacks
+
+A C function pointer from `@cfunction` enters the Julia runtime when it is called: it
+makes the thread that calls it known to Julia if it is not, may wait there for the garbage
+collector, and calls the method of `callable` that is the latest at that time. So C must
+not call it where Julia code cannot run: while the garbage collector runs, in a signal
+handler, or in the parts of the runtime that must not reach a safepoint.
+
+With `runtime_free=true`, the function pointer is instead for code that does not use the
+Julia runtime at all, so that C may call it at any time, on any thread. That code is
+`callable`'s method, as compiled when `@cfunction` is evaluated: a later definition of a
+method does not change what an existing pointer calls, but only what evaluating
+`@cfunction` again returns. An error is thrown (when `@cfunction` is evaluated) unless
+all of this holds for that code:
+
+* The argument types and the return type are `isbits` types, `callable` is not a closure,
+  and it is inferred to return a value of exactly `ReturnType`.
+* It does not allocate, and cannot throw: there is no caller that could catch an
+  exception. Use `@inbounds` and unchecked arithmetic where the compiler cannot prove an
+  error impossible. (With `--check-bounds=yes`, an index is always checked, so only code
+  that has none can be compiled.)
+* Everything that it calls is inlined into it, and it has no `ccall`, `try` or task-local
+  state: it consists of arithmetic, control flow and loads and stores of memory.
+
+It is then up to that code to only use memory that stays valid without the garbage
+collector's cooperation: what its arguments point to, and constants, such as a `const`
+tuple of numbers.
+
+!!! compat "Julia 1.15"
+    The `runtime_free` option requires Julia 1.15 or higher.
+
 # Examples
 ```julia-repl
 julia> function foo(x::Int, y::Int)
@@ -45,22 +77,37 @@ julia> function foo(x::Int, y::Int)
 
 julia> @cfunction(foo, Int, (Int, Int))
 Ptr{Cvoid} @0x000000001b82fcd0
+
+julia> ccall(@cfunction(foo, Int, (Int, Int), runtime_free=true), Int, (Int, Int), 1, 2)
+3
 ```
 """
-macro cfunction(f, rt, at)
+macro cfunction(f, rt, at, options...)
     if !(isa(at, Expr) && at.head === :tuple)
         throw(ArgumentError("@cfunction argument types must be a literal tuple"))
+    end
+    runtime_free = false
+    for opt in options
+        if isa(opt, Expr) && (opt.head === :(=) || opt.head === :kw) && length(opt.args) == 2 &&
+                opt.args[1] === :runtime_free && opt.args[2] isa Bool
+            runtime_free = opt.args[2]
+        else
+            throw(ArgumentError("@cfunction options are `runtime_free = <bool>`"))
+        end
     end
     at.head = :call
     pushfirst!(at.args, GlobalRef(Core, :svec))
     if isa(f, Expr) && f.head === :$
+        runtime_free && throw(ArgumentError("@cfunction: a runtime-free callback cannot be a closure"))
         fptr = f.args[1]
         typ = CFunction
     else
         fptr = QuoteNode(f)
         typ = Ptr{Cvoid}
     end
-    cfun = Expr(:cfunction, typ, fptr, rt, at, QuoteNode(:ccall))
+    # the calling convention is `ccall`, or `runtime_free` for a wrapper
+    # that does not enter the runtime
+    cfun = Expr(:cfunction, typ, fptr, rt, at, QuoteNode(runtime_free ? :runtime_free : :ccall))
     return esc(cfun)
 end
 

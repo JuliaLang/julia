@@ -108,15 +108,34 @@ function Base.var"@generated"(__context__::MacroContext, ex::SyntaxTree)
 end
 
 function Base.var"@cfunction"(__context__::MacroContext, callable::SyntaxTree,
-                              return_type::SyntaxTree, arg_types::SyntaxTree)
+                              return_type::SyntaxTree, arg_types::SyntaxTree,
+                              options::SyntaxTree...)
     if head(arg_types) != :tuple
         throw(LoweringError(arg_types, "@cfunction argument types must be a literal tuple"))
+    end
+    runtime_free = false
+    for opt in options
+        @stm opt begin
+            [:(=) [:identifier] val] -> if syntax_name(opt[1]) == "runtime_free"
+                if head(val) !== :value || !(val.value isa Bool)
+                    throw(LoweringError(val, "runtime_free must be true or false"))
+                else
+                    runtime_free = val.value
+                end
+            else
+                throw(LoweringError(opt[1], "unknown option name for @cfunction"))
+            end
+            _ -> throw(LoweringError(opt, "bad option to @cfunction"))
+        end
     end
     arg_types_svec = @ast __context__ arg_types [:call
         [:core "svec"::identifier]
         children(arg_types)...
     ]
     if head(callable) == :$
+        if runtime_free
+            throw(LoweringError(callable, "a runtime-free callback cannot be a closure"))
+        end
         fptr = callable[1]
         typ = Base.CFunction
     else
@@ -133,7 +152,9 @@ function Base.var"@cfunction"(__context__::MacroContext, callable::SyntaxTree,
         fptr
         return_type
         arg_types_svec
-        [:inert "ccall"::identifier]
+        # the calling convention: `runtime_free` for a wrapper that does not
+        # enter the runtime
+        [:inert (runtime_free ? "runtime_free" : "ccall")::identifier]
     ]
 end
 

@@ -48,6 +48,15 @@ struct ExpandAtomicModifyPass : OptionalPassInfoMixin<ExpandAtomicModifyPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
 };
 
+// Checks the functions that codegen compiled as runtime-free (the attribute
+// "julia.runtime_free"), now that they are lowered: see llvm-runtime-free.cpp
+struct VerifyRuntimeFreePass : RequiredPassInfoMixin<VerifyRuntimeFreePass> {
+    PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM) JL_NOTSAFEPOINT;
+};
+// Why `F` is not runtime-free, or "" if it is. It may call the functions with
+// the attribute "julia.runtime_free", and those with `calleeAttr` if given.
+std::string jl_verify_runtime_free(const Function &F, StringRef calleeAttr = "") JL_NOTSAFEPOINT;
+
 
 // Module Passes
 struct CPUFeaturesPass : RequiredPassInfoMixin<CPUFeaturesPass> {
