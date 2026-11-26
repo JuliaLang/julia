@@ -656,14 +656,13 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :invoke_modify,
-                      :new, :splatnew, :(=), :(&),
-                      :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :foreignglobal, :isdefined, :copyast,
-                      :throw_undef_if_not,
-                      :cfunction, :pop_exception,
-                      :leave,
-                      :new_opaque_closure)
+    head = e.head
+    return head === :call || head === :invoke || head === :new || head === :foreigncall ||
+           head === :gc_preserve_begin || head === :gc_preserve_end ||
+           head === :leave || head === :foreignglobal || head === :splatnew ||
+           head === :pop_exception || head === :isdefined || head === :invoke_modify ||
+           head === :throw_undef_if_not || head === :cfunction || head === :copyast ||
+           head === :(=) || head === :(&) || head === :new_opaque_closure
 end
 
 @noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
