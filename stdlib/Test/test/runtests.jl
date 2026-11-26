@@ -1274,56 +1274,57 @@ end
     @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
     test_properties_macro_source = runtests * ":6"
     test_properties2_macro_source = utils * ":2"
+    # Frames at `file:line` or `file:line:column`
+    atline(file, line) = contains(Regex("\\Q$(file):$(line)\\E(?!\\d)"))
 
     fail = failures[1]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 2 # @testset + test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 10), lines) == 1 # test
 
     fail = failures[2]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":11"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 11), lines) == 1 # test
 
     fail = failures[3]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":12"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 12), lines) == 1 # test
 
     fail = failures[4]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 5
     @test fail.testset == "Other tests" && fail.source == included * ":2" && fail.ex == "1 + 1 == 3"
-    @test count(contains(included * ":2"), lines) == 2 # @testset + test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(atline(included, 1), lines) == 1 # @testset
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 
     fail = failures[5]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Other tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(included * ":2"), lines) == 1 # @testset
-    @test count(contains(included * ":3"), lines) == 1 # test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(atline(included, 1), lines) == 1 # @testset
+    @test count(atline(included, 3), lines) == 1 # test
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 
     fail = failures[6]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 8
     @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":14"), lines) == 1 # include
-    @test count(contains(included * ":5"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 14), lines) == 1 # include
+    @test count(atline(included, 5), lines) == 1 # test
 
     fail = failures[7]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 9
     @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":14"), lines) == 1 # include
-    @test count(contains(included * ":8"), lines) == 1 # test
+    @test count(atline(runtests, 14), lines) == 1 # include
+    @test count(atline(included, 8), lines) == 1 # test
 
     fail = failures[8]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 5
     @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
-    @test count(contains(included * ":10"), lines) == 2 # @testset + test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 end
 
 let io = IOBuffer()
@@ -1483,20 +1484,26 @@ erronce() = @error "an error" maxlog=1
     @test length(test_logger.logs) == 2
 
     # Test failures
+    ran = Ref(false)
     fails = @testset NoThrowTestSet "check that @test_logs detects bad input" begin
         @test_logs (Warn,) foo(1)
         @test_logs (Warn,) match_mode=:any @info "foo"
         @test_logs (Debug,) @debug "foo"
         @test_logs (Warn,) error()
         @test_logs (:nosuchlevel,) @info "foo"
+        @test_logs (Info,) match_mode=:exact (ran[] = true; @info "foo")
     end
-    @test length(fails) == 5
+    @test length(fails) == 6
     @test fails[1] isa Test.LogTestFailure
     @test fails[2] isa Test.LogTestFailure
     @test fails[3] isa Test.LogTestFailure
     @test fails[4] isa Test.Error
     @test startswith(fails[4].value, "ErrorException")
     @test occursin("Unknown log level nosuchlevel", fails[5].value)
+    # an invalid `match_mode` is rejected before the expression is evaluated
+    @test fails[6] isa Test.Error
+    @test startswith(fails[6].value, "ArgumentError")
+    @test !ran[]
 
     # Other fields of the pattern, matched by value, by regex or not at all
     @test_logs (:abovemaxlevel,) @logmsg AboveMaxLevel "foo"

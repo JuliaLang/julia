@@ -157,7 +157,12 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         ios_bufmode(&f, bm_block);
     }
 
-    if (native_code) {
+    if (native_code && emit_split && jl_options.incremental && jl_native_code_is_empty(native_code)) {
+        // the .ji was written standalone, so no native image is needed
+        jl_free_native(native_code);
+        jl_postoutput_hook();
+    }
+    else if (native_code) {
         const char *unpack_func =
             emit_split ? (comp ? "jl_image_unpack_split_zstd" : "jl_image_unpack_split") :
                          (comp ? "jl_image_unpack_zstd" : "jl_image_unpack_uncomp");

@@ -1239,7 +1239,8 @@ static jl_value_t *lookup_typevalue(jl_typename_t *tn, jl_value_t *key1, jl_valu
     }
 }
 
-static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, int atomic)
+// returns 1 + the probe distance, or 0 if full
+static size_t cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, int atomic)
 {
     _Atomic(jl_value_t*) *tab = (_Atomic(jl_value_t*)*)jl_svec_data(a);
     size_t sz = jl_svec_len(a);
@@ -1258,7 +1259,7 @@ static int cache_insert_type_set_(jl_svec_t *a, jl_datatype_t *val, uint_t hv, i
                 jl_atomic_store_release(&tab[index], (jl_value_t*)val);
             else
                 jl_atomic_store_relaxed(&tab[index], (jl_value_t*)val);
-            return 1;
+            return iter + 1;
         }
         index = (index + 1) & (sz - 1);
         iter++;
@@ -1272,15 +1273,27 @@ static void cache_insert_type_set(jl_datatype_t *val, uint_t hv) JL_CANSAFEPOINT
     jl_svec_t *a = jl_atomic_load_relaxed(&val->name->cache);
     while (1) {
         JL_GC_PROMISE_ROOTED(a);
-        if (cache_insert_type_set_(a, val, hv, 1))
+        size_t probe = cache_insert_type_set_(a, val, hv, 1);
+        size_t sz = jl_svec_len(a);
+        if (probe) {
+            if (probe - 1 <= jl_table_long_probe(sz))
+                return;
+            jl_value_t **tab = jl_svec_data(a);
+            size_t step = jl_table_sample_stride(sz), n = 0;
+            for (size_t i = 0; i < sz; i += step)
+                n += tab[i] != jl_nothing;
+            if (2 * n * step <= sz)
+                return;
+            a = cache_rehash_set(a, sz << 1);
+            jl_gc_write_atomic(val->name, val->name->cache, jl_svec_t, a, release);
             return;
+        }
 
         /* table full */
         /* rehash to grow and retry the insert */
         /* it's important to grow the table really fast; otherwise we waste */
         /* lots of time rehashing all the keys over and over. */
         size_t newsz;
-        size_t sz = jl_svec_len(a);
         if (sz < HT_N_INLINE)
             newsz = HT_N_INLINE;
         else if (sz >= (1 << 19) || (sz <= (1 << 8)))

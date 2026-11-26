@@ -280,6 +280,10 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex::SyntaxTre
     ]
 end
 
+Base.@constprop :none function _eval_fill_context(st, sc)
+    fill_context(st, sc)::Syntax
+end
+
 # @eval should mostly ignore hygiene against our system's best wishes.  Still
 # attempt to preserve provenance.
 function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex::SyntaxTree)
@@ -293,7 +297,8 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex::SyntaxTree)
                 val
                 [:call at_eval_hook::value
                     mod_st
-                    [:call fill_context::value trim_provenance(q, true) new_sc::value]
+                    [:call _eval_fill_context::value
+                        trim_provenance(q, true) new_sc::value]
                 ]
             ]
         ]

@@ -578,12 +578,18 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
+# Fast path: the operands of any `Expr` except `=` are its `args`.
+@inline is_call_like_expr(@nospecialize(stmt)) = isa(stmt, Expr) && stmt.head !== :(=)
+
 # Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
 # types only have a single operand, so the op==1 path can return directly without
 # checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
 # to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
-function _useref_getindex(@nospecialize(stmt), op::Int)
-    if op == 1
+@inline function _useref_getindex(@nospecialize(stmt), op::Int)
+    if is_call_like_expr(stmt)
+        args = stmt.args
+        return op > length(args) ? OOB_TOKEN : args[op]
+    elseif op == 1
         return _useref_getindex_op1(stmt)
     else
         return _useref_getindex_opN(stmt, op)
@@ -656,14 +662,13 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :invoke_modify,
-                      :new, :splatnew, :(=), :(&),
-                      :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :foreignglobal, :isdefined, :copyast,
-                      :throw_undef_if_not,
-                      :cfunction, :pop_exception,
-                      :leave,
-                      :new_opaque_closure)
+    head = e.head
+    return head === :call || head === :invoke || head === :new || head === :foreigncall ||
+           head === :gc_preserve_begin || head === :gc_preserve_end ||
+           head === :leave || head === :foreignglobal || head === :splatnew ||
+           head === :pop_exception || head === :isdefined || head === :invoke_modify ||
+           head === :throw_undef_if_not || head === :cfunction || head === :copyast ||
+           head === :(=) || head === :(&) || head === :new_opaque_closure
 end
 
 @noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
@@ -714,7 +719,12 @@ end
 end
 
 @inline function setindex!(x::UseRef, @nospecialize(v))
-    x.urs.stmt = _useref_setindex!(x.urs.stmt, x.op, v)
+    stmt = x.urs.stmt
+    if is_call_like_expr(stmt)
+        stmt.args[x.op] = v
+    else
+        x.urs.stmt = _useref_setindex!(stmt, x.op, v)
+    end
     return x
 end
 
@@ -736,7 +746,13 @@ end
 
 @inline function iterate(it::UseRefIterator, op::Int=0)
     it.relevant || return nothing
-    op = _advance(it.stmt, op)
+    stmt = it.stmt
+    if is_call_like_expr(stmt)
+        op += 1
+        op > length(stmt.args) && return nothing
+        return (UseRef(it, op), op)
+    end
+    op = _advance(stmt, op)
     op === nothing && return nothing
     return (UseRef(it, op), op)
 end
@@ -865,7 +881,6 @@ mutable struct IncrementalCompact
         code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
-        blocks = code.cfg.blocks
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
@@ -1075,7 +1090,7 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
         else
             newline = something(newinst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
-            node = inst_from_newinst!(node, newinst, newline, newflag)
+            inst_from_newinst!(node, newinst, newline, newflag)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -1099,7 +1114,7 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
             end
             newline = something(newinst.line, compact.ir.stmts[pos][:line])
             node = add_pending!(compact, pos, attach_after)
-            node = inst_from_newinst!(node, newinst, newline, newflag)
+            inst_from_newinst!(node, newinst, newline, newflag)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -1139,16 +1154,14 @@ end
 
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
     newline = newinst.line::NTuple{3,Int32}
-    refinish = false
     result_idx = compact.result_idx
-    result_bbs = compact.cfg_transform.result_bbs
     refinish = reverse_affinity && maybe_reopen_bb!(compact)
     if result_idx > length(compact.result)
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
     newflag = recompute_newinst_flag(newinst, compact)
-    node = inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
+    inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
     count_added_node!(compact, newinst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
     inst = SSAValue(result_idx)
@@ -2088,7 +2101,6 @@ function iterate_compact(compact::IncrementalCompact)
     compact.idx = idx + 1
     compact.active_bb = active_bb
     if old_result_idx == compact.result_idx
-        idx += 1
         @goto restart
     end
     @assert isassigned(compact.result.stmt, old_result_idx)
@@ -2242,7 +2254,7 @@ function non_dce_finish!(compact::IncrementalCompact)
         # Finish the bb now
         finish_current_bb!(compact, 0)
     end
-    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
+    resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     compact.renamed_new_nodes = true
     nothing
 end

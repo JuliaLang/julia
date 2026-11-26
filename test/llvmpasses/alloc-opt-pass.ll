@@ -77,6 +77,23 @@ declare void @external_function()
 
 declare ptr addrspace(10) @external_function2()
 
+; Keep forwarding the tag through `julia.typeof` when an escaping allocation cannot be eliminated.
+; CHECK-LABEL: @typeof_escaping_alloc(
+; CHECK: %obj = call noalias ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) %tag)
+; CHECK: call void @escape_alloc(ptr addrspace(10) %obj)
+; CHECK-NOT: @julia.typeof
+; CHECK-NEXT: ret ptr addrspace(10) %tag
+define ptr addrspace(10) @typeof_escaping_alloc(ptr %ptls, ptr addrspace(10) %tag) {
+  %obj = call noalias ptr addrspace(10) @julia.gc_alloc_obj(ptr %ptls, i64 8, ptr addrspace(10) %tag)
+  call void @escape_alloc(ptr addrspace(10) %obj)
+  %type = call ptr addrspace(10) @julia.typeof(ptr addrspace(10) %obj)
+  ret ptr addrspace(10) %type
+}
+
+declare void @escape_alloc(ptr addrspace(10))
+
+declare ptr addrspace(10) @julia.typeof(ptr addrspace(10))
+
 
 ; CHECK-LABEL: @legal_int_types
 ; Test that allocations use i64 chunks (capped at 64 bits for backend compatibility)

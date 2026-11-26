@@ -1802,7 +1802,7 @@ end
     for i=1:10
         @eval begin
             @noinline function g(x)
-                x = @big_expr(4000, x)
+                x = @big_expr(2500, x)
                 if x > 0
                     f(x-1)
                 else
@@ -1827,6 +1827,9 @@ end
     end
 end
 
+# TODO: @big_expr was originally 4000 (more-or-less flisp's limit), but JL runs
+# out of stack space sooner
+@test_broken false
 
 # Forcible task abandonment (unsafe_abandon!): the victim must be running
 # on a thread of its own while the driver keeps executing.
@@ -1992,5 +1995,31 @@ if threadpoolsize() >= 2
         end
         @test Core.Compiler.return_type(m.f, Tuple{Int}) === Int
         @test fetch(t) == 2 * (sizeof(Int) + 1) + 1
+    end
+end
+
+# GC must be able to stop a loop whose only safepoint is in a callee compiled after an
+# atomic modify. This relies on callees being compiled in reverse order of their calls.
+mutable struct AtomicModifyInBatch
+    @atomic x::Int
+end
+@noinline spin_callee_in_batch(started) = (started[] = true; nothing)
+@noinline atomic_modify_in_batch(c) = @atomic c.x += 1
+function spin_then_atomic_modify(c, started, stop)
+    while !stop[]
+        spin_callee_in_batch(started)
+    end
+    atomic_modify_in_batch(c)
+end
+if threadpoolsize(:default) > 1
+    let c = AtomicModifyInBatch(0), started = Threads.Atomic{Bool}(false), stop = Threads.Atomic{Bool}(false)
+        t = spawn_pinned(() -> spin_then_atomic_modify(c, started, stop), other_default_tid())
+        while !started[]
+            yield()
+        end
+        GC.gc() # the callee's entry safepoint is the only one in the loop
+        stop[] = true
+        wait(t)
+        @test (@atomic c.x) == 1
     end
 end

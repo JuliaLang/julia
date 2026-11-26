@@ -38,9 +38,9 @@ function inflate_ir!(ci::CodeInfo, sptypes::Vector{VarState}, argtypes::Vector{A
     nstmts = length(code)
     ssavaluetypes = ci.ssavaluetypes
     if !isa(ssavaluetypes, Vector{Any})
-        ssavaluetypes = Any[ Any for i = 1:ssavaluetypes::Int ]
+        ssavaluetypes = Any[ Any for _ = 1:ssavaluetypes::Int ]
     end
-    info = CallInfo[NoCallInfo() for i = 1:nstmts]
+    info = CallInfo[NoCallInfo() for _ = 1:nstmts]
     di = DebugInfoStream(nothing, ci.debuginfo, nstmts)
     stmts = InstructionStream(code, ssavaluetypes, info, di.codelocs, ci.ssaflags)
     meta = Expr[]
@@ -64,7 +64,7 @@ function inflate_ir(ci::CodeInfo)
     isa(parent, MethodInstance) && return inflate_ir(ci, parent)
     # XXX the length of `ci.slotflags` may be different from the actual number of call
     # arguments, but we really don't know that information in this case
-    argtypes = Any[ Any for i = 1:length(ci.slotflags) ]
+    argtypes = Any[ Any for _ = 1:length(ci.slotflags) ]
     return inflate_ir(ci, VarState[], argtypes)
 end
 

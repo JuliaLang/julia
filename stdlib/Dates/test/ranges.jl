@@ -493,7 +493,7 @@ let n = 10000,
     b = Dates.Date(1986, 12, 27),
     c = Dates.DateTime(1985, 12, 5),
     d = Dates.DateTime(1986, 12, 27)
-    for i = 1:n
+    for _ = 1:n
         @test length(a:Dates.Month(1):b) == 13
         @test length(a:Dates.Year(1):b) == 2
         @test length(c:Dates.Month(1):d) == 13

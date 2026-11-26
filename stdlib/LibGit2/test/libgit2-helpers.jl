@@ -1,7 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using LibGit2: AbstractCredential, UserPasswordCredential, SSHCredential,
-    CachedCredentials, CredentialPayload
+using LibGit2: AbstractCredential, CachedCredentials, CredentialPayload, SSHCredential,
+    UserPasswordCredential
 using Base: something
 
 const DEFAULT_PAYLOAD = CredentialPayload(allow_ssh_agent=false, allow_git_helpers=false)

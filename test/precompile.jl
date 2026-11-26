@@ -693,6 +693,8 @@ precompile_test_harness(false) do dir
     cachefile, _ = @test_logs (:debug, r"Generating object cache file for FooBar") min_level=Logging.Debug match_mode=:any Base.compilecache(Base.PkgId("FooBar"))
     @test cachefile == Base.compilecache_path(Base.PkgId("FooBar"), "")
     @test isfile(joinpath(cachedir, "FooBar.ji"))
+    # FooBar has no native code, so it gets no package image file
+    @test !isfile(Base.ocachefile_from_cachefile(cachefile))
     Tsc = Bool(Base.JLOptions().use_pkgimages) ? Tuple{<:Vector, String, UInt128} : Tuple{<:Vector, Nothing, UInt128}
     @test Base.stale_cachefile(FooBar_file, joinpath(cachedir, "FooBar.ji")) isa Tsc
     @test !isdefined(Main, :FooBar)
@@ -2239,25 +2241,32 @@ precompile_test_harness("BadInvalidations") do load_path
 end
 
 # https://github.com/JuliaLang/julia/issues/48074
+# A package without code has no .so, so its loaded .ji is the file that cannot be replaced.
 precompile_test_harness("WindowsCacheOverwrite") do load_path
-    # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        end # module
-        """)
-    ji, ofile = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @eval using WindowsCacheOverwrite
+    for code in (true, false)
+        name = code ? "WindowsCacheOverwrite" : "WindowsCacheOverwriteNoCode"
+        # https://github.com/JuliaLang/julia/pull/47184#issuecomment-1364716312
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
+        ji, ofile = Base.compilecache(Base.PkgId(name))
+        @eval using $(Symbol(name))
 
-    write(joinpath(load_path, "WindowsCacheOverwrite.jl"),
-        """
-        module WindowsCacheOverwrite
-        f() = "something new"
-        end # module
-        """)
+        write(joinpath(load_path, "$name.jl"),
+            """
+            module $name
+            f() = "something new"
+            $(code ? "precompile(f, ())" : "")
+            end # module
+            """)
 
-    ji_2, ofile_2 = Base.compilecache(Base.PkgId("WindowsCacheOverwrite"))
-    @test ofile_2 == Base.ocachefile_from_cachefile(ji_2)
+        ji_2, ofile_2 = Base.compilecache(Base.PkgId(name))
+        @test ofile_2 == (code ? Base.ocachefile_from_cachefile(ji_2) : ji_2)
+    end
 end
 
 precompile_test_harness("Issue #48391") do load_path
@@ -2795,6 +2804,61 @@ precompile_test_harness("Image WeakRef") do load_path
         ImageWeakRef.held[] = nothing
         GC.gc(true); GC.gc(true)
         @test ImageWeakRef.cleared() skip=!Base.USING_STOCK_GC
+    end
+end
+
+# An object of a package image is never freed, and must keep alive what it refers to even
+# once nothing refers to it: an image that is loaded later can still refer to it, by its
+# address in the first image. (This is why such an object retains memory: issue #65162.)
+precompile_test_harness("Image object revived by a later image") do load_path
+    write(joinpath(load_path, "ImageRevivedA.jl"),
+        """
+        module ImageRevivedA
+            mutable struct Node
+                next::Any
+            end
+            mutable struct Payload
+                v::Vector{Int}
+            end
+            const holder = Ref{Any}(Node(nothing))
+            # store a new object in the `Node` of the image, then drop the node
+            @noinline function drop!()
+                node = holder[]::Node
+                node.next = Payload(collect(1:100))
+                holder[] = nothing
+                return WeakRef(node.next)
+            end
+        end
+        """)
+    write(joinpath(load_path, "ImageRevivedB.jl"),
+        """
+        module ImageRevivedB
+            using ImageRevivedA
+            # while this is precompiled, the other image still holds its `Node`
+            const kept = ImageRevivedA.holder[]::ImageRevivedA.Node
+            @noinline getnext() = kept.next
+        end
+        """)
+    @eval using ImageRevivedA
+    payload, junk = invokelatest() do
+        payload = ImageRevivedA.drop!()
+        GC.gc(true); GC.gc(true)
+        junk = [ImageRevivedA.Payload([i]) for i in 1:100_000] # reuse what was freed, if anything
+        GC.gc(true); GC.gc(true)
+        payload, junk
+    end
+    # MMTk does not treat image objects as permalloc'd, so it frees the payload
+    # (but this is a bug, since semantically it should be immortal)
+    @test payload.value !== nothing broken=!Base.USING_STOCK_GC
+    if Base.USING_STOCK_GC # otherwise this reads freed memory
+        @eval using ImageRevivedB
+        invokelatest() do
+            @test ImageRevivedA.holder[] === nothing
+            next = ImageRevivedB.getnext()
+            @test next === payload.value
+            @test sum((next::ImageRevivedA.Payload).v) == 5050
+            @test length(junk) == 100_000
+        end
     end
 end
 
@@ -3447,6 +3511,66 @@ end
     end
 end
 
+@testset "ExplicitEnv takes the project and stdlib extensions from where loading does" begin
+    mktempdir() do dir
+        root, dep1, dep2 = Base.UUID.("e1000000-0000-0000-0000-00000000000" .* ("1", "2", "3"))
+        statistics = Base.UUID("10745b16-79ce-11e8-11f9-7d13ad32a3b2")
+        project_file = joinpath(dir, "Project.toml")
+        # a project that is also in its manifest, as a workspace member is, and that changed since it was resolved
+        write(project_file, """
+            name = "Root"
+            uuid = "$root"
+
+            [deps]
+            Dep = "$dep2"
+
+            [weakdeps]
+            Statistics = "$statistics"
+
+            [extensions]
+            RootExt = "Statistics"
+            """)
+        explicit_env(statistics_source) = (write(joinpath(dir, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.Dep]]
+            path = "Dep1"
+            uuid = "$dep1"
+
+            [[deps.Dep]]
+            path = "Dep2"
+            uuid = "$dep2"
+
+            [[deps.Root]]
+            path = "."
+            uuid = "$root"
+
+                [deps.Root.deps]
+                Dep = "$dep1"
+
+            [[deps.Statistics]]
+            $statistics_source
+            uuid = "$statistics"
+            """); Base.Precompilation.ExplicitEnv(project_file))
+        env = explicit_env("")
+        @test env.deps[root] == [dep2]
+        @test env.extensions[root] == Dict("RootExt" => [statistics])
+        # a stdlib has the extensions of the copy that is loaded
+        has_stdlib_ext(env) = haskey(env.extensions[statistics], "SparseArraysExt")
+        @test has_stdlib_ext(env)
+        @test !has_stdlib_ext(explicit_env("path = \"Statistics\""))
+        tree = "1"^40
+        @test has_stdlib_ext(explicit_env("git-tree-sha1 = \"$tree\"")) # not installed, so the stdlib is loaded
+        mkpath(joinpath(dir, "packages", "Statistics", Base.version_slug(statistics, Base.SHA1(tree))))
+        pushfirst!(DEPOT_PATH, dir)
+        try
+            @test !has_stdlib_ext(explicit_env("git-tree-sha1 = \"$tree\""))
+        finally
+            popfirst!(DEPOT_PATH)
+        end
+    end
+end
+
 # Write dev packages, given as (name, uuid, deps), into the depot, and a project that depends on all of them
 function write_precompile_env(depot, pkgs)
     project = "[deps]\n"
@@ -3554,6 +3678,42 @@ end
             @test length(paths) == 2
         end
     end
+end
+
+# Workers are handed what the driver resolved for their dependencies
+@testset "precompilepkgs hands its resolution to workers" begin
+    mkdepottempdir() do depot
+        project_path = write_precompile_env(depot, [
+            ("PreresA", "b1000000-0000-0000-0000-000000000001", String[]),
+            ("PreresB", "b1000000-0000-0000-0000-000000000002", ["PreresA"]),
+        ])
+        write(joinpath(depot, "dev", "PreresB", "src", "PreresB.jl"), """
+            module PreresB
+            import PreresA
+            let A = Base.PkgId(PreresA), table = Base.preresolved_table()
+                table.names[(Base.PkgId(PreresB), "PreresA")] == A || error("name not handed over")
+                haskey(table.specs, A) && haskey(table.cachefiles, A) || error("location not handed over")
+                isempty(table.exts[A]) || error("extensions not handed over")
+                # the table only describes the load path the worker started with
+                push!(LOAD_PATH, "@stdlib")
+                Base.preresolved_table() === nothing || error("table used on another load path")
+                pop!(LOAD_PATH)
+            end
+            end
+            """)
+        with_precompile_env(depot, project_path) do
+            paths = Base.Precompilation.precompilepkgs(; io=IOBuffer(), fancyprint=false)
+            @test length(paths) == 2
+        end
+    end
+
+    a, b = Base.PkgId(Base.UUID(1), "A"), Base.PkgId(Base.UUID(2), "B")
+    entries = [Base.PreresolvedPkg(a, [b, a], Base.PkgLoadSpec("/src/\$A.jl", (1, 14)), "/A.ji", UInt128(0), ["AExt" => [b]]),
+               Base.PreresolvedPkg(b, Base.PkgId[], nothing, nothing, UInt128(7) << 64 | 9, nothing)]
+    roundtrip = Core.eval(Main, Meta.parse(Base._preresolved_str(entries)))
+    @test roundtrip isa Vector{Base.PreresolvedPkg}
+    @test all(e -> all(f -> getfield(e[1], f) == getfield(e[2], f), fieldnames(Base.PreresolvedPkg)), zip(entries, roundtrip))
+    @test isempty(Core.eval(Main, Meta.parse(Base._preresolved_str(Base.PreresolvedPkg[]))))
 end
 
 # Verbose mode prints a per-package breakdown of where the precompile time went
@@ -5908,13 +6068,13 @@ end
 # needed later, so the package is recompiled to the same path and loaded from it.
 precompile_test_harness("mismatched package image .so is recompiled") do load_path
     srcfile = joinpath(load_path, "MismatchedSo.jl")
-    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 1\nprecompile(f, (Int,))\nend\n")
     pkg = Base.PkgId("MismatchedSo")
     Base.compilecache(pkg)
     cachefile = only(Base.find_all_in_cache_path(pkg))
     ocachefile = Base.ocachefile_from_cachefile(cachefile)
     oldso = read(ocachefile)
-    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nend\n")
+    write(srcfile, "module MismatchedSo\nf(x) = x + 2\nprecompile(f, (Int,))\nend\n")
     Base.compilecache(pkg)
     @test only(Base.find_all_in_cache_path(pkg)) == cachefile
     write(ocachefile, oldso)

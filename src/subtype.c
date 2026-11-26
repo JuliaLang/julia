@@ -4326,6 +4326,8 @@ JL_DLLEXPORT int jl_isa(jl_value_t *x, jl_value_t *t)
         return 1;
     if (jl_is_typeapp(t))
         jl_error("internal error: TypeApp in jl_isa");
+    if (t == (jl_value_t*)jl_anytype_type) // its subtypes are the kinds and `Intersect`
+        return jl_is_type(x) || jl_is_intersecttype(x);
     if (jl_is_type(x)) {
         if (t == (jl_value_t*)jl_type_type)
             return 1;

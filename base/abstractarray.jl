@@ -1058,17 +1058,21 @@ julia> y
 ```
 """
 function copyto!(dest::AbstractArray, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
+    src′ = unalias(dest, src)
     if dest isa BitArray
         # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src)
+        return _copyto_bitarray!(dest, src′)
     end
-    src′ = unalias(dest, src)
     copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
 end
 
 function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
+    @_propagate_inbounds_meta
     isempty(src) && return dest
+    @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
     src′ = unalias(dest, src)
     copyto_unaliased!(deststyle, dest, srcstyle, src′)
 end
@@ -1078,8 +1082,6 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     idf, isf = first(destinds), first(srcinds)
     Δi = idf - isf
-    (checkbounds(Bool, destinds, isf+Δi) & checkbounds(Bool, destinds, last(srcinds)+Δi)) ||
-        throw(BoundsError(dest, srcinds))
     if deststyle isa IndexLinear
         if srcstyle isa IndexLinear
             # Single-index implementation
@@ -1116,30 +1118,38 @@ function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle:
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
+    @_propagate_inbounds_meta
     copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
+    @_propagate_inbounds_meta
     srcinds = LinearIndices(src)
-    checkbounds(Bool, srcinds, sstart) || throw(BoundsError(src, sstart))
+    @boundscheck checkbounds(Bool, srcinds, sstart) || throw_boundserror(src, sstart)
     copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
                  src::AbstractArray, sstart::Integer,
                  n::Integer)
+    @_propagate_inbounds_meta
     n == 0 && return dest
     n < 0 && throw(ArgumentError(LazyString("tried to copy n=",
         n," elements, but n should be non-negative")))
     destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
-    (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
+    @boundscheck (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    @boundscheck (checkbounds(Bool, srcinds, sstart)  && n <= last(srcinds) - sstart + 1)  || throw_boundserror(src, sstart)
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)
     src′ = unalias(dest, src)
-    @inbounds for i = 0:n-1
-        dest[dstart+i] = src′[sstart+i]
+    return _copyto_loops!(dest, dstart:dstart+n-1, src′, sstart:sstart+n-1)
+end
+
+function _copyto_loops!(dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::UnitRange{Int})
+    Δi = first(Rsrc) - first(Rdest)
+    for i in Rdest
+        @inbounds dest[i] = src[i + Δi]
     end
     return dest
 end
@@ -1151,6 +1161,7 @@ end
 
 function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
                A::AbstractVecOrMat{S}, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int}) where {R,S}
+    @_propagate_inbounds_meta
     if length(ir_dest) != length(ir_src)
         throw(ArgumentError(LazyString("source and destination must have same size (got ",
             length(ir_src)," and ",length(ir_dest),")")))
@@ -1162,11 +1173,16 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
     A′ = unalias(B, A)
+    return _copyto_loops!(B, ir_dest, jr_dest, A′, ir_src, jr_src)
+end
+
+function _copyto_loops!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
+                        A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
     jdest = first(jr_dest)
     for jsrc in jr_src
         idest = first(ir_dest)
         for isrc in ir_src
-            @inbounds B[idest,jdest] = A′[isrc,jsrc]
+            @inbounds B[idest,jdest] = A[isrc,jsrc]
             idest += step(ir_dest)
         end
         jdest += step(jr_dest)
@@ -2626,86 +2642,40 @@ function _typed_hvncat_dims(::Type{T}, dims::NTuple{N, Int}, row_first::Bool, as
         throw(ArgumentError("must have at least one element"))
     all(>(0), dims) ||
         throw(ArgumentError("`dims` argument must contain positive integers"))
+    nblocks = Core.checked_dims(dims...)
+    length(as) == nblocks ||
+        throw(ArgumentError("argument count does not match specified shape (expected $nblocks, got $(length(as)))"))
 
     d1 = row_first ? 2 : 1
     d2 = row_first ? 1 : 2
 
     outdims = zeros(Int, N)
-
-    # validate shapes for lowest level of concatenation
-    d = findfirst(>(1), dims)
-    if d !== nothing # all dims are 1
-        if row_first && d < 3
-            d = d == 1 ? 2 : 1
-        end
-        nblocks = length(as) ÷ dims[d]
-        for b ∈ 1:nblocks
-            offset = ((b - 1) * dims[d])
-            startelementi = offset + 1
-            for i ∈ offset .+ (2:dims[d])
-                for dd ∈ 1:N
-                    dd == d && continue
-                    if cat_size(as[startelementi], dd) != cat_size(as[i], dd)
-                        throw(DimensionMismatch("incompatible shape in element $i"))
-                    end
-                end
-            end
-        end
-    end
-
-    # discover number of rows or columns
-    # d1 dimension is increased by 1 to appropriately handle 0-length arrays
-    for i ∈ 1:dims[d1]
-        outdims[d1] = checked_add(outdims[d1], cat_size(as[i], d1))
-    end
-
-    # adjustment to handle 0-length arrays
-    first_dim_zero = outdims[d1] == 0
-    if first_dim_zero
-        outdims[d1] = dims[d1]
-    end
-
     currentdims = zeros(Int, N)
-    blockcount = 0
-    elementcount = 0
+    closed = N
+    prev = as[1]
     for i ∈ eachindex(as)
-        elementcount = checked_add(elementcount, cat_length(as[i]))
-        currentdims[d1] = checked_add(currentdims[d1], first_dim_zero ? 1 : cat_size(as[i], d1))
-        if currentdims[d1] == outdims[d1]
-            currentdims[d1] = 0
-            for d ∈ (d2, 3:N...)
-                currentdims[d] = checked_add(currentdims[d], cat_size(as[i], d))
-                if outdims[d] == 0 # unfixed dimension
-                    blockcount += 1
-                    if blockcount == dims[d]
-                        outdims[d] = currentdims[d]
-                        currentdims[d] = 0
-                        blockcount = 0
-                    else
-                        break
-                    end
-                else # fixed dimension
-                    if currentdims[d] == outdims[d] # end of dimension
-                        currentdims[d] = 0
-                    elseif currentdims[d] < outdims[d] # dimension in progress
-                        break
-                    else # exceeded dimension
-                        throw(DimensionMismatch("argument $i has too many elements along axis $d"))
-                    end
-                end
+        a = as[i]
+        for k ∈ closed+2:N
+            d = k == 2 ? d2 : k
+            cat_size(a, d) == cat_size(prev, d) ||
+                throw(DimensionMismatch("incompatible shape in element $i"))
+        end
+        prev = a
+        closed = 0
+        n = i
+        for d ∈ (d1, d2, 3:N...)
+            currentdims[d] = checked_add(currentdims[d], cat_size(a, d))
+            n % dims[d] == 0 || break
+            n ÷= dims[d]
+            if n == 1
+                outdims[d] = currentdims[d]
+            elseif currentdims[d] != outdims[d]
+                throw(DimensionMismatch("argument $i has a mismatched number of elements along axis $d"))
             end
-        elseif currentdims[d1] > outdims[d1] # exceeded dimension
-            throw(DimensionMismatch("argument $i has too many elements along axis $d1"))
+            currentdims[d] = 0
+            closed += 1
         end
     end
-    # restore 0-length adjustment
-    if first_dim_zero
-        outdims[d1] = 0
-    end
-
-    outlen = Core.checked_dims(ntuple(i -> outdims[i], Val(N))...)
-    elementcount == outlen ||
-        throw(DimensionMismatch("mismatched number of elements; expected $(outlen), got $(elementcount)"))
 
     # copy into final array
     A = cat_similar(as[1], T, ntuple(i -> outdims[i], N))

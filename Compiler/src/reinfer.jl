@@ -152,7 +152,7 @@ function verify_method_graph(codeinst::CodeInstance, validation_world::UInt, wor
     @assert isempty(workspace.initial_states) "workspace corrupted"
     @assert isempty(workspace.work_states) "workspace corrupted"
     @assert isempty(workspace.result_states) "workspace corrupted"
-    child_cycle, minworld, maxworld = verify_method(codeinst, validation_world, workspace)
+    child_cycle, _minworld, _maxworld = verify_method(codeinst, validation_world, workspace)
     @assert child_cycle == 0
     @assert isempty(workspace.stack) "workspace corrupted"
     @assert isempty(workspace.visiting) "workspace corrupted"

@@ -938,6 +938,7 @@ JL_DLLEXPORT void jl_typeassert(jl_value_t *x, jl_value_t *t) JL_CANSAFEPOINT;
     JL_DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 JL_CALLABLE(jl_f_tuple) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_apply_generic_spans(jl_value_t *F, size_t nspans, ...) JL_CANSAFEPOINT;
 void jl_install_default_signal_handlers(void) JL_NOTSAFEPOINT;
 void restore_signals(void) JL_NOTSAFEPOINT;
 #ifndef _OS_WINDOWS_
@@ -947,6 +948,10 @@ void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_wakeup_thread_from_foreign(int16_t tid) JL_NOTSAFEPOINT;
 JL_DLLEXPORT void jl_membarrier(void) JL_NOTSAFEPOINT;
 extern _Atomic(int) jl_sigint_dispatch_pending;
+extern _Atomic(int) jl_exit_thread0_pending;
+#ifndef _OS_WINDOWS_
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT;
+#endif
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
@@ -2329,6 +2334,16 @@ typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 
+// An insert that probes further than this checks the load and doubles a table that is more
+// than half full. 2 * log2(sz), capped below the max probe (16) of small tables.
+STATIC_INLINE size_t jl_table_long_probe(size_t sz) JL_NOTSAFEPOINT
+{
+    size_t p = 2 * (size_t)__builtin_ctzll(sz);
+    return sz <= 1024 && p > 8 ? 8 : p;
+}
+// the load is estimated from at most 1024 evenly spaced slots
+#define jl_table_sample_stride(sz) ((sz) > 1024 ? (sz) / 1024 : 1)
+
 // probe sequence, shared by lookup and insert
 #define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
@@ -2771,6 +2786,7 @@ JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_free_native(void *native_code);
+JL_DLLIMPORT int jl_native_code_is_empty(void *native_code);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,

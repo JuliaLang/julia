@@ -367,6 +367,21 @@ IO redirection can be accomplished by passing keyword arguments `stdin`, `stdout
 pipeline(`do_work`, stdout=pipeline(`sort`, "out.txt"), stderr="errs.txt")
 ```
 
+As a special case in command literals, a redirection to or from `/dev/null` is replaced with the
+[`devnull`](@ref) object, including on Windows, where that path doesn't exist. This provides a
+portable way to discard output and read from an always-empty file. So
+``` `do_work 2>/dev/null` ``` means ```pipeline(`do_work`, stderr=devnull)```, and discards the
+error output of `do_work` portably.
+
+In a command literal, `N>&M` makes the command's stream `N` a copy of its stream `M`, for the
+standard streams 0, 1 and 2, as in a shell; `>&M` is short for `1>&M` and `<&M` for `0<&M`.
+Redirections are applied in the order they are written, so ``` `do_work >log 2>&1` ``` sends
+both streams of `do_work` to `log`, while ``` `do_work 2>&1 >log` ``` sends only its output
+there, and its errors to where its output would otherwise have gone. In a pipeline, or when
+reading the output with [`read`](@ref), that is the pipe: ``` read(`do_work 2>&1`, String) ```
+captures both streams, and ``` `do_work >&2` ``` sends the output of `do_work` to its
+standard error.
+
 ### Avoiding Deadlock in Pipelines
 
 When reading and writing to both ends of a pipeline from a single process, it is important to

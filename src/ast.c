@@ -987,21 +987,9 @@ static jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule
     margs[0] = jl_array_ptr_ref(args, 0);
     // __source__ argument
     jl_value_t *lno = jl_array_ptr_ref(args, 1);
-    jl_value_t *retry_lno = NULL;
     if (!jl_is_linenumbernode(lno)) {
-        if (lno != jl_nothing) {
-            // Special case: The magic @VERSION macro currently gets a special
-            // Core.MacroSource for its __source__ argument. However, to avoid
-            // giving this to macros that do not expect it, we check for that
-            // special case and retry with just the LineNumberNode if needed.
-            if (jl_typeof(lno) == jl_get_global(jl_core_module, jl_symbol("MacroSource"))) {
-                retry_lno = jl_fieldref_noalloc(lno, 0);
-                goto lno_ok;
-            }
-        }
         lno = jl_new_struct(jl_linenumbernode_type, jl_box_long(0), jl_nothing);
     }
-lno_ok:
     margs[1] = lno;
     margs[2] = (jl_value_t*)inmodule;
     for (i = 3; i < nargs; i++)
@@ -1013,24 +1001,14 @@ lno_ok:
         ct->world_age = world;
     jl_value_t *result;
     JL_TRY {
-        jl_module_t *ctx_module = *ctx;
-        JL_GC_PROMISE_ROOTED(ctx_module);
-        margs[0] = jl_toplevel_eval(ctx_module, margs[0]);
-        jl_method_instance_t *mfunc = NULL;
-        mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
+        margs[0] = jl_toplevel_eval(*ctx, margs[0]);
+        jl_method_instance_t *mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
         JL_GC_PROMISE_ROOTED(mfunc);
-        if (mfunc == NULL && retry_lno != NULL) {
-            margs[1] = retry_lno;
-            mfunc = jl_apply_lookup(margs, nargs, ct->world_age);
-            JL_GC_PROMISE_ROOTED(mfunc);
-        }
         if (mfunc == NULL) {
             jl_method_error(margs[0], &margs[1], nargs, ct->world_age);
             // unreachable
         }
-        // margs[1] may still be a MacroSource; timing wants the inner LineNumberNode
-        jl_timing_show_macro(mfunc, retry_lno != NULL ? retry_lno : margs[1],
-                             inmodule, JL_TIMING_DEFAULT_BLOCK);
+        jl_timing_show_macro(mfunc, margs[1], inmodule, JL_TIMING_DEFAULT_BLOCK);
         *ctx = mfunc->def.method->module;
         result = jl_invoke_fromdispatch(margs[0], &margs[1], nargs - 1, mfunc);
     }

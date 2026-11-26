@@ -655,11 +655,16 @@ static jl_cgval_t generic_bitcast(jl_codectx_t &ctx, ArrayRef<jl_cgval_t> argv) 
         } else if (vxt->isIntegerTy(1) && llvmt->isIntegerTy(8)) {
             vx = ctx.builder.CreateZExt(vx, llvmt);
         } else if (vxt->isPointerTy() && !llvmt->isPointerTy()) {
-            vx = ctx.builder.CreatePtrToInt(vx, llvmt);
+            Type *int_t = llvmt->isIntegerTy() ? llvmt : Type::getIntNTy(ctx.builder.getContext(), nbits);
+            vx = ctx.builder.CreatePtrToInt(vx, int_t);
+            if (vx->getType() != llvmt)
+                vx = emit_bitcast(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // CreatePtrToInt may undo an IntToPtr
                 setName(ctx.emission_context, vx, "bitcast_coercion");
         } else if (!vxt->isPointerTy() && llvmt->isPointerTy()) {
+            if (!vxt->isIntegerTy())
+                vx = emit_bitcast(ctx, vx, Type::getIntNTy(ctx.builder.getContext(), nbits));
             vx = emit_inttoptr(ctx, vx, llvmt);
             if (isa<Instruction>(vx) && !vx->hasName())
                 // emit_inttoptr may undo an PtrToInt
@@ -1217,21 +1222,27 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den) JL_
     raise_exception_unless(ctx,
             ndivby0,
             literal_pointer_val(ctx, jl_diverror_exception));
-    BasicBlock *m1BB = BasicBlock::Create(ctx.builder.getContext(), "minus1", ctx.f);
+    // For a nonzero divisor, `srem` is undefined only for `typemin % -1`, which Julia
+    // defines as 0. Branch on exactly that pair rather than on every divisor of -1: LLVM
+    // removes the branch when either operand rules the pair out, after which the remainder
+    // can be CSE'd, hoisted, and paired with a division of the same operands.
+    BasicBlock *ovfBB = BasicBlock::Create(ctx.builder.getContext(), "overflow", ctx.f);
     BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "oksrem", ctx.f);
     BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_srem", ctx.f);
     PHINode *ret = PHINode::Create(t, 2);
-    auto divbym1 = ctx.builder.CreateICmpEQ(den, ConstantInt::get(t, -1, true));
-    setName(ctx.emission_context, divbym1, "divbym1");
-    ctx.builder.CreateCondBr(divbym1, m1BB, okBB);
-    ctx.builder.SetInsertPoint(m1BB);
+    Constant *typemin = ConstantInt::get(t, APInt::getSignedMinValue(t->getIntegerBitWidth()));
+    auto overflow = ctx.builder.CreateAnd(
+                        ctx.builder.CreateICmpEQ(den, ConstantInt::get(t, -1, true)),
+                        ctx.builder.CreateICmpEQ(x, typemin));
+    setName(ctx.emission_context, overflow, "srem_overflow");
+    ctx.builder.CreateCondBr(overflow, ovfBB, okBB);
+    ctx.builder.SetInsertPoint(ovfBB);
     ctx.builder.CreateBr(cont);
     ctx.builder.SetInsertPoint(okBB);
     Value *sremval = ctx.builder.CreateSRem(x, den);
     ctx.builder.CreateBr(cont);
     ctx.builder.SetInsertPoint(cont);
-    ret->addIncoming(// rem(typemin, -1) is undefined
-                     ConstantInt::get(t, 0), m1BB);
+    ret->addIncoming(ConstantInt::get(t, 0), ovfBB);
     ret->addIncoming(sremval, okBB);
     setName(ctx.emission_context, ret, "checked_srem");
     ctx.builder.Insert(ret);
@@ -1754,7 +1765,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     }
 
     case checked_sdiv_int: {
-        Value *typemin = ctx.builder.CreateShl(ConstantInt::get(t, 1), t->getPrimitiveSizeInBits() - 1);
+        Constant *typemin = ConstantInt::get(t, APInt::getSignedMinValue(t->getIntegerBitWidth()));
         auto cond = ctx.builder.CreateAnd(
                         ctx.builder.CreateICmpNE(y, ConstantInt::get(t, 0)),
                         ctx.builder.CreateOr(
@@ -1888,7 +1899,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
         }
         if (cy) {
             APInt iy = cy->getValue();
-            return iy.isNonNegative() ? x : ctx.builder.CreateSub(ConstantInt::get(t, 0), x);
+            return iy.isNonNegative() ? x : ctx.builder.CreateNeg(x);
         }
         Value *tmp = ctx.builder.CreateAShr(y, ConstantInt::get(t, cast<IntegerType>(t)->getBitWidth() - 1));
         return ctx.builder.CreateXor(ctx.builder.CreateAdd(x, tmp), tmp);

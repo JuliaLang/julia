@@ -1300,7 +1300,6 @@ K"outer",
 K"primitive",
 K"type",
 K"var",
-K"VERSION"
 ]
 
 const _true_hash = simple_hash("true")

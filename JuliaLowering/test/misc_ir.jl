@@ -319,13 +319,14 @@ end
 @eval $f(x, y)
 #---------------------
 1   TestMod.f
-2   (call core.tuple %₁)
-3   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₂)
-4   (call Base.fill_context %₃ SyntaxContext(#=omitted=#))
-5   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook TestMod %₄))
-6   latestworld
-7   slot₁/eval_result
-8   (return %₇)
+2   (call core.svec %₁)
+3   (call core.svec %₂)
+4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
+5   (call Base.JuliaLowering._eval_fill_context %₄ SyntaxContext(#=omitted=#))
+6   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook TestMod %₅))
+7   latestworld
+8   slot₁/eval_result
+9   (return %₈)
 
 ########################################
 # @eval with module
@@ -333,13 +334,14 @@ end
 #---------------------
 1   TestMod.mod
 2   TestMod.f
-3   (call core.tuple %₂)
-4   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₃)
-5   (call Base.fill_context %₄ SyntaxContext(#=omitted=#))
-6   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook %₁ %₅))
-7   latestworld
-8   slot₁/eval_result
-9   (return %₈)
+3   (call core.svec %₂)
+4   (call core.svec %₃)
+5   (call JuliaLowering.interpolate_syntax (syntaxinert (call (syntaxunquote f) x y)) %₄)
+6   (call Base.JuliaLowering._eval_fill_context %₅ SyntaxContext(#=omitted=#))
+7   (= slot₁/eval_result (call Base.JuliaLowering.at_eval_hook %₁ %₆))
+8   latestworld
+9   slot₁/eval_result
+10  (return %₉)
 
 ########################################
 # Juxtaposition

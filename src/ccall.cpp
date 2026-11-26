@@ -717,7 +717,12 @@ static void interpret_foreignsymbol(jl_codectx_t &ctx, native_sym_arg_t &out, jl
         void *symaddr;
         std::string iname("i");
         iname += out.f_name;
-        if (jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0, 0)) {
+        // Only the runtime's exported jl_ functions have an i-prefixed name (see
+        // jl_internal_funcs.inc). Not looking for one otherwise keeps the failed lookup's
+        // dlerror out of compiles of calls to anything else (such as libc's): glibc formats
+        // its message reading the environment, which another thread may be changing.
+        if (strncmp(out.f_name, "jl_", 3) == 0 &&
+            jl_dlsym(jl_libjulia_internal_handle, iname.c_str(), &symaddr, 0, 0)) {
             out.f_lib = JL_LIBJULIA_INTERNAL_DL_LIBNAME;
             out.f_name = jl_symbol_name(jl_symbol(iname.c_str()));
         }
@@ -1873,7 +1878,7 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
             ConstantInt::get(in_pure_callback->getType(), 0));
 
         Value *world_counter = emit_world_counter_load(ctx);
-        Value *ret = ctx.builder.CreateSelect(cond, world_counter, ConstantInt::get(ctx.types().T_size, ~(size_t)0));
+        Value *ret = ctx.builder.CreateSelect(cond, world_counter, Constant::getAllOnesValue(ctx.types().T_size));
         return mark_or_box_ccall_result(ctx, ret, retboxed, rt, unionall, static_rt);
     }
     else if (is_libjulia_func(jl_gc_disable_finalizers_internal)

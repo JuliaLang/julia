@@ -149,8 +149,8 @@ function extendedterminfo(data::IO, NumInt::Union{Type{Int16}, Type{Int32}})
         table_indices[index] += names_offset
     end
     labels = map(Symbol, _terminfo_read_strings(table_data, table_indices[string_count+1:end]))
-    Dict{Symbol, Union{Bool, Int, String, Nothing}}(
-        zip(labels, Iterators.flatten((flags, numbers, strings))))
+    values = Union{Bool, Int, String, Nothing}[flags; numbers; strings]
+    Dict{Symbol, Union{Bool, Int, String, Nothing}}(zip(labels, values))
 end
 
 """

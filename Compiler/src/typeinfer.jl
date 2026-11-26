@@ -231,6 +231,8 @@ function promotecache!(interp::AbstractInterpreter, caller::InferenceState)
         end
         if !iszero(caller.cache_mode & CACHE_MODE_GLOBAL)
             code_cache(interp)[mi] = ci
+        elseif !iszero(caller.cache_mode & CACHE_MODE_ROOT)
+            InternalCodeCache(ci.owner, caller.valid_worlds)[mi] = ci
         end
         # A globally committed exact CI becomes visible before its reservation is
         # released and any waiters wake. A publication loser is still filled as a
@@ -326,7 +328,7 @@ function finish_nocycle(interp::AbstractInterpreter, frame::InferenceState{I}, t
     validation_world = get_world_counter()
     time_before = finish!(interp::I, frame, validation_world, time_before)
     promotecache!(interp::I, frame)
-    if (!iszero(frame.cache_mode & CACHE_MODE_GLOBAL) &&
+    if (!iszero(frame.cache_mode & (CACHE_MODE_GLOBAL | CACHE_MODE_ROOT)) &&
             isdefined(frame.result, :ci))
         # After validation, under the world_counter_lock, set max_world to typemax(UInt) for all dependencies
         # (recursively). From that point onward the ordinary backedge mechanism is responsible for maintaining
@@ -828,7 +830,7 @@ function finishinfer!(me::InferenceState, interp::AbstractInterpreter, cycleid::
         # const-prop work that would hit the same limit.
         result.src = nothing
         result.tombstone = true
-        me.cache_mode &= ~CACHE_MODE_GLOBAL
+        me.cache_mode &= ~(CACHE_MODE_GLOBAL | CACHE_MODE_ROOT)
         set_inlineable!(src, false)
     else
         # annotate fulltree with type information,
@@ -1361,10 +1363,9 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
                                     method::Method, edge_ci::Union{Nothing,CodeInstance},
                                     edgecycle::Bool, edgelimited::Bool, edgerecursed::Bool)
     mresult = Future{MethodCallResult}()
-    push!(caller.tasks, function get_infer_result(interp, caller)
+    function get_infer_result(interp, caller)
         update_valid_age!(caller, get_inference_world(interp), frame.valid_worlds)
         isinferred = is_inferred(frame)
-        effects = nothing
         call_result = nothing
         edge = edge_ci
         if isinferred
@@ -1411,7 +1412,8 @@ function _schedule_edge_infer_task!(caller::AbsIntState, frame::InferenceState, 
             edge, edgecycle, edgelimited, edgerecursed, call_result;
             force_edgecycle=false, needs_mi_edge)
         return true
-    end)
+    end
+    push!(caller.tasks, get_infer_result)
     return mresult
 end
 
@@ -1949,6 +1951,73 @@ function typeinf_ext(interp::AbstractInterpreter, mi::MethodInstance, source_mod
         @assert is_result_constabi_eligible(result) == use_const_api(ci)
     end
     return ci
+end
+
+"""
+    typeinf_ext(interp::AbstractInterpreter, result::InferenceResult, root_owner,
+                source_mode::UInt8) -> Union{CodeInstance, Nothing}
+
+Infer `result` as a root of its own, typically with argument types overridden by
+constants (`result.overridden_by_const`), and return its `CodeInstance`. Unlike a
+constant-propagated result, that `CodeInstance` carries the edges and valid worlds of
+this inference, and is cached for later use. It is looked up, reserved and published
+under `root_owner`, while callees are cached under `cache_owner(interp)` as usual.
+
+Lookups only compare the owner and the `MethodInstance`, so `root_owner` must be
+dedicated to this root: distinct from `cache_owner(interp)`, and identifying both that
+owner and the argument types of `result`, e.g. by containing them. Owners are compared
+with `===`, also when the `CodeInstance` was loaded from a package image, so a root is
+only found there again if the caller can reconstruct an `===` owner, e.g. an immutable
+value with immutable contents. The `CodeInstance` is only valid for the seeded
+arguments. `result` must be fresh, and not for the method's `unspecialized` instance,
+whose code the runtime may call without checking its owner. Returns `nothing` if
+inference failed.
+
+As inference reserves a root by the identity of its owner, callers that infer the same
+root concurrently with separately constructed, equal owners must serialize these calls
+to get a single `CodeInstance`.
+"""
+function typeinf_ext(interp::AbstractInterpreter, result::InferenceResult,
+                     @nospecialize(root_owner), source_mode::UInt8)
+    @assert !isdefined(result, :ci) "`result` has already been inferred"
+    @assert root_owner !== nothing && root_owner !== cache_owner(interp) "`root_owner` must be dedicated to the root"
+    mi = result.linfo
+    start_time = ccall(:jl_typeinf_timing_begin, UInt64, ())
+    valid_worlds = WorldRange(get_inference_world(interp))
+    cache = InternalCodeCache(root_owner, valid_worlds)
+    let code = find_cached_ci(interp, cache, mi, valid_worlds, source_mode)
+        if code !== nothing
+            ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+            return code
+        end
+    end
+    ci = engine_reserve(mi, root_owner)
+    # `result` refers to `ci` once inference starts, so make sure the reservation is
+    # released even if it fails
+    try
+        # check cache again if it is still new after reserving in the engine
+        code = find_cached_ci(interp, cache, mi, valid_worlds, source_mode)
+        code === nothing || return code
+        def = mi.def
+        if (!InferenceParams(interp).force_enable_inference && isa(def, Method) &&
+                ccall(:jl_get_module_infer, Cint, (Any,), def.module) == 0)
+            # without inference, there are no constants to propagate
+            return nothing
+        end
+        result.ci = ci
+        frame = InferenceState(result, CACHE_MODE_ROOT, interp)
+        frame === nothing && return nothing
+        typeinf(interp, frame)
+        # a limited result is not published
+        iszero(frame.cache_mode & CACHE_MODE_ROOT) && return nothing
+        codegen = codegen_cache(interp)
+        @assert isdefined(ci, :inferred) "interpreter did not fulfill our expectations"
+        @assert codegen === nothing || ci_meets_requirement(interp, ci, source_mode)
+        return ci
+    finally
+        engine_reject(interp, ci) # a no-op after successful inference
+        ccall(:jl_typeinf_timing_end, Cvoid, (UInt64, Cint), start_time, 0)
+    end
 end
 
 # compute (and cache) an inferred AST and return the inferred return type

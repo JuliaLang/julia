@@ -1,6 +1,6 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-using Test, LibGit2
+using LibGit2, Test
 
 @test isempty(Test.detect_closure_boxes(LibGit2))
 

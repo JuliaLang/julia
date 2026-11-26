@@ -326,14 +326,14 @@ static void gc_verify_tags_page(jl_gc_pagemeta_t *pg) JL_NOTSAFEPOINT
         assert(halfpages || next);
         while (next != NULL && gc_page_data(next) == data) {
             int obj_idx = (((char*)next) - page_begin) / sizeof(void*);
-            freelist_map[obj_idx / 8] |= 1 << (obj_idx % 7);
+            freelist_map[obj_idx / 8] |= 1 << (obj_idx % 8);
             next = next->next;
         }
     }
     // validate all of the tags on the page
     while ((char*)v <= lim) {
         int obj_idx = (((char*)v) - page_begin) / sizeof(void*);
-        int in_freelist = freelist_map[obj_idx / 8] & (1 << (obj_idx % 7));
+        int in_freelist = freelist_map[obj_idx / 8] & (1 << (obj_idx % 8));
         if (!in_freelist) {
             jl_value_t *dt = jl_typeof(jl_valueof(v));
             if (dt != (jl_value_t*)jl_buff_tag &&

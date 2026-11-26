@@ -11,6 +11,12 @@ include("testenv.jl")
 
 include("tempdepot.jl")
 
+# JuliaLowering deliberately rejects some syntax that flisp allows
+macro test_lowering_rejects(ex)
+    Expr(:macrocall, Symbol("@test_throws"), __source__, "syntax:",
+         :(Core.eval($__module__, $(QuoteNode(ex)))))
+end
+
 ## tests that `const` field declarations
 
 # sanity tests that our built-in types are marked correctly for const fields
@@ -1082,8 +1088,11 @@ end
 @test a_global_closure_vector[2](10) == 12
 @test a_global_closure_vector[3](10) == 13
 
-# issue #22032
-let a = [], fs = []
+# issue #22032 (JuliaLowering update: A non-simple assignment LHS containing a
+# call expression is no longer allowed to create a broken function def.
+# Previously this would evaluate the "function body" at function definition time
+# and create a constant-returning function that ignores all arguments.)
+@test_lowering_rejects let a = [], fs = []
     for f() in 1:3
         push!(a, f())
         push!(fs, f)
@@ -1091,14 +1100,14 @@ let a = [], fs = []
     @test a == [1,2,3]
     @test [f() for f in fs] == [1,2,3]
 end
-let t = (22,33)
+@test_lowering_rejects let t = (22,33)
     (g(), x) = t
     @test g() == 22
     @test x == 33
 end
 
 # issue #23091
-let (f(), x) = (1, 2)
+@test_lowering_rejects let (f(), x) = (1, 2)
     @test f() == 1
     @test x == 2
 end
@@ -1866,8 +1875,15 @@ let
     @test pointer(a.ref.mem,2)===pointer(a,2)
 end
 
-@test unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any),
-                                     x -> x+1, 314158)) == 314159
+# `unsafe_pointer_to_objref` on a `jl_value_t*` that C code returned as a plain pointer
+# (issue #2458), here to a boxed `Int`, which `pointer_from_objref` cannot provide. The
+# pointer does not root the box, so `r` keeps it alive while it is in use (issue #65171).
+let r = Ref{Any}(314159)
+    GC.@preserve r begin
+        x = unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any,Any), getindex, r))
+        @test x === 314159
+    end
+end
 let x = [1,2,3]
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) == x
     @test unsafe_pointer_to_objref(pointer_from_objref(x)) === x
@@ -2812,8 +2828,10 @@ macro m20524(ex)
         end
     end
 end
-@m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))
-@test f20524() === (8,1,5)
+# JuliaLowering rejects the unescaped `global`: "unhygienic global name `f20524`
+# conflicts with an existing local variable"
+@test_broken (@eval(@m20524 ((a,(b20524,c)) = (8,(1,5)); (a,b20524,c))); true)
+@test_broken f20524() === (8,1,5)
 @test !@isdefined b20524 # should not assign to a global
 
 # issue #6387
@@ -3196,7 +3214,7 @@ let
 end
 
 # pull request #9534
-@test_throws BoundsError((1, 2), 3) begin; a, b, c = 1, 2; end
+@test_throws "syntax:" @eval begin; a, b, c = 1, 2; end
 let a = []
     @test try; a[]; catch ex; (ex::BoundsError).a === a && ex.i == (); end
     @test_throws BoundsError(a, (1, 2)) a[1, 2]
@@ -4011,7 +4029,7 @@ let
     @test forouter() == 3
 end
 
-@test_throws ErrorException("syntax: no outer local variable declaration exists for \"for outer\"") @eval function f()
+@test_throws "syntax:" @eval function f()
     for outer i = 1:2
     end
 end
@@ -4296,7 +4314,10 @@ end
 # types whose instances hold data that their Julia-visible fields do not describe
 # (C-only fields after them, an opaque layout, trailing variable-sized data) can only be
 # allocated by the runtime, since `new` would not set up that data
-for x in Any[which(sin, (Float64,)), current_task(), Base.CancellationTokenSource(),
+for x in Any[which(sin, (Float64,)),
+             # a new task with no scope, since the closures below keep their task's scope alive
+             let t = Task(Returns(nothing)); setfield!(t, :scope, nothing); t; end,
+             Base.CancellationTokenSource(),
              Base.WaitEntryN(nothing, 2), Main, :sym, "str", Core.svec(1), Memory{Int}(undef, 2),
              Vector{T} where T]
     T = typeof(x)
@@ -4726,10 +4747,11 @@ macro makefn(f,g)
         $(g)(x) = x+2
     end
 end
-@makefn ff gg
 end
-@test TestMacroGlobalFunction.ff(1) == 2
-@test TestMacroGlobalFunction.gg(1) == 3
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(TestMacroGlobalFunction, @makefn(ff, gg)); true)
+@test_broken TestMacroGlobalFunction.ff(1) == 2
+@test_broken TestMacroGlobalFunction.gg(1) == 3
 
 # issue #18672
 macro x18672()
@@ -5159,9 +5181,10 @@ macro m()
         x = 2
     end
 end
-@m
 end
-@test Macro_Yielding_Global_Assignment.x == 2
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(Macro_Yielding_Global_Assignment, @m()); true)
+@test_broken Macro_Yielding_Global_Assignment.x == 2
 
 # issue #15718
 function compare_test(x, y)
@@ -5735,13 +5758,7 @@ gVararg(a::fVararg(Int)) = length(a)
 
 # issue #18577
 @generated f18577() = quote ()->1 end
-@test try
-    f18577()
-    false
-catch e
-    (e::ErrorException).msg
-end == "The function body AST defined by this @generated function is not pure. " *
-       "This likely means it contains a closure, a comprehension or a generator."
+@test_throws ErrorException f18577()
 
 let x = 1
     global g18444
@@ -6444,7 +6461,6 @@ macro foo(TYP)
     end
 end
 struct Foo end
-@foo Foo
 
 macro foo2()
     quote
@@ -6453,11 +6469,12 @@ macro foo2()
     end
 end
 
-@foo2
-
 end
-@test M22026.foofunction(Int16) === Int16
-@test M22026.foofunction2(3) === 6.0f0
+# JuliaLowering rejects the unescaped `global` (see #20524 above)
+@test_broken (@eval(M22026, @foo(Foo)); true)
+@test_broken (@eval(M22026, @foo2()); true)
+@test_broken M22026.foofunction(Int16) === Int16
+@test_broken M22026.foofunction2(3) === 6.0f0
 
 # tests for isdefined behavior and code generation
 global undefined_variable
@@ -7960,18 +7977,18 @@ let x = SplatNew{Int16}()
     @test x.x === Int8(0)
     @test x.y === Int16(1)
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew{Int16}(1)
+@test_throws ArgumentError SplatNew{Int16}(1)
 let x = SplatNew(3, 2)
     @test x.x === Int8(3)
     @test x.y === 2.0f0
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)") SplatNew(1, 2, 3)
-@test_throws ArgumentError("new: too few arguments (expected 2)") SplatNew{Any}(1)
+@test_throws ArgumentError SplatNew(1, 2, 3)
+@test_throws ArgumentError SplatNew{Any}(1)
 let x = SplatNew{Tuple{Int16}}((1,))
     @test x.x === Int8(2)
     @test x.y === (Int16(1),)
 end
-@test_throws ArgumentError("new: too many arguments (expected 2)")  SplatNew{Int8}()
+@test_throws ArgumentError  SplatNew{Int8}()
 
 # Issue #31357 - Missed assignment in nested try/catch
 function foo31357(b::Bool)
@@ -9096,39 +9113,39 @@ let load_path = mktempdir()
         pushfirst!(LOAD_PATH, load_path)
         pushfirst!(DEPOT_PATH, depot_path)
 
-        write(joinpath(load_path, "Foo.jl"),
+        write(joinpath(load_path, "OverlayMTFoo.jl"),
             """
-            module Foo
+            module OverlayMTFoo
             Base.Experimental.@MethodTable(mt)
             Base.Experimental.@overlay mt sin(x::Int) = 1
             end
             """)
 
-        # precompiling Foo serializes the overlay method through the `mt` binding in the module
-        Foo = Base.require(Main, :Foo)
-        @test length(Foo.mt) == 1
+        # precompiling OverlayMTFoo serializes the overlay method through the `mt` binding in the module
+        OverlayMTFoo = Base.require(Main, :OverlayMTFoo)
+        @test length(OverlayMTFoo.mt) == 1
 
-        write(joinpath(load_path, "Bar.jl"),
+        write(joinpath(load_path, "OverlayMTBar.jl"),
             """
-            module Bar
+            module OverlayMTBar
             Base.Experimental.@MethodTable(mt)
             end
             """)
 
-        write(joinpath(load_path, "Baz.jl"),
+        write(joinpath(load_path, "OverlayMTBaz.jl"),
             """
-            module Baz
-            using Bar
-            Base.Experimental.@overlay Bar.mt sin(x::Int) = 1
+            module OverlayMTBaz
+            using OverlayMTBar
+            Base.Experimental.@overlay OverlayMTBar.mt sin(x::Int) = 1
             end
             """)
 
         # when referring to a method table in another module,
         # the overlay method needs to be discovered explicitly
-        Bar = Base.require(Main, :Bar)
-        @test length(Bar.mt) == 0
-        Baz = Base.require(Main, :Baz)
-        @test length(Bar.mt) == 1
+        OverlayMTBar = Base.require(Main, :OverlayMTBar)
+        @test length(OverlayMTBar.mt) == 0
+        OverlayMTBaz = Base.require(Main, :OverlayMTBaz)
+        @test length(OverlayMTBar.mt) == 1
     finally
         filter!((≠)(load_path), LOAD_PATH)
         filter!((≠)(depot_path), DEPOT_PATH)

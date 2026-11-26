@@ -32,10 +32,6 @@ const DEBUG = DEBUG_LOWERING
 const JL_NEW_EDITION = Base.EXPERIMENTAL_EDITION # TODO: set this to (1, 15)
 const JL_OLD_EDITION = Base.FLISP_EDITION
 
-# Falls back to `Union{}` so that `loc isa MacroSource` is always false on Julia < 1.14
-# where `Core.MacroSource` is not defined.
-const MacroSource = isdefinedglobal(Core, :MacroSource) ? Core.MacroSource : Union{}
-
 const TypeEqOf = isdefinedglobal(Core, :TypeEqOf) ? "TypeEqOf" : "Typeof"
 
 # todo: remove

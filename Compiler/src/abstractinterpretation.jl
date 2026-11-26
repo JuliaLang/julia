@@ -58,10 +58,12 @@ struct MethodMatchTarget
     edge_idx::Int
 end
 
-struct MethodMatches
-    applicable::Vector{MethodMatchTarget}
-    info::MethodMatchInfo
-    valid_worlds::WorldRange
+# Mutable (with const fields) so that the one allocation is shared wherever they are held as
+# `Union{MethodMatches,UnionSplitMethodMatches}`, instead of being boxed again each time.
+mutable struct MethodMatches
+    const applicable::Vector{MethodMatchTarget}
+    const info::MethodMatchInfo
+    const valid_worlds::WorldRange
 end
 any_ambig(result::MethodLookupResult) = result.ambig
 any_ambig(info::MethodMatchInfo) = any_ambig(info.results)
@@ -70,11 +72,11 @@ fully_covering(info::MethodMatchInfo) = info.fullmatch
 fully_covering(m::MethodMatches) = fully_covering(m.info)
 multiple_methods(m::MethodMatches) = length(m.applicable) > 1
 
-struct UnionSplitMethodMatches
-    applicable::Vector{MethodMatchTarget}
-    applicable_argtypes::Vector{Vector{Any}}
-    info::UnionSplitInfo
-    valid_worlds::WorldRange
+mutable struct UnionSplitMethodMatches
+    const applicable::Vector{MethodMatchTarget}
+    const applicable_argtypes::Vector{Vector{Any}}
+    const info::UnionSplitInfo
+    const valid_worlds::WorldRange
 end
 any_ambig(info::UnionSplitInfo) = any(any_ambig, info.split)
 any_ambig(m::UnionSplitMethodMatches) = any_ambig(m.info)
@@ -2988,9 +2990,7 @@ end
 function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
         arginfo::ArgInfo, si::StmtInfo, vtypes::Union{VarTable,Nothing},
         sv::AbsIntState, max_methods::Int = get_max_methods(interp, f, sv))
-    (; fargs, argtypes) = arginfo
-    argtypes::Vector{Any} = arginfo.argtypes  # declare type because the closure below captures `argtypes`
-    fargs = arginfo.fargs
+    (; fargs, argtypes) = arginfo # don't reassign `argtypes`: closures below capture it
     la = length(argtypes)
     𝕃ᵢ = typeinf_lattice(interp)
     if isa(f, Builtin)
@@ -3104,7 +3104,6 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     elseif la == 3 && f === Core.:(>:)
         # mark issupertype as an exact alias for issubtype
         # swap T1 and T2 arguments and call <:
-        atype = argtypes_to_type(argtypes)
         let call = abstract_call_gf_by_type(interp, f, ArgInfo(fargs, Any[Const(f), Any, Any]), si, Tuple{typeof(f), Any, Any}, vtypes, sv, max_methods)::Future
             if fargs !== nothing && length(fargs) == 3
                 fargs_reverse = Any[<:, fargs[3], fargs[2]]
@@ -3126,34 +3125,29 @@ function abstract_call_known(interp::AbstractInterpreter, @nospecialize(f),
     if f === TypeVar && !isvarargtype(argtypes[end])
         # Manually look through the definition of TypeVar to
         # make sure to be able to get `PartialTypeVar`s out.
-        2 ≤ la ≤ 4 || return Future{CallMeta}(call, sv, interp) do call, sv, interp
+        2 ≤ la ≤ 4 || return Future{CallMeta}(call, interp, sv) do _, _, _
             return CallMeta(Bottom, Any, EFFECTS_THROWS, NoCallInfo())
         end
-        # make sure generic code is prepared for inlining if needed later
-        let T = Any[Type{TypeVar}, Any, Any, Any]
-            resize!(T, la)
-            atype = Tuple{T...}
-            T[1] = Const(TypeVar)
-            return Future{CallMeta}(call, interp, sv) do call, interp, sv
-                n = argtypes[2]
-                ub_var = Const(Any)
-                lb_var = Const(Union{})
-                if la == 4
-                    ub_var = argtypes[4]
-                    lb_var = argtypes[3]
-                elseif la == 3
-                    ub_var = argtypes[3]
-                end
-                pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
-                typevar_argtypes = Any[n, lb_var, ub_var]
-                effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                if effects.nothrow
-                    exct = Union{}
-                else
-                    exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
-                end
-                return CallMeta(pT, exct, effects, call.info)
+        return Future{CallMeta}(call, interp, sv) do call, interp, sv
+            local effects, exct
+            n = argtypes[2]
+            ub_var = Const(Any)
+            lb_var = Const(Union{})
+            if la == 4
+                ub_var = argtypes[4]
+                lb_var = argtypes[3]
+            elseif la == 3
+                ub_var = argtypes[3]
             end
+            pT = typevar_tfunc(𝕃ᵢ, n, lb_var, ub_var)
+            typevar_argtypes = Any[n, lb_var, ub_var]
+            effects = builtin_effects(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+            if effects.nothrow
+                exct = Union{}
+            else
+                exct = builtin_exct(𝕃ᵢ, Core._typevar, typevar_argtypes, pT)
+            end
+            return CallMeta(pT, exct, effects, call.info)
         end
     elseif la == 2 && f === Core.typename
         return Future{CallMeta}(call, interp, sv) do call, interp, sv
@@ -3216,7 +3210,7 @@ function abstract_call_opaque_closure(interp::AbstractInterpreter, closure::Part
             ftt = closure.typ
             rty = (unwrap_unionall(ftt)::DataType).parameters[2]
             rty = rewrap_unionall(rty isa TypeVar ? rty.ub : rty, ftt)
-            if !(rt ⊑ rty && sig ⊑ ocsig_box.contents)
+            if !(rt ⊑ rty && match.spec_types ⊑ ocsig_box.contents)
                 effects = Effects(effects; nothrow=false)
                 exct = exct ⊔ TypeError
             end
@@ -3464,6 +3458,32 @@ function is_field_pointerfree(dt::DataType, fidx::Int)
     return datatype_pointerfree(ft)
 end
 
+# The helpers below loop instead of calling `any` or `all` with a closure, since a closure
+# capturing `dt` would have a different type for each value of `dt` at runtime.
+
+function any_field_pointerfree(dt::DataType, fidxs::UnitRange{Int})
+    for fidx in fidxs
+        is_field_pointerfree(dt, fidx) && return true
+    end
+    return false
+end
+
+# whether each of `vals` is an instance of the type of the corresponding field of `dt`
+function all_isa_fieldtypes(@nospecialize(vals::Tuple), dt::DataType)
+    for i = 1:length(vals)
+        getfield(vals, i) isa fieldtype(dt, i) || return false
+    end
+    return true
+end
+
+# whether each of `fields` is a subtype of the type of the corresponding field of `dt`
+function all_partialorder_fieldtypes(𝕃::AbstractLattice, fields::Vector{Any}, dt::DataType)
+    for i = 1:length(fields)
+        ⊑(𝕃, fields[i], fieldtype(dt, i)) || return false
+    end
+    return true
+end
+
 function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::StatementState,
                            sv::AbsIntState)
     𝕃ᵢ = typeinf_lattice(interp)
@@ -3478,7 +3498,7 @@ function abstract_eval_new(interp::AbstractInterpreter, e::Expr, sstate::Stateme
         fcount = datatype_fieldcount(ut)
         nargs = length(e.args) - 1
         has_any_uninitialized = fcount === nothing || (fcount > nargs &&
-            any(i::Int->is_field_pointerfree(ut, i), (nargs+1):fcount))
+            any_field_pointerfree(ut, (nargs+1):fcount))
         if has_any_uninitialized
             # allocation with undefined field is inconsistent always
             consistent = ALWAYS_FALSE
@@ -3582,19 +3602,16 @@ function abstract_eval_splatnew(interp::AbstractInterpreter, e::Expr, sstate::St
     if length(e.args) == 2 && isconcretedispatch(rt) && !ismutabletype(rt)
         at = abstract_eval_value(interp, e.args[2], sstate, sv)
         n = fieldcount(rt)
-        if (isa(at, Const) && isa(at.val, Tuple) && n == length(at.val::Tuple) &&
-            (let t = rt, at = at
-                all(i::Int -> getfield(at.val::Tuple, i) isa fieldtype(t, i), 1:n)
-            end))
+        if (isa(at, Const) && let atval = at.val
+                isa(atval, Tuple) && n == length(atval) && all_isa_fieldtypes(atval, rt)
+            end)
             nothrow = isexact
             rt = Const(ccall(:jl_new_structt, Any, (Any, Any), rt, at.val))
         elseif at isa PartialStruct
             if ⊑(𝕃ᵢ, at, Tuple) && n > 0
                 fields = at.fields
                 if (n == length(fields) && !isvarargtype(fields[end]) &&
-                    (let t = rt
-                        all(i::Int -> ⊑(𝕃ᵢ, fields[i], fieldtype(t, i)), 1:n)
-                    end))
+                    all_partialorder_fieldtypes(𝕃ᵢ, fields, rt))
                     nothrow = isexact
                     undefs = Union{Nothing,Bool}[false for _ in 1:n]
                     rt = PartialStruct(𝕃ᵢ, rt, undefs, fields)
@@ -5177,10 +5194,11 @@ function condition_object_change(currstate::VarTable, condt::Conditional,
     if then_or_else === :then
         thentype = condt.thentype
         elsetype = Union{}
-    elseif then_or_else === :else
+    else
+        @assert then_or_else === :else
         thentype = Union{}
         elsetype = condt.elsetype
-    else @assert false end
+    end
     newcondt = Conditional(condt.slot, condt.ssadef, thentype, elsetype)
     return StateRefinement(slot_id(condslot), newcondt, vtype.undef)
 end

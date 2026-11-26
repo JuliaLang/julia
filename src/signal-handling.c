@@ -475,6 +475,10 @@ JL_DLLEXPORT void jl_set_sigint_cond(uv_async_t *cond) JL_NOTSAFEPOINT
 // in a long-running foreign call) - see jl_task_get_next.
 _Atomic(int) jl_sigint_dispatch_pending = 0;
 
+// The fatal signal that jl_exit_thread0_wake (Unix) left for thread 0 to handle
+// from jl_task_get_next, or 0.
+_Atomic(int) jl_exit_thread0_pending = 0;
+
 // Atomically claim a pending ^C notification: the sigint listener (one per
 // threadpool) that wins the claim processes the episode; others re-park.
 JL_DLLEXPORT int jl_claim_sigint_dispatch(void) JL_NOTSAFEPOINT

@@ -115,20 +115,10 @@ end
     # Here we've specified a text month name, but given a number
     b3 = "96/2/15"
     @test_throws ArgumentError Dates.DateTime(b3, f)
-    try
-        Dates.parse(DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
-        @test false
-    catch err
-        @test isa(err, ArgumentError)
-        @test err.msg == "Found extra characters at the end of date time string"
-    end
-    try
-        Dates.parse(DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
-        @test false
-    catch err
-        @test isa(err, ArgumentError)
-        @test err.msg == "Unable to parse date time. Expected directive Delim(.) at char 16"
-    end
+    @test_throws ArgumentError("Found extra characters at the end of date time string") Dates.parse(
+        DateTime, "2012/2/20T9:9:31.25i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
+    @test_throws ArgumentError("Unable to parse date time. Expected directive Delim(.) at char 16") Dates.parse(
+        DateTime, "2012/2/20T9:9:3i90", dateformat"yyyy/mm/ddTHH:MM:SS.s")
 
     f = "yy:dd:mm"
     c = "96:15:01"
@@ -460,7 +450,6 @@ end
     end
 
     str = "2015-07-24T05:38:19.591Z"
-    dt = Dates.DateTime(2015, 7, 24, 5, 38, 19, 591)
     parsed = Any[
         Dates.Year(2015), Dates.Month(7), Dates.Day(24),
         Dates.Hour(5), Dates.Minute(38), Dates.Second(19), Dates.Millisecond(591)
@@ -639,18 +628,19 @@ end
             @test DateTime("2018-01-01 $t12", "yyyy-mm-dd $HH:MMp") == d
             @test Time("$t12", "$HH:MMp") == t
         end
-        local tmstruct, strftime
-        withlocales(["C"]) do locale
+        tmstruct = Ref{Libc.TmStruct}()
+        strftime = Ref{String}()
+        withlocales(["C"]) do _
             # test am/pm comparison handling
-            tmstruct = Libc.strptime("%I:%M%p", t12)
-            strftime = Libc.strftime("%I:%M%p", tmstruct)
+            tmstruct[] = Libc.strptime("%I:%M%p", t12)
+            strftime[] = Libc.strftime("%I:%M%p", tmstruct[])
             nothing
         end
-        @test Time(tmstruct) == t
+        @test Time(tmstruct[]) == t
         @test uppercase(t12) ==
               Dates.format(t, "II:MMp") ==
               Dates.format(d, "II:MMp") ==
-              strftime
+              strftime[]
     end
     for bad in ("00:24am", "00:24pm", "13:24pm", "2pm", "12:24p.m.", "12:24 pm", "12:24pµ")
         @test_throws ArgumentError Time(bad, "II:MMp")
@@ -684,24 +674,12 @@ end
             ("DateTime", "Date or Time", "Date or Time"),
             ("yyyy-mm-ddHHMMSS.s", "yyymmdd", "HHMMSS")
         )
-        @test_throws ArgumentError T("")
+        @test_throws ArgumentError("Cannot parse an empty string as a $name") T("")
         @test_throws ArgumentError T("", fmt)
         @test_throws ArgumentError T("", DateFormat(fmt))
-        try
-            T("")
-            @test false
-        catch err
-            @test err.msg == "Cannot parse an empty string as a $name"
-        end
 
-        @test_throws ArgumentError parse(T, "")
+        @test_throws ArgumentError("Cannot parse an empty string as a $name") parse(T, "")
         @test_throws ArgumentError parse(T, "", DateFormat(fmt))
-        try
-            parse(T, "")
-            @test false
-        catch err
-            @test err.msg == "Cannot parse an empty string as a $name"
-        end
 
         @test tryparse(T, "") === nothing
         @test tryparse(T, "", DateFormat(fmt)) === nothing

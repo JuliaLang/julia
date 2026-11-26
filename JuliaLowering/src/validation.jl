@@ -384,10 +384,6 @@ end
 
 vst1_toplevel_only(vcx, st) = @stm st begin
     # body will be validated when lowered
-    [:module [:value] [:value] [:identifier] [:block xs...]] ->
-        !(st[1].value isa VersionNumber) ? @fail(st[1], "expected version") :
-        !(st[2].value isa Bool) ? @fail(st[2], "expected boolean bare flag") :
-        pass()
     [:module [:value] [:identifier] [:block xs...]] ->
         !(st[1].value isa Bool) ? @fail(st[1], "expected boolean bare flag") :
         pass()
@@ -785,7 +781,7 @@ function _calldecl_positionals(vcx, params_meta, eq_is_kw)
     for (i, p) in enumerate(params)
         if head(p) === :kw || head(p) === :(=) && eq_is_kw
             require_assign = true
-            allow_val_splat = i == lastindex(params)
+            allow_val_splat = i == lastindex(params) && !is_known(va_ok)
             ok[] &= vst1_pparam_and_default(vcx, p; eq_is_kw, allow_val_splat)
         elseif head(p) === :...
             ok[] &= @fail(p, "`...` may only be used on the final parameter")
@@ -1190,7 +1186,7 @@ vst0_macrocall(vcx, st) = @stm st begin
     (_, when=!vcx.unexpanded) ->
         @fail(st, "macrocall not valid in AST after macro expansion")
     ([:macrocall name [:value] args...],
-     when=(typeof(st[2].value) in (LineNumberNode, MacroSource))) ->
+     when=(typeof(st[2].value) === LineNumberNode)) ->
          pass()
     [:macrocall _...] ->
         @fail(st, "expected (macrocall name linenode args...)")

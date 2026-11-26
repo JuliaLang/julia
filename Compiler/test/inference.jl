@@ -6903,6 +6903,8 @@ fapplicable(; x) = x
 @test only(Base.return_types(gapplicable, (Int,))) === Val{true}
 @test only(Base.return_types(()) do; applicable(); end) === Union{}
 @test only(Base.return_types((Any,)) do x; Val(applicable(x...)); end) == Val
+# an argument type that no object has forms no signature
+@test only(Base.return_types((Some{Union{}},)) do x; applicable(sin, x); end) === Union{}
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, x...)); end) == Val # could be improved to Val{true}
 @test only(Base.return_types((Tuple{Vararg{Int}},)) do x; Val(applicable(+, 1, 2, 3, x...)); end) === Val{true}
 @test only(Base.return_types((Int,)) do x; Val(applicable(+, 1, x)); end) === Val{true}
@@ -7207,7 +7209,7 @@ end |> only == Val{true}
 
 # https://github.com/JuliaLang/julia/issues/51310
 @test code_typed() do
-    b{c} = d...
+    b = UnionAll(TypeVar(:c), d...)
 end |> only |> first isa Core.CodeInfo
 
 abstract_call_unionall_vararg(some::Some{Any}) = UnionAll(some.value...)
@@ -7936,6 +7938,13 @@ g55916(x) = f55916(x)
 end === Union{}
 @test Base.infer_return_type() do
     TypeVar(:Issue56248, Any, 1)
+end === Union{}
+# a `TypeVar` call with a wrong number of arguments throws a `MethodError`
+@test Base.infer_return_type() do
+    TypeVar()
+end === Union{}
+@test Base.infer_return_type((Symbol,Any,Any,Any)) do name, lb, ub, x
+    TypeVar(name, lb, ub, x)
 end === Union{}
 
 @test Base.infer_return_type((Nothing,)) do x
@@ -8677,6 +8686,8 @@ end == Type
 @test Base.infer_return_type() do
     Compiler.return_type(Tuple)
 end == Type
+
+@test Compiler._return_type(Compiler.NativeInterpreter(), Tuple{typeof(Core.current_scope)}) === Any
 
 @test Base.infer_return_type(Core.task_result_type, (Task,)) === Type
 task_returner() = Task(() -> "hello")

@@ -1,16 +1,19 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
 struct SummarySize
-    seen::IdDict{Any,Any}
+    seen::Set{Ptr{Cvoid}}
     frontier_x::Vector{Any}
     frontier_i::Vector{Int}
-    exclude::Any
-    chargeall::Any
     count::Bool
 end
 
-nth_pointer_isdefined(obj, i::Int) = ccall(:jl_nth_pointer_isdefined, Cint, (Any, Csize_t), obj, i-1) != 0
-get_nth_pointer(obj, i::Int) = ccall(:jl_get_nth_pointer, Any, (Any, Csize_t), obj, i-1)
+get_nth_pointer_or_nothing(obj, i::Int) = ccall(:jl_get_nth_pointer_or_nothing, Any, (Any, Csize_t), obj, i-1)
+
+function memory_npointers(mem::GenericMemory)
+    dtl = DataTypeLayout(typeof(mem))
+    datatype_arrayelem(dtl) == 1 && return length(mem)
+    return dtl.firstptr >= 0 ? length(mem) * Int(dtl.npointers) : 0
+end
 
 """
     Base.summarysize(obj; count = false, exclude=Union{...}, chargeall=Union{...})::Int
@@ -46,9 +49,15 @@ function summarysize(obj;
                      count::Bool = false,
                      exclude = Union{DataType, Core.TypeName, Core.MethodInstance},
                      chargeall = Union{Core.TypeMapEntry, Method})
-    @nospecialize obj exclude chargeall
-    ss = SummarySize(IdDict(), Any[], Int[], exclude, chargeall, count)
-    size::Int = ss(obj)
+    @nospecialize obj
+    ss = SummarySize(Set{Ptr{Cvoid}}(), Any[], Int[], count)
+    return _summarysize_frontier(ss, ss(obj)::Int, exclude, chargeall)
+end
+
+# specialized on the exclude and chargeall types, so checking them is cheap
+function _summarysize_frontier(ss::SummarySize, size::Int, ::Type{Excl}, ::Type{Chg}) where {Excl, Chg}
+    mem = nothing # the memory whose pointer count is cached below
+    mem_nf = 0
     while !isempty(ss.frontier_x)
         # DFS heap traversal of everything without a specialization
         # BFS heap traversal of anything with a specialization
@@ -80,29 +89,15 @@ function summarysize(obj;
                 v === nothing || (val = v)
             end
         elseif isa(x, GenericMemory)
-            T = eltype(x)
-            if allocatedinline(T)
-                np = datatype_npointers(T)
-                nf = length(x) * np
-                idx = (i-1) ÷ np + 1
-                if @inbounds @inline isassigned(x, idx)
-                    elt = x[idx]
-                    p = (i-1) % np + 1
-                    if nth_pointer_isdefined(elt, p)
-                        val = get_nth_pointer(elt, p)
-                    end
-                end
-            else
-                nf = length(x)
-                if @inbounds @inline isassigned(x, i)
-                    val = x[i]
-                end
+            if x !== mem
+                mem = x
+                mem_nf = memory_npointers(x)
             end
+            nf = mem_nf
+            val = get_nth_pointer_or_nothing(x, i)
         else
             nf = datatype_npointers(typeof(x))
-            if nth_pointer_isdefined(x, i)
-                val = get_nth_pointer(x, i)
-            end
+            val = get_nth_pointer_or_nothing(x, i)
         end
         if nf > i
             ss.frontier_i[end] = i + 1
@@ -110,7 +105,7 @@ function summarysize(obj;
             pop!(ss.frontier_x)
             pop!(ss.frontier_i)
         end
-        if val !== nothing && !isa(val, Module) && (!isa(val, ss.exclude) || isa(x, ss.chargeall))
+        if val !== nothing && !isa(val, Module) && (!isa(val, Excl) || isa(x, Chg))
             size += ss(val)::Int
         end
     end
@@ -124,7 +119,7 @@ end
     # NOTE: this attempts to discover multiple copies of the same immutable value,
     # and so is somewhat approximate.
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     if datatype_npointers(typeof(obj)) > 0
         push!(ss.frontier_x, obj)
         push!(ss.frontier_i, 1)
@@ -147,13 +142,13 @@ end
 
 function (ss::SummarySize)(obj::String)
     key = ccall(:jl_value_ptr, Ptr{Cvoid}, (Any,), obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     return (ss.count ? 1 : (Core.sizeof(Int) + Core.sizeof(obj)))
 end
 
 function (ss::SummarySize)(obj::DataType)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     size::Int = ss.count ? 1 : sizeof(DataType)
     size += ss(obj.parameters)::Int
     if isdefined(obj, :types)
@@ -164,24 +159,22 @@ end
 
 function (ss::SummarySize)(obj::Core.TypeName)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     return (ss.count ? 1 : Core.sizeof(obj))
 end
 
 function (ss::SummarySize)(obj::GenericMemory)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    in!(pointer_from_objref(obj), ss.seen) && return 0
     headersize = 2 * sizeof(Int)
     size::Int = (ss.count ? 1 : headersize)
     datakey = unsafe_convert(Ptr{Cvoid}, obj)
-    if !haskey(ss.seen, datakey)
-        ss.seen[datakey] = true
+    if !in!(datakey, ss.seen)
         if !ss.count
             size += sizeof(obj)
         elseif pointer_from_objref(obj) + 16 != datakey
             size += 1
         end
-        T = eltype(obj)
-        if !isempty(obj) && T !== Symbol && (!allocatedinline(T) || (T isa DataType && !datatype_pointerfree(T)))
+        if eltype(obj) !== Symbol && memory_npointers(obj) > 0
             push!(ss.frontier_x, obj)
             push!(ss.frontier_i, 1)
         end
@@ -191,7 +184,7 @@ end
 
 function (ss::SummarySize)(obj::Core.SimpleVector)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     size::Int = (ss.count ? 1 : Core.sizeof(obj))
     if !isempty(obj)
         push!(ss.frontier_x, obj)
@@ -201,7 +194,7 @@ function (ss::SummarySize)(obj::Core.SimpleVector)
 end
 
 function (ss::SummarySize)(obj::Module)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    in!(pointer_from_objref(obj), ss.seen) && return 0
     size::Int = (ss.count ? 1 : Core.sizeof(obj))
     for binding in names(obj, all = true)
         if isdefined(obj, binding) && !isdeprecated(obj, binding)
@@ -223,10 +216,10 @@ end
 
 function (ss::SummarySize)(obj::Core.CancellationTokenSource)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     # Variable-sized: Core.sizeof includes the trailing parent link entries.
     # The (strong) parent references are traversed through the iterative
-    # frontier (see the branch in `summarysize`), which keeps deep chains
+    # frontier (see its branch in the frontier loop), which keeps deep chains
     # off the stack and honors `exclude`; the child list is weak - a source
     # does not keep its children alive - so it is deliberately not followed.
     if Int(obj.nparents) > 0
@@ -238,7 +231,7 @@ end
 
 function (ss::SummarySize)(obj::Core.WaitEntryN)
     key = pointer_from_objref(obj)
-    haskey(ss.seen, key) ? (return 0) : (ss.seen[key] = true)
+    in!(key, ss.seen) && return 0
     # Variable-sized: Core.sizeof includes the trailing wait slots, whose
     # strong owner/next references (invisible to the layout) are traversed
     # through the iterative frontier alongside `task`.
@@ -248,7 +241,7 @@ function (ss::SummarySize)(obj::Core.WaitEntryN)
 end
 
 function (ss::SummarySize)(obj::Task)
-    haskey(ss.seen, obj) ? (return 0) : (ss.seen[obj] = true)
+    in!(pointer_from_objref(obj), ss.seen) && return 0
     size::Int = (ss.count ? 1 : Core.sizeof(obj))
     if isdefined(obj, :code)
         size += ss(obj.code)::Int

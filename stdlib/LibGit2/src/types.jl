@@ -2,7 +2,7 @@
 
 using Base: something
 import Base.@kwdef
-import .Consts: GIT_SUBMODULE_IGNORE, GIT_MERGE_FILE_FAVOR, GIT_MERGE_FILE, GIT_CONFIG, GIT_OID_TYPE
+import .Consts: GIT_CONFIG, GIT_MERGE_FILE, GIT_MERGE_FILE_FAVOR, GIT_OID_TYPE, GIT_SUBMODULE_IGNORE
 
 const OID_RAWSZ = 20
 const OID_HEXSZ = OID_RAWSZ * 2
@@ -20,7 +20,7 @@ struct GitHash <: AbstractGitHash
     val::NTuple{OID_RAWSZ, UInt8}
     GitHash(val::NTuple{OID_RAWSZ, UInt8}) = new(val)
 end
-GitHash() = GitHash(ntuple(i->zero(UInt8), OID_RAWSZ))
+GitHash() = GitHash(ntuple(_->zero(UInt8), OID_RAWSZ))
 GitHash(h::GitHash) = h
 
 """

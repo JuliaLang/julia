@@ -1054,6 +1054,43 @@ JL_CALLABLE(jl_f__apply_iterate)
     return result;
 }
 
+// Every span must be a rooted argument buffer, as for an ordinary call.
+JL_DLLEXPORT jl_value_t *jl_apply_generic_spans(jl_value_t *F, size_t nspans, ...)
+{
+    va_list ap;
+    uint32_t n = 0;
+    va_start(ap, nspans);
+    for (size_t i = 0; i < nspans; i++) {
+        (void)va_arg(ap, jl_value_t**);
+        if (__builtin_add_overflow(n, va_arg(ap, size_t), &n)) {
+            va_end(ap);
+            jl_throw(jl_memory_exception);
+        }
+    }
+    va_end(ap);
+    int onstack = n < jl_page_size / sizeof(jl_value_t*);
+    jl_value_t **roots;
+    JL_GC_PUSHARGS(roots, onstack ? n : 1);
+    jl_value_t **newargs = roots;
+    if (!onstack) {
+        jl_svec_t *arg_heap = jl_alloc_svec_uninit(n);
+        roots[0] = (jl_value_t*)arg_heap;
+        newargs = jl_svec_data(arg_heap);
+    }
+    size_t k = 0;
+    va_start(ap, nspans);
+    for (size_t i = 0; i < nspans; i++) {
+        jl_value_t **data = va_arg(ap, jl_value_t**);
+        size_t len = va_arg(ap, size_t);
+        for (size_t j = 0; j < len; j++)
+            newargs[k++] = jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)data + j);
+    }
+    va_end(ap);
+    jl_value_t *result = jl_apply_generic(F, newargs, n);
+    JL_GC_POP();
+    return result;
+}
+
 // this is like a regular call, but always runs in the newest world
 JL_CALLABLE(jl_f_invokelatest)
 {
@@ -2001,7 +2038,7 @@ JL_CALLABLE(jl_f__import)
     else if (nargs == 5) {
         JL_TYPECHK(_import, symbol, args[3]);
         JL_TYPECHK(_import, bool, args[4]);
-        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+        jl_module_import((jl_module_t *)args[0], (jl_module_t *)args[1],
                          (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
     }
     return jl_nothing;

@@ -337,34 +337,34 @@ end
 @testset "filter" begin # was recur
     startdate = Dates.Date(2014, 1, 1)
     stopdate = Dates.Date(2014, 2, 1)
-    @test length(filter(x->true, startdate:Dates.Day(1):stopdate))  == 32
-    @test length(filter(x->true, stopdate:Dates.Day(-1):startdate)) == 32
+    @test length(filter(_->true, startdate:Dates.Day(1):stopdate))  == 32
+    @test length(filter(_->true, stopdate:Dates.Day(-1):startdate)) == 32
 
     Januarymondays2014 = [Dates.Date(2014, 1, 6), Dates.Date(2014, 1, 13), Dates.Date(2014, 1, 20), Dates.Date(2014, 1, 27)]
     @test filter(Dates.ismonday, startdate:Dates.Day(1):stopdate) == Januarymondays2014
 
     @test_throws MethodError filter((x, y)->x + y, Dates.Date(2013):Dates.Day(1):Dates.Date(2014))
     @test_throws MethodError Dates.DateFunction((x, y)->x + y, Date(0))
-    @test_throws ArgumentError Dates.DateFunction((dt)->2, Date(0))
+    @test_throws ArgumentError Dates.DateFunction(_->2, Date(0))
     @test contains(sprint(show, Dates.DateFunction(Dates.ismonday, Date(0))), "ismonday")
     # Time adjusters step by the finest unit given unless told otherwise
     @test Time(t -> minute(t) == 30, 1, 0, 0; step=Minute(1)) == Time(1, 30)
     @test Time(t -> millisecond(t) == 3, 1, 0, 0, 0) == Time(1, 0, 0, 3)
     @test Time(t -> nanosecond(t) == 3, 1, 0, 0, 0, 0) == Time(1, 0, 0, 0, 0, 3)
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 2))) == 32
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 1))) == 1
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 2))) == 2
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 3))) == 3
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 4))) == 4
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 5))) == 5
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 6))) == 6
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 7))) == 7
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 8))) == 8
-    @test length(filter(x->true, Dates.Date(2013):Dates.Month(1):Dates.Date(2013, 1, 1))) == 1
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(-1):Dates.Date(2012, 1, 1))) == 367
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 2))) == 32
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 1))) == 1
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 2))) == 2
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 3))) == 3
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 4))) == 4
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 5))) == 5
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 6))) == 6
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 7))) == 7
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2013, 1, 8))) == 8
+    @test length(filter(_->true, Dates.Date(2013):Dates.Month(1):Dates.Date(2013, 1, 1))) == 1
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(-1):Dates.Date(2012, 1, 1))) == 367
 
     # Empty range
-    @test length(filter(x->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2012, 1, 1))) == 0
+    @test length(filter(_->true, Dates.Date(2013):Dates.Day(1):Dates.Date(2012, 1, 1))) == 0
 
     # All leap days in 20th century
     @test length(filter(Dates.Date(1900):Dates.Day(1):Dates.Date(2000)) do x
@@ -373,7 +373,6 @@ end
 end
 
 @testset "Holiday test cases" begin
-    dt = Dates.Date(2014, 5, 21)
     dr = Dates.Date(2014):Dates.Day(1):Dates.Date(2015)
     @testset "Thanksgiving" begin
         # 4th Thursday of November
@@ -423,26 +422,6 @@ end
         isthanksgiving(dt) = Dates.dayofweek(dt) == Dates.Thu &&
             Dates.month(dt) == Dates.Nov && Dates.dayofweekofmonth(dt) == 4
 
-        function easter(y)
-            # Butcher's Algorithm: http://www.smart.net/~mmontes/butcher.html
-            a = y % 19
-            b = div(y, 100)
-            c = y % 100
-            d = div(b, 4)
-            e = b % 4
-            f = div(b + 8, 25)
-            g = div(b - f + 1, 3)
-            h = (19 * a + b - d - g + 15) % 30
-            i = div(c, 4)
-            k = c % 4
-            l = (32 + 2 * e + 2 * i - h - k) % 7
-            m = div(a + 11 * h + 22 * l, 451)
-            month = div(h + l - 7 * m + 114, 31)
-            p = (h + l - 7 * m + 114) % 31
-            return (y, month, p + 1)
-        end
-        iseaster(dt) = Dates.yearmonthday(dt) == easter(Dates.year(dt))
-
         HOLIDAYS = x->isnewyears(x) || isindependenceday(x) ||
                       isveteransday(x) || ischristmas(x) ||
                       ismartinlutherking(x) || ispresidentsday(x) ||
@@ -491,7 +470,7 @@ end
     # occurs every 823 years
     @test length(filter(Date(2000):Dates.Month(1):Date(2016)) do dt
         sum = 0
-        for i = 1:7
+        for _ = 1:7
             sum += Dates.dayofweek(dt) > 4 ? Dates.daysofweekinmonth(dt) : 0
             dt += Dates.Day(1)
         end

@@ -507,7 +507,6 @@ end
 function _copyto_bitarray!(B::BitArray, A::AbstractArray)
     l = length(A)
     l == 0 && return B
-    l > length(B) && throw(BoundsError(B, length(B)+1))
     Bc = B.chunks
     nc = num_bit_chunks(l)
     Ai = first(eachindex(A))

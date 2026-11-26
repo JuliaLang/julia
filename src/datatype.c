@@ -2442,10 +2442,46 @@ JL_DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field) JL_CANSAFE
     return jl_field_offset(ty, field - 1);
 }
 
+static uint32_t layout_nth_pointer_offset(const jl_datatype_layout_t *ly, size_t i) JL_NOTSAFEPOINT
+{
+    const void *ptrs = jl_dt_layout_ptrs(ly);
+    if (ly->flags.fielddesc_type == JL_FIELDDESC_8)
+        return ((const uint8_t*)ptrs)[i];
+    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16)
+        return ((const uint16_t*)ptrs)[i];
+    else
+        return ((const uint32_t*)ptrs)[i];
+}
+
+// Pointers are counted in storage order: one per boxed element, or `npointers` per inline element.
+static jl_value_t *get_nth_memory_pointer(jl_genericmemory_t *m, const jl_datatype_layout_t *ly, size_t i)
+{
+    _Atomic(jl_value_t*) *data = (_Atomic(jl_value_t*)*)m->ptr;
+    if (ly->flags.arrayelem_isboxed) {
+        if (i >= m->length)
+            jl_bounds_error_int((jl_value_t*)m, i);
+        return jl_atomic_load_relaxed(&data[i]);
+    }
+    uint32_t np = ly->npointers;
+    if (ly->first_ptr < 0 || np == 0 || i / np >= m->length)
+        jl_bounds_error_int((jl_value_t*)m, i);
+    _Atomic(jl_value_t*) *elem = data + (i / np) * (ly->size / sizeof(jl_value_t*));
+    _Atomic(jl_value_t*) *fld = &elem[layout_nth_pointer_offset(ly, i % np)];
+    if (!ly->flags.arrayelem_islocked)
+        return jl_atomic_load_relaxed(fld);
+    // A locked element is written with memcpy while its lock is held.
+    jl_lock_field((jl_mutex_t*)elem);
+    jl_value_t *r = jl_atomic_load_relaxed(fld);
+    jl_unlock_field((jl_mutex_t*)elem);
+    return r;
+}
+
 static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
 {
     jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(v);
     const jl_datatype_layout_t *ly = dt->layout;
+    if (jl_is_genericmemory(v))
+        return get_nth_memory_pointer((jl_genericmemory_t*)v, ly, i);
     uint32_t npointers = ly->npointers;
     if (i >= npointers)
         jl_bounds_error_int(v, i);
@@ -2454,16 +2490,7 @@ static jl_value_t *get_nth_pointer(jl_value_t *v, size_t i)
         // but they do not expose an inline pointer-offset table to enumerate.
         return NULL;
     }
-    const uint8_t *ptrs8 = (const uint8_t *)jl_dt_layout_ptrs(ly);
-    const uint16_t *ptrs16 = (const uint16_t *)jl_dt_layout_ptrs(ly);
-    const uint32_t *ptrs32 = (const uint32_t*)jl_dt_layout_ptrs(ly);
-    uint32_t fld;
-    if (ly->flags.fielddesc_type == JL_FIELDDESC_8)
-        fld = ptrs8[i];
-    else if (ly->flags.fielddesc_type == JL_FIELDDESC_16)
-        fld = ptrs16[i];
-    else
-        fld = ptrs32[i];
+    uint32_t fld = layout_nth_pointer_offset(ly, i);
     return jl_atomic_load_relaxed((_Atomic(jl_value_t*)*)(&((jl_value_t**)v)[fld]));
 }
 
@@ -2478,6 +2505,13 @@ JL_DLLEXPORT jl_value_t *jl_get_nth_pointer(jl_value_t *v, size_t i)
 JL_DLLEXPORT int jl_nth_pointer_isdefined(jl_value_t *v, size_t i)
 {
     return get_nth_pointer(v, i) != NULL;
+}
+
+// Reads the pointer once, so it cannot be cleared between a check and the read.
+JL_DLLEXPORT jl_value_t *jl_get_nth_pointer_or_nothing(jl_value_t *v, size_t i)
+{
+    jl_value_t *ptrf = get_nth_pointer(v, i);
+    return ptrf == NULL ? jl_nothing : ptrf;
 }
 
 // ============================================================================

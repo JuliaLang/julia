@@ -1529,6 +1529,8 @@ end
     @test @views mightalias(AA, AA[:])
     @test @views mightalias(AA[:], AA[:])
     @test @views mightalias(AA[1:1], AA[1:2])
+
+    @test @views !mightalias(zeros(0)[:], zeros(0, 0)[:, :])
 end
 
 @testset "lexicographic comparison" begin

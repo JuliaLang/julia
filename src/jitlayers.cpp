@@ -434,6 +434,8 @@ static void jl_publish_compiled_ci(jl_code_instance_t *ci,
     }
 }
 
+// GC-unsafe only: jl_static_show reads Julia objects and roots some on the GC stack, which must
+// not change while the thread is GC-safe, as a GC may be walking it meanwhile
 static void jl_do_dump_compile(jl_code_instance_t *codeinst, uint64_t time) JL_NOTSAFEPOINT
 {
     jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
@@ -487,11 +489,11 @@ jl_emit_codeinsts_to_jit_impl(jl_code_instance_t **codeinsts, jl_code_info_t **s
         jl_promote_method_roots(out, mi);
         emit_always_inline(out, jl_get_method_ir); // contains safepoints
 
-        // Non-opaque-closure MethodInstances are considered globally rooted
-        // through their methods, but for OC, we need to create a global root
-        // here.
+        // Non-opaque-closure CodeInstances are considered globally rooted through
+        // their methods, but for OC, we need to create a global root here (not when
+        // the code is registered, which runs under the JIT's locks).
         if (jl_is_method(mi->def.value) && mi->def.method->is_for_opaque_closure)
-            jl_as_global_root((jl_value_t*)mi, 1);
+            jl_as_global_root((jl_value_t*)codeinst, 1);
     }
 
     out.temporary_roots = nullptr;
@@ -754,7 +756,7 @@ void JLDebuginfoPlugin::enableGDBRegistration(orc::ExecutorAddr Registrar)
 // bytes, while allocations made inside the uninstrumented libLLVM touch no
 // shadow state. A block libLLVM carves out of a slab our calls created is
 // therefore live but still shadow-poisoned; repair that before reading it.
-static void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
+void unpoisonLinkGraphBlocks(const jitlink::Section &Sec) JL_NOTSAFEPOINT
 {
 #ifdef _COMPILER_ASAN_ENABLED_
     for (const jitlink::Block *B : Sec.blocks())
@@ -1081,11 +1083,6 @@ public:
         }
         uint64_t end_time = jl_hrtime();
 
-        for (auto [CI, _] : Out.linker_info->ci_funcs) {
-            JL_GC_PROMISE_ROOTED(CI);
-            jl_do_dump_compile(CI, end_time - start_time);
-        }
-
         auto G = jitlink::createLinkGraphFromObject(Obj->getMemBufferRef(),
                                                     ES.getSymbolStringPool());
         if (!G) {
@@ -1105,6 +1102,10 @@ public:
 
         jl_task_t *ct = jl_current_task;
         uint8_t gc_state = jl_gc_unsafe_enter(ct->ptls);
+        for (auto [CI, _] : Out.linker_info->ci_funcs) {
+            JL_GC_PROMISE_ROOTED(CI);
+            jl_do_dump_compile(CI, end_time - start_time);
+        }
         JIT.publishCIs(CIs);
         jl_gc_unsafe_leave(ct->ptls, gc_state);
 

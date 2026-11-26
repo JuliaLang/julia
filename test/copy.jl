@@ -80,6 +80,7 @@ end
         copyto!(A, CartesianIndices((2:3,2)), A, CartesianIndices((2,2)))
         @test A[2:3,:] == [1 4;2 5]
     end
+    @test_throws ArgumentError copyto!(zeros(3), CartesianIndices((1:0,)), zeros(3), CartesianIndices((1:2,)))
 end
 
 @testset "shallow and deep copying" begin

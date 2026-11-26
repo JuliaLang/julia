@@ -639,6 +639,11 @@ static inline void add_named_global(StringRef name, T *addr JL_CANSAFEPOINT)
     // data and code pointers
     add_named_global(name, (void*)(uintptr_t)addr);
 }
+template<typename T>
+static inline void add_shared_named_global(StringRef name, T *addr JL_CANSAFEPOINT)
+{
+    add_shared_named_global(name, (void*)(uintptr_t)addr);
+}
 
 static AttributeSet Attributes(LLVMContext &C, std::initializer_list<Attribute::AttrKind> attrkinds, std::initializer_list<Attribute> extra={})
 {
@@ -1037,6 +1042,15 @@ static const auto jlapplygeneric_func = new JuliaFunction<>{
     XSTR(jl_apply_generic),
     get_func_sig,
     get_func_attrs,
+};
+static const auto jlapplygenericspans_func = new JuliaFunction<TypeFnContextAndSizeT>{
+    XSTR(jl_apply_generic_spans),
+    [](LLVMContext &C, Type *T_size) { return FunctionType::get(PointerType::get(C, AddressSpace::Tracked),
+            {PointerType::get(C, AddressSpace::Tracked), T_size}, true); },
+    [](LLVMContext &C) { return AttributeList::get(C,
+            AttributeSet(),
+            Attributes(C, {Attribute::NonNull}),
+            {}); },
 };
 static const auto jlinvoke_func = new JuliaFunction<>{
     XSTR(jl_invoke),
@@ -4913,35 +4927,57 @@ static bool emit_builtin_call(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
         }
     }
 
-    else if (f == BUILTIN(_apply_iterate) && nargs == 3) {
-        // turn Core._apply_iterate(iter, f, Tuple) ==> f(Tuple...) using the jlcall calling convention if Tuple is the va allocation
-        if (ctx.vaSlot > 0) {
-            if (LoadInst *load = dyn_cast_or_null<LoadInst>(argv[3].V)) {
-                if (load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot && ctx.argArray) {
-                    Value *theF = boxed(ctx, argv[2]);
-                    Value *nva = emit_n_varargs(ctx);
-#ifdef _P64
-                    nva = ctx.builder.CreateTrunc(nva, getInt32Ty(ctx.builder.getContext()));
-#endif
-                    Value *theArgs = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
-                    Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, theArgs, nva });
-                    *ret = mark_julia_type(ctx, r, true, jl_any_type);
-                    return true;
+    else if (f == BUILTIN(_apply_iterate) && nargs >= 3) {
+        auto is_va = [&](const jl_cgval_t &arg) {
+            if (ctx.vaSlot > 0 && ctx.argArray)
+                if (LoadInst *load = dyn_cast_or_null<LoadInst>(arg.V))
+                    return load->getPointerOperand() == ctx.slots[ctx.vaSlot].boxroot;
+            return false;
+        };
+        bool all_spans = true;
+        for (size_t i = 3; i <= nargs; i++)
+            all_spans &= is_va(argv[i]) || argv[i].typ == (jl_value_t*)jl_simplevector_type;
+        if (all_spans) {
+            size_t nspans = nargs - 2;
+            SmallVector<Value*, 4> data(nspans), lens(nspans), roots;
+            for (size_t i = 0; i < nspans; i++) {
+                const jl_cgval_t &arg = argv[i + 3];
+                if (is_va(arg)) {
+                    data[i] = emit_ptrgep(ctx, ctx.argArray, ctx.nReqArgs * sizeof(jl_value_t*));
+                    lens[i] = emit_n_varargs(ctx);
+                }
+                else {
+                    Value *svec_val = boxed(ctx, arg);
+                    data[i] = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
+                    lens[i] = ctx.builder.CreateAlignedLoad(ctx.types().T_size, decay_derived(ctx, svec_val), Align(ctx.types().sizeof_ptr));
+                    roots.push_back(svec_val);
                 }
             }
-        }
-        // optimization for _apply_iterate when there is one argument and it is a SimpleVector
-        const jl_cgval_t &arg = argv[3];
-        if (arg.typ == (jl_value_t*)jl_simplevector_type) {
             Value *theF = boxed(ctx, argv[2]);
-            Value *svec_val = boxed(ctx, arg);
-            Value *svec_len = ctx.builder.CreateAlignedLoad(ctx.types().T_size, decay_derived(ctx, svec_val), Align(ctx.types().sizeof_ptr));
+            SmallVector<OperandBundleDef, 1> bundles;
+            if (!roots.empty())
+                bundles.emplace_back("jl_roots", roots);
+            Value *r;
+            if (nspans == 1) {
+                Value *len = lens[0];
 #ifdef _P64
-            svec_len = ctx.builder.CreateTrunc(svec_len, getInt32Ty(ctx.builder.getContext()));
+                len = ctx.builder.CreateTrunc(len, getInt32Ty(ctx.builder.getContext()));
 #endif
-            Value *svec_data = emit_ptrgep(ctx, emit_pointer_from_objref(ctx, svec_val), ctx.types().sizeof_ptr);
-            OperandBundleDef OpBundle("jl_roots", svec_val);
-            Value *r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, svec_data, svec_len }, OpBundle);
+                r = ctx.builder.CreateCall(prepare_call(jlapplygeneric_func), { theF, data[0], len }, bundles);
+            }
+            else {
+                SmallVector<Value*, 8> args{theF, ConstantInt::get(ctx.types().T_size, nspans)};
+                for (size_t i = 0; i < nspans; i++) {
+                    args.push_back(data[i]);
+                    args.push_back(lens[i]);
+                }
+                CallInst *call = ctx.builder.CreateCall(prepare_call(jlapplygenericspans_func), args, bundles);
+                LLVMContext &C = ctx.builder.getContext();
+                for (size_t i = 0; i < nspans; i++)
+                    call->setAttributes(call->getAttributes().addParamAttributes(C, 2 + 2 * i,
+                        AttrBuilder(C, Attributes(C, {Attribute::NoAlias, Attribute::ReadOnly, Attribute::NoUndef}, {NoCaptureAttr(C)}))));
+                r = call;
+            }
             *ret = mark_julia_type(ctx, r, true, jl_any_type);
             return true;
         }
@@ -6949,7 +6985,10 @@ static void emit_phinode_assign(jl_codectx_t &ctx, ssize_t idx, jl_value_t *r) J
                 ptr_phi = PHINode::Create(ctx.types().T_prjlvalue, jl_array_nrows(edges), "ptr_phi");
                 ptr_phi->insertInto(BB, InsertPt);
                 if (dest) {
-                    Value *isboxed = ctx.builder.CreateIsNotNull(ptr_phi);
+                    // With no roots to fill, every edge puts an unboxed member in the slot, even
+                    // one that also has a box, so only a value with no index is read from its box.
+                    Value *isboxed = inline_roots ? ctx.builder.CreateIsNotNull(ptr_phi) :
+                        ctx.builder.CreateICmpEQ(Tindex_phi, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0));
                     AllocaInst *phi = cast<AllocaInst>(dest->clone());
                     phi->insertAfter(dest);
                     setName(ctx.emission_context, phi, "union_phi");
@@ -11032,8 +11071,8 @@ static jl_llvm_functions_t
                     if (new_union.Vboxed)
                         V = new_union.Vboxed;
                     else if (new_union.isboxed) {
-                        // The `emit_unionmove` below follows `isboxed` too: a boxed value is in
-                        // no slot, and lives only in this box.
+                        // Without roots, the `emit_unionmove` below puts this value in the slot
+                        // as well; otherwise it lives only in this box.
                         assert(new_union.constant); // its box is made on demand
                         V = boxed(ctx, new_union);
                     }
@@ -11045,18 +11084,13 @@ static jl_llvm_functions_t
                 }
                 else if (jl_is_concrete_type(val.typ) || val.constant) {
                     size_t tindex = get_box_tindex((jl_datatype_t*)(val.constant ? jl_typeof(val.constant) : val.typ), phiType);
-                    if (tindex && dest && (!VN || !val.isboxed)) {
+                    if (tindex && dest && (!VN || !val.isboxed || roots.empty())) {
                         emit_unionmove(ctx, dest, phiType, union_slot_aliasinfo(ctx, phiType), val, RTindex, nullptr);
                     }
                 }
                 else {
-                    if (dest && (!VN || !val.isboxed)) {
+                    if (dest && (!VN || !val.isboxed || roots.empty())) {
                         Value *skip = ctx.builder.CreateIsNull(RTindex); // skip entirely if old value isn't part of the new union
-                        if (new_union.Vboxed != nullptr && roots.empty()) {
-                            // if the value is boxed, we won't select this slot anyways, so skip it also
-                            Value *isboxed = ctx.builder.CreateIsNotNull(new_union.Vboxed);
-                            skip = ctx.builder.CreateOr(isboxed, skip);
-                        }
                         emit_unionmove(ctx, dest, phiType, union_slot_aliasinfo(ctx, phiType), val, RTindex, skip);
                     }
                 }
@@ -11337,6 +11371,7 @@ void emit_always_inline(jl_codegen_output_t &out,
     // that are here for inlining only, so we'll restore the original ci_funcs
     // map after emitting everything necessary for inlining.
     auto orig_ci_funcs = out.ci_funcs;
+    bool safepoint_on_entry = out.safepoint_on_entry;
     while (true) {
         for (auto &[call, target] : out.call_targets) {
             auto [ci, api] = call;
@@ -11345,6 +11380,7 @@ void emit_always_inline(jl_codegen_output_t &out,
         }
         if (queue.empty()) {
             out.ci_funcs = std::move(orig_ci_funcs);
+            out.safepoint_on_entry = safepoint_on_entry;
             return;
         }
 
@@ -11443,7 +11479,6 @@ static void init_jit_functions(void)
     add_named_global("jl_fptr_args", jl_fptr_args_addr);
     add_named_global("jl_fptr_sparam", jl_fptr_sparam_addr);
     add_named_global(jl_small_typeof_var, &jl_small_typeof);
-    add_named_global(jlstack_chk_guard_var, &__stack_chk_guard);
     add_named_global(jlRTLD_DEFAULT_var, &jl_RTLD_DEFAULT_handle);
     add_named_global(jlexe_var, &jl_exe_handle);
     add_named_global(jldll_var, &jl_libjulia_handle);
@@ -11459,7 +11494,6 @@ static void init_jit_functions(void)
     global_jlvalue_to_llvm(new JuliaVariable{"jl_diverror_exception", true, size2pjlvalue}, &jl_diverror_exception);
     global_jlvalue_to_llvm(new JuliaVariable{"jl_undefref_exception", true, size2pjlvalue}, &jl_undefref_exception);
     add_named_global(jlgetworld_global, &jl_world_counter);
-    add_named_global("__stack_chk_fail", &__stack_chk_fail);
     add_named_global(jlpgcstack_func, (void*)NULL);
     add_named_global(jlerror_func, &jl_error);
     add_named_global(jlatomicerror_func, &jl_atomic_error);
@@ -11538,19 +11572,25 @@ static void init_jit_functions(void)
     add_shared_named_global("jl_pgcstack_key_slot", (void*)&pgcstack_key_slot);
     add_shared_named_global("jl_image_tls_offset", (void*)&jl_tls_offset);
 
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+    add_named_global("__julia_personality", &__julia_personality);
+#endif
+
+    // referenced by LLVM itself (stack protector, stack probes)
+    add_shared_named_global(jlstack_chk_guard_var->name, &__stack_chk_guard);
+    add_shared_named_global("__stack_chk_fail", &__stack_chk_fail);
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)
-    add_named_global("__julia_personality", &__julia_personality);
 #if defined(__MINGW32__)
-    add_named_global("___chkstk_ms", &___chkstk_ms);
+    add_shared_named_global("___chkstk_ms", &___chkstk_ms);
 #else
-    add_named_global("__chkstk", &__chkstk);
+    add_shared_named_global("__chkstk", &__chkstk);
 #endif
 #else
 #if defined(__MINGW32__)
-    add_named_global("_alloca", &_alloca);
+    add_shared_named_global("_alloca", &_alloca);
 #else
-    add_named_global("_chkstk", &_chkstk);
+    add_shared_named_global("_chkstk", &_chkstk);
 #endif
 #endif
 #endif

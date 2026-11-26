@@ -2218,9 +2218,10 @@ end
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
     2   TestMod.generator_code
     3   (call %₂ slot₄/x slot₅/y)
-    4   (call core.tuple %₃)
-    5   (call JuliaLowering.interpolate_syntax (syntaxinert (block (syntaxunquote (block (call generator_code x y))))) %₄)
-    6   (return %₅)
+    4   (call core.svec %₃)
+    5   (call core.svec %₄)
+    6   (call JuliaLowering.interpolate_syntax (syntaxinert (block (syntaxunquote (block (call generator_code x y))))) %₅)
+    7   (return %₆)
 14  latestworld
 15  TestMod.f_only_generated
 16  (call core.TypeEqOf %₁₅)
@@ -2269,9 +2270,10 @@ end
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/#self#(nospecialize,!read) slot₄/x(nospecialize,!read) slot₅/y(nospecialize,!read)]
     1   (meta :nospecialize slot₃/#self# slot₄/x slot₅/y)
     2   (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y)))))
-    3   (call core.tuple %₂)
-    4   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₃)
-    5   (return %₄)
+    3   (call core.svec %₂)
+    4   (call core.svec %₃)
+    5   (call JuliaLowering.interpolate_syntax (syntaxinert (block (= nongen_stuff (call bothgen x y)) (syntaxunquote (block (copyast (inert (block (= maybe_gen_stuff (call some_gen_stuff x y))))))) (tuple nongen_stuff maybe_gen_stuff))) %₄)
+    6   (return %₅)
 14  latestworld
 15  TestMod.f_partially_generated
 16  (call core.TypeEqOf %₁₅)
