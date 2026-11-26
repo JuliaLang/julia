@@ -2138,6 +2138,16 @@ typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
 
+// An insert that probes further than this checks the load and doubles a table that is more
+// than half full. 2 * log2(sz), capped below the max probe (16) of small tables.
+STATIC_INLINE size_t jl_table_long_probe(size_t sz) JL_NOTSAFEPOINT
+{
+    size_t p = 2 * (size_t)__builtin_ctzll(sz);
+    return sz <= 1024 && p > 8 ? 8 : p;
+}
+// the load is estimated from at most 1024 evenly spaced slots
+#define jl_table_sample_stride(sz) ((sz) > 1024 ? (sz) / 1024 : 1)
+
 // probe sequence, shared by lookup and insert
 #define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)
 #define smallintset_h2index(hv, sz) (size_t)((hv) & ((sz)-1))
