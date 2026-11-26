@@ -407,13 +407,23 @@ Escape information imposed on SSA IR element `x` can be retrieved by `estate[x]`
 struct EscapeState
     escapes::Vector{EscapeInfo}
     aliasset::AliasSet
+    # The elements of each alias set as a circular linked list: `nextalias[xidx]` is the
+    # element that follows `xidx` in its alias set, which is `xidx` itself if it is alone.
+    nextalias::Vector{Int}
+    # `nontop[root]`, if not `nothing`, lists the elements of the alias set rooted at
+    # `root` that may not be `⊤` yet: every other element of that alias set is `⊤`.
+    # Joining escape information into `⊤` gives `⊤`, so those need not be visited again.
+    nontop::Vector{Union{Nothing,Vector{Int}}}
     nargs::Int
 end
 function EscapeState(nargs::Int, nstmts::Int)
+    n = nargs+nstmts
     escapes = EscapeInfo[
-        1 ≤ i ≤ nargs ? ArgEscape() : ⊥ for i in 1:(nargs+nstmts)]
-    aliasset = AliasSet(nargs+nstmts)
-    return EscapeState(escapes, aliasset, nargs)
+        1 ≤ i ≤ nargs ? ArgEscape() : ⊥ for i in 1:n]
+    aliasset = AliasSet(n)
+    nextalias = Int[i for i in 1:n]
+    nontop = Union{Nothing,Vector{Int}}[nothing for _ in 1:n]
+    return EscapeState(escapes, aliasset, nextalias, nontop, nargs)
 end
 function getindex(estate::EscapeState, @nospecialize(x))
     xidx = iridx(x, estate)
@@ -423,6 +433,9 @@ function setindex!(estate::EscapeState, v::EscapeInfo, @nospecialize(x))
     xidx = iridx(x, estate)
     if xidx !== nothing
         estate.escapes[xidx] = v
+        if v !== ⊤
+            estate.nontop[find_root!(estate.aliasset, xidx)] = nothing
+        end
     end
     return estate
 end
@@ -469,21 +482,16 @@ function getaliases(x::Union{Argument,SSAValue}, estate::EscapeState)
     return Union{Argument,SSAValue}[irval(aidx, estate) for aidx in aliases]
 end
 function getaliases(xidx::Int, estate::EscapeState)
-    aliasset = estate.aliasset
-    root = find_root!(aliasset, xidx)
-    if xidx ≠ root || aliasset.ranks[xidx] > 0
-        # the size of this alias set containing `key` is larger than 1,
-        # collect the entire alias set
-        aliases = Int[]
-        for aidx in 1:length(aliasset.parents)
-            if aliasset.parents[aidx] == root
-                push!(aliases, aidx)
-            end
-        end
-        return aliases
-    else
-        return nothing
+    nextalias = estate.nextalias
+    aidx = nextalias[xidx]
+    aidx == xidx && return nothing # `xidx` has no alias
+    # collect the entire alias set, which includes `xidx`
+    aliases = Int[xidx]
+    while aidx ≠ xidx
+        push!(aliases, aidx)
+        aidx = nextalias[aidx]
     end
+    return aliases
 end
 
 isaliased(x::Union{Argument,SSAValue}, y::Union{Argument,SSAValue}, estate::EscapeState) =
@@ -717,14 +725,29 @@ end
 @inline function propagate_escape_change!(@specialize(op),
     estate::EscapeState, change::EscapeChange)
     (; xidx, xinfo) = change
-    anychanged = _propagate_escape_change!(op, estate, xidx, xinfo)
-    # COMBAK is there a more efficient method of escape information equalization on aliasset?
-    aliases = getaliases(xidx, estate)
-    if aliases !== nothing
-        for aidx in aliases
+    root = find_root!(estate.aliasset, xidx)
+    nontop = estate.nontop[root]
+    if op === (⊔ₑ) && nontop !== nothing
+        # every element of the alias set other than these is `⊤`, which the join keeps
+        anychanged = false
+        for aidx in nontop
             anychanged |= _propagate_escape_change!(op, estate, aidx, xinfo)
         end
+        xinfo === ⊤ && empty!(nontop)
+        return anychanged
     end
+    anychanged = _propagate_escape_change!(op, estate, xidx, xinfo)
+    # COMBAK is there a more efficient method of escape information equalization on aliasset?
+    nextalias = estate.nextalias
+    aidx = nextalias[xidx]
+    while aidx ≠ xidx
+        anychanged |= _propagate_escape_change!(op, estate, aidx, xinfo)
+        aidx = nextalias[aidx]
+    end
+    # the whole alias set is `⊤` after joining `⊤` into it, and unknown after anything else
+    # (there is nothing to gain from tracking this for an element without aliases)
+    alltop = op === (⊔ₑ) && xinfo === ⊤ && nextalias[xidx] ≠ xidx
+    estate.nontop[root] = alltop ? Int[] : nothing
     return anychanged
 end
 
@@ -765,7 +788,40 @@ end
     xroot = find_root!(aliasset, xidx)
     yroot = find_root!(aliasset, yidx)
     if xroot ≠ yroot
-        union!(aliasset, xroot, yroot)
+        nextalias, nontop = estate.nextalias, estate.nontop
+        xnontop, ynontop = nontop[xroot], nontop[yroot]
+        if xnontop === nothing
+            if ynontop !== nothing
+                # nothing is known about the alias set of `x`: all of it may be non-`⊤`
+                aidx = xidx
+                while true
+                    push!(ynontop, aidx)
+                    aidx = nextalias[aidx]
+                    aidx == xidx && break
+                end
+            end
+            merged = ynontop
+        elseif ynontop === nothing
+            aidx = yidx
+            while true
+                push!(xnontop, aidx)
+                aidx = nextalias[aidx]
+                aidx == yidx && break
+            end
+            merged = xnontop
+        else
+            if length(xnontop) < length(ynontop)
+                xnontop, ynontop = ynontop, xnontop
+            end
+            for aidx in ynontop
+                push!(xnontop, aidx)
+            end
+            merged = xnontop
+        end
+        nontop[xroot] = nontop[yroot] = nothing
+        nontop[union!(aliasset, xroot, yroot)] = merged
+        # merge the circular lists of the two alias sets
+        nextalias[xidx], nextalias[yidx] = nextalias[yidx], nextalias[xidx]
         return true
     end
     return false
