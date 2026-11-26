@@ -251,7 +251,7 @@ define void @overaligned_gc_alloca(<8 x ptr addrspace(10)> %values) {
 ; CHECK: %roots = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 6)
 ; FINAL-LABEL: @overaligned_gc_alloca
 ; FINAL: %gcframe = alloca ptr addrspace(10), i32 17, align 64
-; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL: %roots = getelementptr inbounds nuw i8, ptr %gcframe, i64 64
   %pgcstack = call {}*** @julia.get_pgcstack()
   %roots = alloca <8 x ptr addrspace(10)>, align 64
 ; CHECK: store <8 x ptr addrspace(10)> %values, ptr %roots, align 64
@@ -274,7 +274,7 @@ define void @overaligned_gc_call(<8 x ptr addrspace(10)> %values) {
 ; CHECK: call void @aligned_root_array(ptr align 64 %roots)
 ; FINAL-LABEL: @overaligned_gc_call
 ; FINAL: %gcframe = alloca ptr addrspace(10), i32 16, align 64
-; FINAL: %roots = getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
+; FINAL: %roots = getelementptr inbounds nuw i8, ptr %gcframe, i64 64
 ; FINAL: call void @aligned_root_array(ptr align 64 %roots)
   %pgcstack = call {}*** @julia.get_pgcstack()
   %roots = alloca <8 x ptr addrspace(10)>, align 64
@@ -297,8 +297,8 @@ define void @overaligned_gc_padding(<4 x ptr addrspace(10)> %values) {
 ; CHECK-DAG: call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 14)
 ; FINAL-LABEL: @overaligned_gc_padding
 ; FINAL: %gcframe = alloca ptr addrspace(10), i32 20, align 64
-; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 8
-; FINAL-DAG: getelementptr inbounds ptr addrspace(10), ptr %gcframe, i32 16
+; FINAL-DAG: getelementptr inbounds nuw i8, ptr %gcframe, i64 64
+; FINAL-DAG: getelementptr inbounds nuw i8, ptr %gcframe, i64 128
 ; FINAL: store <4 x ptr addrspace(10)> %values, ptr %a, align 64
 ; FINAL: store <4 x ptr addrspace(10)> %values, ptr %b, align 64
   %pgcstack = call {}*** @julia.get_pgcstack()
@@ -486,7 +486,7 @@ left:
 ; CHECK-NEXT: [[LOCAL_L:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
 ; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_L]], align 8
 ; FINAL: left:
-; FINAL-NEXT: [[FINAL_L:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: [[FINAL_L:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_L]], align 8
   store ptr addrspace(10) %val, ptr %local, align 8
   call void @jl_safepoint()
@@ -499,7 +499,7 @@ right:
 ; CHECK-NEXT: [[LOCAL_R:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
 ; CHECK-NEXT: store ptr addrspace(10) %val, ptr [[LOCAL_R]], align 8
 ; FINAL: right:
-; FINAL-NEXT: [[FINAL_R:%.*]] = getelementptr inbounds {{(nuw )?}}ptr addrspace(10), ptr %gcframe, i32 2
+; FINAL-NEXT: [[FINAL_R:%.*]] = getelementptr inbounds nuw i8, ptr %gcframe, i64 16
 ; FINAL-NEXT: store ptr addrspace(10) %val, ptr [[FINAL_R]], align 8
   store ptr addrspace(10) %val, ptr %local, align 8
   call void @jl_safepoint()

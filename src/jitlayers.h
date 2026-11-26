@@ -994,4 +994,4 @@ void jl_jit_add_bytes(size_t bytes) JL_NOTSAFEPOINT;
 
 void jl_register_jit_object(const object::ObjectFile &Object,
                             std::function<uint64_t(const StringRef &)> getLoadAddress,
-                            const jl_linker_info_t &Info) JL_CANSAFEPOINT_ENTER_LEAVE;
+                            const jl_linker_info_t &Info) JL_NOTSAFEPOINT;

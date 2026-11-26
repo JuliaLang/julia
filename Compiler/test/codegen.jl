@@ -89,12 +89,14 @@ end
         nothing
     end
     increment_reinterpret!(a) = (a .+= Int32(1); nothing)
-    for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
-        if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+    if !is_debug_build && opt_level >= 2 && !coverage && Sys.ARCH in (:x86_64, :i686, :aarch64)
+        for (f, T) in ((zigzag_reinterpret!, Int16), (increment_reinterpret!, Int32))
             ir = get_llvm(f, Tuple{typeof(reinterpret(T, UInt8[]))})
             @test occursin(r"load <[0-9]+ x i(16|32)>", ir)
             @test occursin(r"store <[0-9]+ x i(16|32)>", ir)
         end
+        @test occursin(r"store <[0-9]+ x i16>", get_llvm(Base._fill!, Tuple{typeof(reinterpret(Int16, UInt8[])), Int16}))
+        @test occursin(r"store <[0-9]+ x i16>", get_llvm(Base._fill!, Tuple{typeof(reinterpret(UInt8, UInt16[])), UInt8}))
     end
 end
 
@@ -982,6 +984,10 @@ f_isdefined_nospecialize(@nospecialize(x)) = isdefined(x, 1)
 f_isa_type(@nospecialize(x)) = isa(x, Type)
 @test !occursin("jl_isa", get_llvm(f_isa_type, Tuple{Any}, true, false, false))
 
+# Test codegen for isa(::Any, AnyType)
+f_isa_anytype(@nospecialize(x)) = isa(x, Core.AnyType)
+@test !occursin("jl_subtype", get_llvm(f_isa_anytype, Tuple{Any}, true, false, false))
+
 # Issue #47247
 f47247(a::Ref{Int}, b::Nothing) = setfield!(a, :x, b)
 @test_throws TypeError f47247(Ref(5), nothing)
@@ -1000,6 +1006,20 @@ function f34459(args...)
 end
 # only the egality type `TypeEgal{Int}` is a ghost that codegen can elide (#61323)
 @test !occursin("jl_f_tuple", get_llvm(f34459, Tuple{Ptr{Int}, Core.TypeEgal{Int}}, true, false, false))
+
+# splatting varargs next to other arguments costs the same however many arguments are splatted
+const splat_count = Ref(0)
+@noinline splat_set(args...) = (splat_count[] = length(args); nothing)
+splat_lead(V...) = splat_set(0, V...)
+splat_trail(V...) = splat_set(V..., 0)
+splat_middle(V...) = splat_set(0, V..., 0)
+splat_twice(V...) = splat_set(V..., V...)
+splat_req(x, V...) = splat_set(x, V..., x)
+splat_call(f, xs) = f(xs...)
+splat_allocs(f, xs) = (splat_call(f, xs); @allocated splat_call(f, xs))
+@testset "splat varargs next to other arguments: $f" for f in (splat_lead, splat_trail, splat_middle, splat_twice, splat_req)
+    @test splat_allocs(f, fill([1], 10)) == splat_allocs(f, fill([1], 200))
+end
 
 # issue #48394: incorrectly-inferred getproperty shouldn't introduce invalid cgval_t
 #               when dealing with unions of ghost values
@@ -1732,4 +1752,21 @@ end
     @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_boxed, Tuple{Vector{Int}, String, Symbol, Int}))
     @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_inline, Tuple{Int, Vector{Int}, Vector{Int}, Vector{Int}, Int}))
     @test !occursin("jl_get_nth_field_checked", get_llvm(new_split_allptr, Tuple{Vector{Int}, Vector{Int}, Vector{Int}, Int}))
+end
+
+# `rem` only guards the overflowing `typemin % -1`, so a numerator that can't be `typemin`
+# leaves a plain `srem`, which can be CSE'd and paired with a division
+srem_index(i::UInt16, n::Int) = rem(i % Int, n)
+@noinline srem_dynamic(x, y) = rem(x, y)
+@testset "checked srem" begin
+    ir = get_llvm(srem_index, Tuple{UInt16, Int}, false)
+    @test occursin(" = srem $Iptr ", ir)
+    @test !occursin("phi", ir)
+    for T in Base.BitSigned_types
+        x, y = Base.inferencebarrier(typemin(T)), Base.inferencebarrier(T(-1))
+        @test srem_dynamic(x, y) === T(0)
+        @test srem_dynamic(x + T(1), y) === T(0)
+        @test srem_dynamic(x, T(7)) === T(rem(big(typemin(T)), 7))
+        @test_throws DivideError srem_dynamic(x, zero(T))
+    end
 end

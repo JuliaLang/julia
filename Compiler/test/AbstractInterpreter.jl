@@ -627,6 +627,55 @@ let interp = InvokeInterp()
     @test contains(result, "[1] error(::Char, ::Char, ::Char, ::Char)")
 end
 
+# A root inferred with constant arguments is published under an owner of its own, apart
+# from the generic CodeInstance of its MethodInstance and from recursive calls to it.
+@newinterp SeededRootInterp
+const seeded_root_codegen = IdDict{CodeInstance,CodeInfo}()
+Compiler.codegen_cache(::SeededRootInterp) = seeded_root_codegen
+struct SeededRootOwner
+    argtypes::Tuple
+end
+seeded_root_base() = :base
+seeded_root(n::Int) = n == 0 ? seeded_root_base() : (seeded_root(n - 1); n)
+function seeded_root_ci(interp, mi, n, source_mode=Compiler.SOURCE_MODE_NOT_REQUIRED)
+    argtypes = Any[Core.Const(seeded_root), Core.Const(n)]
+    𝕃 = Compiler.typeinf_lattice(interp)
+    defaults = Compiler.matching_cache_argtypes(𝕃, mi)
+    overridden = BitVector(map(i -> !Compiler.is_lattice_equal(𝕃, argtypes[i], defaults[i]),
+                               eachindex(argtypes)))
+    result = Compiler.InferenceResult(mi, argtypes, overridden)
+    owner = SeededRootOwner(Tuple(argtypes))
+    return Compiler.typeinf_ext(interp, result, owner, source_mode), owner
+end
+let interp = SeededRootInterp()
+    mi = Base.method_instance(seeded_root, (Int,))
+    # seeded before the generic MethodInstance is inferred: the recursive call infers
+    # it generically instead of joining the seeded root
+    ci, owner = seeded_root_ci(interp, mi, 1)
+    @test ci isa CodeInstance
+    @test ci.owner === owner
+    @test ci.rettype_const === 1
+    @test ci.max_world == typemax(UInt)
+    generic = get(Compiler.code_cache(interp), mi, nothing)
+    @test generic isa CodeInstance && generic !== ci
+    @test generic.rettype === Union{Int,Symbol}
+    @test seeded_root_ci(interp, mi, 1)[1] === ci
+
+    # seeded with the generic CodeInstance cached, and requiring source
+    ci2, owner2 = seeded_root_ci(interp, mi, 2, Compiler.SOURCE_MODE_GET_SOURCE)
+    @test ci2 !== ci && ci2 !== generic
+    @test ci2.owner === owner2
+    @test ci2.rettype_const === 2
+    @test Compiler.ci_has_source(interp, ci2)
+    @test seeded_root_ci(interp, mi, 2, Compiler.SOURCE_MODE_GET_SOURCE)[1] === ci2
+    @test get(Compiler.code_cache(interp), mi, nothing) === generic
+
+    # invalidated by a callee only the recursion reaches
+    @eval seeded_root_base() = :redefined
+    @test ci.max_world != typemax(UInt)
+    @test ci2.max_world != typemax(UInt)
+end
+
 # Global publication and per-interpreter source/ABI capability are selected separately,
 # including when a winner appears while inference is running.
 @newinterp SourceModeWinnerInterp

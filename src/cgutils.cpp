@@ -2037,7 +2037,7 @@ static bool _can_optimize_isa(jl_value_t *type, int &counter) JL_CANSAFEPOINT
         return (_can_optimize_isa(((jl_uniontype_t*)type)->a, counter) &&
                 _can_optimize_isa(((jl_uniontype_t*)type)->b, counter));
     }
-    if (type == (jl_value_t*)jl_type_type)
+    if (type == (jl_value_t*)jl_type_type || type == (jl_value_t*)jl_anytype_type)
         return true;
     // a pointer test is only valid for the egality kind (#61323)
     if (is_uniquerep_Type(type) && jl_pointer_egal(type))
@@ -2183,7 +2183,7 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
         auto ptr = track_pjlvalue(ctx, literal_pointer_val(ctx, jl_some_Type_T(intersected_type)));
         return {ctx.builder.CreateICmpEQ(boxed(ctx, x), ptr), false};
     }
-    if (intersected_type == (jl_value_t*)jl_type_type) {
+    if (intersected_type == (jl_value_t*)jl_type_type || intersected_type == (jl_value_t*)jl_anytype_type) {
         // Inline jl_is_kind(jl_typeof(x))
         // N.B. We do the comparison with untracked pointers, because that gives
         // LLVM more optimization opportunities. That means it is possible for
@@ -2201,6 +2201,11 @@ static std::pair<Value*, bool> emit_isa(jl_codectx_t &ctx, const jl_cgval_t &x, 
                 ctx.builder.CreateOr(
                     ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeeq_type)),
                     ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_typeofbottom_type)))));
+        if (intersected_type == (jl_value_t*)jl_anytype_type) {
+            // the kinds are the subtypes of `AnyType`, together with `Intersect`
+            val = ctx.builder.CreateOr(val,
+                ctx.builder.CreateICmpEQ(typ, emit_tagfrom(ctx, jl_intersect_type)));
+        }
         setName(ctx.emission_context, val, "is_kind");
         return std::make_pair(val, false);
     }
@@ -5069,7 +5074,7 @@ static jl_cgval_t emit_memorynew(jl_codectx_t &ctx, jl_datatype_t *typ, jl_cgval
     }
     Value *negnel = ctx.builder.CreateICmpSLT(nel_unboxed, ConstantInt::get(T_size, 0));
     overflow = ctx.builder.CreateOr(overflow, negnel);
-    auto cg_typemax_int = ConstantInt::get(T_size, (((size_t)-1)>>1)-1);
+    auto cg_typemax_int = ConstantInt::get(T_size, APInt::getSignedMaxValue(T_size->getIntegerBitWidth()) - 1);
     Value *tobignel = ctx.builder.CreateICmpSLT(cg_typemax_int, elsz == 0 ? nel_unboxed: nbytes);
     overflow = ctx.builder.CreateOr(overflow, tobignel);
     Value *notoverflow = ctx.builder.CreateNot(overflow);

@@ -407,11 +407,19 @@ function identify_package_env(where::PkgId, name::String)
         # that we've found `where` but it did not have the required dependency. We terminate the search.
         break
     end
-    if pkg_env === nothing && is_stdlib(where)
+    if pkg_env === nothing
         # if not found it could be that manifests are from a different julia version/commit
         # where stdlib dependencies have changed, so look up deps based on the stdlib Project.toml
         # as a fallback
-        pkg_env = identify_stdlib_project_dep(where, name)
+        if is_stdlib(where)
+            pkg_env = identify_stdlib_project_dep(where, name)
+        else
+            # or that `where` is an extension of a stdlib that is not in the manifests
+            triggers = get(EXT_PRIMED, where, nothing)
+            if triggers !== nothing && is_stdlib(triggers[1])
+                pkg_env = identify_stdlib_project_dep(triggers[1], name, #=ext=#true)
+            end
+        end
     end
 
     # Cache the result
@@ -448,7 +456,7 @@ function identify_package_env(where::Nothing, name::String)
 end
 identify_package_env(name::String) = identify_package_env(nothing, name)
 
-function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
+function identify_stdlib_project_dep(stdlib::PkgId, depname::String, ext::Bool=false)
     @debug """
     Stdlib $(repr(MIME"text/plain"(), stdlib)) is trying to load `$depname`
     which is not listed as a dep in the load path manifests, so resorting to search
@@ -456,6 +464,12 @@ function identify_stdlib_project_dep(stdlib::PkgId, depname::String)
     stdlib_projfile = locate_project_file(joinpath(Sys.STDLIB, stdlib.name))
     stdlib_projfile === nothing && return nothing
     found = explicit_project_deps_get(stdlib_projfile, depname)
+    if found === nothing && ext
+        # an extension can also load the weak dependencies that trigger it
+        weakdeps = get(parsed_toml(stdlib_projfile), "weakdeps", nothing)::Union{Dict{String, Any}, Nothing}
+        uuid = weakdeps === nothing ? nothing : get(weakdeps, depname, nothing)::Union{String, Nothing}
+        uuid === nothing || (found = UUID(uuid))
+    end
     if found !== nothing
         @debug "$(repr(MIME"text/plain"(), stdlib)) indeed depends on $depname in project $stdlib_projfile"
         pkgid = PkgId(found, depname)
@@ -578,6 +592,11 @@ end
 
 function locate_package_load_spec(pkg::PkgId, stopenv::Union{String, Nothing}=nothing)::Union{Nothing,PkgLoadSpec}
     @lock require_lock begin
+        table = stopenv === nothing ? preresolved_table() : nothing
+        if table !== nothing
+            spec = get(table.specs, pkg, nothing)
+            spec === nothing || return spec
+        end
         specenv = locate_package_env(pkg, stopenv)
         specenv === nothing && return nothing
         specenv[1]
@@ -1282,17 +1301,23 @@ function explicit_manifest_entry_load_spec(manifest_file::String, pkg::PkgId, en
         end
         return nothing
     end
-    hash = SHA1(hash)
+    path = find_installed_tree(pkg, SHA1(hash))
+    # no depot contains the package, return missing to stop looking
+    path === nothing && return missing
+    return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
+end
+
+# where the depots have the package with this tree, or `nothing`
+function find_installed_tree(pkg::PkgId, hash::SHA1)
     # Keep the 4 since it used to be the default
     uuid = pkg.uuid::UUID # checked within `explicit_manifest_uuid_path`
     for slug in (version_slug(uuid, hash), version_slug(uuid, hash, 4))
         for depot in DEPOT_PATH
             path = joinpath(depot, "packages", pkg.name, slug)
-            ispath(path) && return PkgLoadSpec(entry_path(abspath(path), pkg.name, entryfile), edition)
+            ispath(path) && return path
         end
     end
-    # no depot contains the package, return missing to stop looking
-    return missing
+    return nothing
 end
 
 ## implicit project & manifest API ##
@@ -1753,6 +1778,14 @@ const EXT_DORMITORY_FAILED = ExtensionId[]
 
 function insert_extension_triggers(pkg::PkgId)
     pkg.uuid === nothing && return
+    table = preresolved_table()
+    exts = table === nothing ? nothing : get(table.exts, pkg, nothing)
+    if exts !== nothing
+        for (ext, triggers) in exts
+            prime_extension(pkg, ext, triggers)
+        end
+        return
+    end
     path_env_loc = locate_package_env(pkg)
     path_env_loc === nothing && return
     _, env_loc = path_env_loc
@@ -1840,27 +1873,30 @@ function _insert_extension_triggers(parent::PkgId, extensions::Dict{String, Any}
     for (ext, triggers) in extensions
         triggers = triggers::Union{String, Vector{String}}
         triggers isa String && (triggers = [triggers])
-        id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
-        if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
-            continue  # extension is already primed or loaded, don't add it again
-        end
-        EXT_PRIMED[id] = trigger_ids = PkgId[parent]
-        gid = ExtensionId(id, parent, 1 + length(triggers), 1 + length(triggers))
-        trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
-        push!(trigger1, gid)
-        for trigger in triggers
-            # TODO: Better error message if this lookup fails?
-            uuid_trigger = UUID(totaldeps[trigger]::String)
-            trigger_id = PkgId(uuid_trigger, trigger)
-            push!(trigger_ids, trigger_id)
-            if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
-                trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
-                push!(trigger1, gid)
-            else
-                gid.ntriggers -= 1
-            end
+        # TODO: Better error message if this lookup fails?
+        prime_extension(parent, ext, PkgId[PkgId(UUID(totaldeps[trigger]::String), trigger) for trigger in triggers])
+    end
+end
+
+function prime_extension(parent::PkgId, ext::String, triggers::Vector{PkgId})
+    id = PkgId(uuid5(parent.uuid::UUID, ext), ext)
+    if haskey(EXT_PRIMED, id) || haskey(Base.loaded_modules, id)
+        return  # extension is already primed or loaded, don't add it again
+    end
+    EXT_PRIMED[id] = trigger_ids = PkgId[parent]
+    gid = ExtensionId(id, parent, 1 + length(triggers), 1 + length(triggers))
+    trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, parent)
+    push!(trigger1, gid)
+    for trigger_id in triggers
+        push!(trigger_ids, trigger_id)
+        if !haskey(Base.loaded_modules, trigger_id) || haskey(package_locks, trigger_id)
+            trigger1 = get!(Vector{ExtensionId}, EXT_DORMITORY, trigger_id)
+            push!(trigger1, gid)
+        else
+            gid.ntriggers -= 1
         end
     end
+    return
 end
 
 loading_extension::Bool = false
@@ -2484,7 +2520,8 @@ end
         lazy_cachefile_candidates(pkg, sourcespec.path, DEPOT_PATH) :
         find_all_in_cache_path(pkg, DEPOT_PATH)
     # Try the driver's validated cache first; fall back to the normal search.
-    pre = get(preresolved_cachefiles, pkg, nothing)
+    table = preresolved_table()
+    pre = table === nothing ? nothing : get(table.cachefiles, pkg, nothing)
     pre !== nothing && (paths = Iterators.flatten(((pre,), paths)))
     tried = 0
     for build_id in try_build_ids
@@ -2493,7 +2530,7 @@ end
             trusted = path_to_try === pre
             # Checksums read the whole file, so check them after the deps.
             staledeps = stale_cachefile(pkg, build_id, sourcespec, path_to_try; reasons,
-                                        stalecheck = stalecheck && !trusted, verify_checksums = false)
+                                        stalecheck = stalecheck && !trusted, verify_checksums = false, check_prefs = !trusted)
             if staledeps === true
                 continue
             end
@@ -2537,7 +2574,7 @@ end
                     @assert canstart_loading(modkey, modbuild_id, stalecheck) === nothing
                     package_locks[modkey] = (current_task(), Threads.Condition(require_lock), modbuild_id)
                     startedloading = i
-                    mpre = get(preresolved_cachefiles, modkey, nothing)
+                    mpre = table === nothing ? nothing : get(table.cachefiles, modkey, nothing)
                     modpaths = lazy_cachefile_candidates(modkey, modspec.path, DEPOT_PATH)
                     mpre !== nothing && (modpaths = Iterators.flatten(((mpre,), modpaths)))
                     # a private load, such as a stdlib loaded by the REPL, still needs its cache checked against this environment
@@ -2545,7 +2582,8 @@ end
                     for modpath_to_try in modpaths
                         modtrusted = modpath_to_try === mpre
                         modstaledeps = stale_cachefile(modkey, modbuild_id, modspec, modpath_to_try;
-                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted && privatedep === nothing, split_checksums = false)
+                                                       stalecheck = stalecheck && !modtrusted, verify_checksums = !modtrusted && privatedep === nothing, split_checksums = false,
+                                                       check_prefs = !modtrusted)
                         if modstaledeps === true
                             continue
                         end
@@ -2724,11 +2762,92 @@ const package_callbacks = Any[]
 # WARNING: This is an experimental feature and might change later, without deprecation.
 const include_callbacks = Any[]
 
-# used to optionally track dependencies when requiring a module:
-const _concrete_dependencies = Pair{PkgId,UInt128}[] # these dependency versions are "set in stone", because they are explicitly loaded, and the process should try to avoid invalidating them
+# What the parent precompile driver resolved for one package that this process may load.
+struct PreresolvedPkg
+    pkg::PkgId
+    deps::Vector{PkgId} # what `pkg` may load by name
+    spec::Union{Nothing,PkgLoadSpec}
+    cachefile::Union{Nothing,String} # validated by the driver
+    build_id::UInt128 # nonzero if the parent has `pkg` loaded, and then no other build may be loaded
+    exts::Union{Nothing,Vector{Pair{String,Vector{PkgId}}}} # extension => triggers; `nothing` if unknown
+end
 
-# Cache files supplied by the parent precompile driver.
-const preresolved_cachefiles = Dict{PkgId,String}() # protected by require_lock
+# Lookups try this table first, and anything it lacks takes the normal path.
+struct PreresolvedTable
+    entries::Vector{PreresolvedPkg}
+    # the driver resolved against these, so the table is unused once they change
+    load_path::Vector{String}
+    depot_path::Vector{String}
+    names::Dict{Tuple{PkgId,String},PkgId}
+    specs::Dict{PkgId,PkgLoadSpec}
+    cachefiles::Dict{PkgId,String}
+    exts::Dict{PkgId,Vector{Pair{String,Vector{PkgId}}}}
+    pinned::Vector{Pair{PkgId,UInt128}} # holds whatever the load path is
+end
+
+function PreresolvedTable(entries::Vector{PreresolvedPkg})
+    names = Dict{Tuple{PkgId,String},PkgId}()
+    specs = Dict{PkgId,PkgLoadSpec}()
+    cachefiles = Dict{PkgId,String}()
+    exts = Dict{PkgId,Vector{Pair{String,Vector{PkgId}}}}()
+    pinned = Pair{PkgId,UInt128}[]
+    for e in entries
+        for dep in e.deps
+            names[(e.pkg, dep.name)] = dep
+        end
+        e.spec === nothing || (specs[e.pkg] = e.spec)
+        e.cachefile === nothing || (cachefiles[e.pkg] = e.cachefile)
+        e.exts === nothing || (exts[e.pkg] = e.exts)
+        e.build_id == 0 || push!(pinned, e.pkg => e.build_id)
+    end
+    return PreresolvedTable(entries, copy(LOAD_PATH), copy(DEPOT_PATH), names, specs, cachefiles, exts, pinned)
+end
+
+const PRERESOLVED = Ref{Union{Nothing,PreresolvedTable}}(nothing) # protected by require_lock
+
+function preresolved_table()
+    table = PRERESOLVED[]
+    table === nothing && return nothing
+    (LOAD_PATH == table.load_path && DEPOT_PATH == table.depot_path) || return nothing
+    return table
+end
+
+const NO_PINNED_BUILDS = Pair{PkgId,UInt128}[]
+
+# The builds the parent has loaded, which are "set in stone": a cache file is used only if
+# it agrees with them.
+function pinned_builds()
+    table = PRERESOLVED[]
+    return table === nothing ? NO_PINNED_BUILDS : table.pinned
+end
+
+# What a precompile process started from here inherits.
+function preresolved_entries()
+    @lock require_lock begin
+        table = PRERESOLVED[]
+        table === nothing && return PreresolvedPkg[]
+        preresolved_table() === nothing || return table.entries
+        return PreresolvedPkg[PreresolvedPkg(pkg, PkgId[], nothing, nothing, build_id, nothing) for (pkg, build_id) in table.pinned]
+    end
+end
+
+# The builds loaded here are the only ones the process may load, as are those the parent of
+# this process pinned, unless the process is to ignore them.
+function pin_loaded_modules(entries::Vector{PreresolvedPkg}, keep_loaded_modules::Bool)
+    pins = Dict{PkgId,UInt128}()
+    keep_loaded_modules && @lock require_lock for (pkg, mod) in loaded_modules
+        pins[pkg] = module_build_id(mod)
+    end
+    entries = PreresolvedPkg[
+        PreresolvedPkg(e.pkg, e.deps, e.spec, e.cachefile, pop!(pins, e.pkg, keep_loaded_modules ? e.build_id : UInt128(0)), e.exts)
+        for e in entries]
+    for (pkg, build_id) in pins
+        push!(entries, PreresolvedPkg(pkg, PkgId[], nothing, nothing, build_id, nothing))
+    end
+    return entries
+end
+
+# used to optionally track dependencies when requiring a module:
 const _require_dependencies = Any[] # a list of (mod::Module, abspath::String, fsize::UInt64, hash::UInt32, mtime::Float64) tuples that are the file dependencies of the module currently being precompiled
 const _track_dependencies = Ref(false) # set this to true to track the list of file dependencies
 
@@ -2932,6 +3051,15 @@ function __require(into::Module, mod::Symbol)
         return topmod
     end
     @lock require_lock begin
+    table = preresolved_table()
+    uuidkey = table === nothing ? nothing : get(table.names, (PkgId(into), String(mod)), nothing)
+    if uuidkey !== nothing
+        if _track_dependencies[]
+            path = binpack(uuidkey)
+            push!(_require_dependencies, (into, path, UInt64(0), UInt32(0), 0.0))
+        end
+        return _require_prelocked(uuidkey)
+    end
     LOADING_CACHE[] = LoadingCache()
     try
         uuidkey_env = identify_package_env(into, String(mod))
@@ -3200,14 +3328,13 @@ function __require_prelocked(pkg::PkgId, env)
     assert_havelock(require_lock)
 
     # perform the search operation to select the module file require intends to load
-    specenv = locate_package_env(pkg, env)
-    if specenv === nothing
+    spec = locate_package_load_spec(pkg, env)
+    if spec === nothing
         throw(ArgumentError("""
             Package $(repr(MIME"text/plain"(), pkg)) is required but does not seem to be installed:
              - Run `Pkg.instantiate()` to install all recorded dependencies.
             """))
     end
-    spec = specenv[1]
     path = spec.path
     set_pkgorigin_version_path(pkg, path)
 
@@ -3229,7 +3356,7 @@ function __require_prelocked(pkg::PkgId, env)
     # loaded, and once its cache file is gone nothing a worker can do will produce
     # it again, so the dependent has to be loaded from source in that session
     # rather than reported as a precompilation failure.
-    for (concrete_pkg, concrete_build_id) in _concrete_dependencies
+    for (concrete_pkg, concrete_build_id) in pinned_builds()
         if pkg == concrete_pkg
             @warn """Module $(pkg.name) with build ID $((UUID(concrete_build_id))) is missing from the cache.
                  This may mean $(repr(MIME"text/plain"(), pkg)) does not support precompilation but is imported by a module that does."""
@@ -3438,6 +3565,8 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
     # the PkgId of the ext, or package if not an ext
     this_uuidkey = ext isa String ? PkgId(uuid5(package_uuidkey.uuid, ext), ext) : package_uuidkey
     env = Sys.STDLIB
+    # the environment may not have the parent, whose project file then gives the extension's deps
+    ext isa String && get!(EXT_PRIMED, this_uuidkey, PkgId[package_uuidkey])
     newm = start_loading(this_uuidkey, UInt128(0), true)
     newm === nothing || return newm
     try
@@ -3473,8 +3602,6 @@ function require_stdlib(package_uuidkey::PkgId, ext::Union{Nothing, String}, fro
         run_package_callbacks(this_uuidkey)
     else
         # if the user deleted their bundled depot, next try to load it completely normally
-        # if it is an extension, we first need to indicate where to find its parent via EXT_PRIMED
-        ext isa String && (EXT_PRIMED[this_uuidkey] = PkgId[package_uuidkey])
         newm = _require_prelocked(this_uuidkey)
     end
     return newm
@@ -3651,8 +3778,7 @@ const newly_inferred = []
 
 # this is called in the external process that generates precompiled package files
 function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{Int, Int}, depot_path::Vector{String}, dl_load_path::Vector{String}, load_path::Vector{String},
-                                    concrete_deps::typeof(_concrete_dependencies), source::Union{Nothing,String},
-                                    preresolved::Vector{Pair{PkgId,String}}=Pair{PkgId,String}[])
+                                    source::Union{Nothing,String}, preresolved::Vector{PreresolvedPkg}=PreresolvedPkg[])
 
     @lock require_lock begin
     m = start_loading(pkg, UInt128(0), false)
@@ -3664,10 +3790,7 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     set_active_project(nothing)
     Base._track_dependencies[] = true
     get!(Base.PkgOrigin, Base.pkgorigins, pkg).path = input
-    append!(empty!(Base._concrete_dependencies), concrete_deps)
-    for (k, v) in preresolved
-        preresolved_cachefiles[k] = v
-    end
+    isempty(preresolved) || (PRERESOLVED[] = PreresolvedTable(preresolved))
     end
 
     uuid_tuple = pkg.uuid === nothing ? (UInt64(0), UInt64(0)) : convert(NTuple{2, UInt64}, pkg.uuid)
@@ -3740,15 +3863,43 @@ _pkg_str(_pkg::Vector) = sprint(show, eltype(_pkg); context = :module=>nothing) 
 _pkg_str(_pkg::Pair{PkgId}) = _pkg_str(_pkg.first) * " => " * repr(_pkg.second)
 _pkg_str(_pkg::Nothing) = "nothing"
 
+# Every PkgId is spelled once and referred to by index, which keeps this short to parse.
+function _preresolved_str(entries::Vector{PreresolvedPkg})
+    isempty(entries) && return "Base.PreresolvedPkg[]"
+    ids = PkgId[]
+    index = Dict{PkgId,Int}()
+    idx(pkg) = get!(() -> length(push!(ids, pkg)), index, pkg)
+    idxs(pkgs) = "P[Int[" * join(map(idx, pkgs), ",") * "]]"
+    io = IOBuffer()
+    for e in entries
+        print(io, "Base.PreresolvedPkg(P[", idx(e.pkg), "],", idxs(e.deps), ",")
+        spec = e.spec
+        spec === nothing ? print(io, "nothing") : print(io, "Base.PkgLoadSpec(", repr(spec.path), ",", repr(spec.julia_edition), ")")
+        print(io, ",", repr(e.cachefile), ",", e.build_id == 0 ? "0" : repr(e.build_id), ",")
+        exts = e.exts
+        if exts === nothing
+            print(io, "nothing")
+        else
+            print(io, "Base.Pair{String,Vector{Base.PkgId}}[")
+            for (ext, triggers) in exts
+                print(io, repr(ext), "=>", idxs(triggers), ",")
+            end
+            print(io, "]")
+        end
+        print(io, "),\n")
+    end
+    return "let P = " * _pkg_str(ids) * "\nBase.PreresolvedPkg[\n" * String(take!(io)) * "]\nend"
+end
+
 const PRECOMPILE_TRACE_COMPILE = Ref{String}()
 # Marker prefix used by the precompile subprocess to report per-package timing
 # buckets back to the parent process; the parent surfaces them in verbose mode.
 const PRECOMPILE_VERBOSE_TIMING_MARKER = "__JL_PRECOMP_VERBOSE_TIMING__"
 function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, output_o::Union{Nothing, String},
-                           concrete_deps::typeof(_concrete_dependencies), flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
+                           flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                            internal_stderr::Redirectable = stderr, internal_stdout::Redirectable = stdout, loadable_exts::Union{Vector{PkgId},Nothing}=nothing;
                            report_timing::Bool=false,
-                           preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
+                           preresolved::Vector{PreresolvedPkg} = preresolved_entries())
     @nospecialize internal_stderr internal_stdout
     depot_path = String[abspath(x) for x in DEPOT_PATH]
     dl_load_path = String[abspath(x) for x in DL_LOAD_PATH]
@@ -3818,7 +3969,7 @@ function create_expr_cache(pkg::PkgId, input::PkgLoadSpec, output::String, outpu
         Base.loadable_extensions = $(_pkg_str(loadable_exts))
         Base.precompiling_extension = $(loading_extension)
         Base.include_package_for_output($(_pkg_str(pkg)), $(repr(abspath(input.path))), $(repr(input.julia_edition)), $(repr(depot_path)), $(repr(dl_load_path)),
-            $(repr(load_path)), $(_pkg_str(concrete_deps)), $(repr(source_path(nothing))), $(_pkg_str(preresolved)))
+            $(repr(load_path)), $(repr(source_path(nothing))), $(_preresolved_str(preresolved)))
         """)
     close(io.in)
     return io
@@ -3900,23 +4051,14 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                       keep_loaded_modules::Bool = true; flags::Cmd=``, cacheflags::CacheFlags=CacheFlags(),
                       loadable_exts::Union{Vector{PkgId},Nothing}=nothing, signal_channel::Union{Channel{Int32},Nothing}=nothing,
                       pid_channel::Union{Channel{Int32},Nothing}=nothing, report_timing::Bool=false,
-                      preresolved::Vector{Pair{PkgId,String}} = @lock(require_lock, collect(preresolved_cachefiles)))
+                      preresolved::Vector{PreresolvedPkg} = preresolved_entries())
 
     @nospecialize internal_stderr internal_stdout
     # decide where to put the resulting cache file
     cachepath = compilecache_dir(pkg)
 
-    # build up the list of modules that we want the precompile process to preserve
-    if keep_loaded_modules
-        concrete_deps = copy(_concrete_dependencies)
-        for (pkgreq, modreq) in loaded_modules
-            if !(pkgreq === Main || pkgreq === Core || pkgreq === Base)
-                push!(concrete_deps, pkgreq => module_build_id(modreq))
-            end
-        end
-    else
-        concrete_deps = empty(_concrete_dependencies)
-    end
+    # the modules that we want the precompile process to preserve
+    preresolved = pin_loaded_modules(preresolved, keep_loaded_modules)
     # run the expression and cache the result
 
     # create a temporary file in `cachepath` directory, write the cache in it,
@@ -3938,7 +4080,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
             close(tmpio_o)
             close(tmpio_so)
         end
-        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, concrete_deps, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
+        p = create_expr_cache(pkg, spec, tmppath, tmppath_o, flags, cacheflags, internal_stderr, internal_stdout, loadable_exts; report_timing, preresolved)
 
         # Report the PID of the compilation subprocess
         if pid_channel !== nothing
@@ -4985,7 +5127,7 @@ end
 @constprop :none function stale_cachefile(modkey::PkgId, build_id::UInt128, modspec::PkgLoadSpec, cachefile::String;
                                           ignore_loaded::Bool=false, requested_flags::CacheFlags=CacheFlags(),
                                           reasons::Union{Dict{Symbol,Int},Nothing}=nothing, stalecheck::Bool=true,
-                                          verify_checksums::Bool=true, split_checksums::Bool=true)
+                                          verify_checksums::Bool=true, split_checksums::Bool=true, check_prefs::Bool=true)
     # n.b.: this function does nearly all of the file validation, not just those checks related to stale, so the name is potentially unclear
     io = try
         open(cachefile, "r")
@@ -5146,12 +5288,12 @@ end
             end
         end
 
-        # check if this file is going to provide one of our concrete dependencies
-        # or if it provides a version that conflicts with our concrete dependencies
+        # check if this file is going to provide one of the pinned builds
+        # or if it provides a version that conflicts with them
         # or neither. This is not skipped for a trusted (driver-validated) file:
         # the driver only checks that the file is fresh, not that it carries the
         # build id the parent session pinned.
-        for (req_key, req_build_id) in _concrete_dependencies
+        for (req_key, req_build_id) in pinned_builds()
             build_id = get(modules, req_key, UInt64(0))
             if build_id !== UInt64(0)
                 build_id |= UInt128(checksum) << 64
@@ -5196,7 +5338,7 @@ end
             return true
         end
 
-        if stale_prefs(prefs_blob)
+        if check_prefs && stale_prefs(prefs_blob)
             @debug "Rejecting cache file $cachefile because preferences have changed"
             record_reason(reasons, :preferences_changed)
             return true

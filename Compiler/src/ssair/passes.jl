@@ -1367,13 +1367,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
         # check whether this statement is `getfield` / `setfield!` (or other "interesting" statement)
         is_setfield = is_isdefined = is_finalizer = false
         field_ordering = :unspecified
-        if is_known_call(stmt, setfield!, compact)
+        f = isexpr(stmt, :call) ? _global_call_singleton(stmt.args[1], compact) : nothing
+        if f === setfield!
             4 <= length(stmt.args) <= 5 || continue
             is_setfield = true
             if length(stmt.args) == 5
                 field_ordering = argextype(stmt.args[5], compact)
             end
-        elseif is_known_call(stmt, getfield, compact)
+        elseif f === getfield
             3 <= length(stmt.args) <= 5 || continue
             if length(stmt.args) == 5
                 field_ordering = argextype(stmt.args[5], compact)
@@ -1381,14 +1382,14 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
-        elseif is_known_call(stmt, isdefined, compact)
+        elseif f === isdefined
             3 <= length(stmt.args) <= 4 || continue
             is_isdefined = true
             if length(stmt.args) == 4
                 field_ordering = argextype(stmt.args[4], compact)
                 widenconst(field_ordering) === Bool && (field_ordering = :unspecified)
             end
-        elseif is_known_call(stmt, Core.finalizer, compact)
+        elseif f === Core.finalizer
             3 <= length(stmt.args) <= 5 || continue
             info = compact[SSAValue(idx)][:info]
             if isa(info, FinalizerInfo)
@@ -1447,20 +1448,21 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
             end
             continue
         else # TODO: This isn't the best place to put these
-            if is_known_call(stmt, typeassert, compact)
+            if f === typeassert
                 canonicalize_typeassert!(compact, idx, stmt)
-            elseif is_known_call(stmt, Core._svec_ref, compact)
+            elseif f === Core._svec_ref
                 lift_svec_ref!(compact, idx, stmt)
-            elseif is_known_call(stmt, (===), compact)
+            elseif f === (===)
                 lift_comparison!(===, compact, idx, stmt, 𝕃ₒ)
-            elseif is_known_call(stmt, isa, compact)
+            elseif f === isa
                 lift_comparison!(isa, compact, idx, stmt, 𝕃ₒ)
-            elseif is_known_call(stmt, Core.ifelse, compact)
+            elseif f === Core.ifelse
                 fold_ifelse!(compact, idx, stmt, 𝕃ₒ)
-            elseif is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact)
+            elseif f === Core.OptimizedGenerics.KeyValue.get ||
+                    (isexpr(stmt, :invoke) && is_known_invoke_or_call(stmt, Core.OptimizedGenerics.KeyValue.get, compact))
                 2 == (length(stmt.args) - (isexpr(stmt, :invoke) ? 2 : 1)) || continue
                 lift_keyvalue_get!(compact, idx, stmt, 𝕃ₒ)
-            elseif is_known_call(stmt, Core.current_scope, compact)
+            elseif f === Core.current_scope
                 length(stmt.args) == 1 || continue
                 scope_mapping !== nothing || continue
                 bb = compact.active_result_bb
@@ -1470,7 +1472,7 @@ function sroa_pass!(ir::IRCode, inlining::Union{Nothing,InliningState}=nothing)
                 compact[SSAValue(idx)] = (compact[enter_ssa][:stmt]::EnterNode).scope
             elseif isexpr(stmt, :new)
                 refine_new_effects!(𝕃ₒ, compact, idx, stmt)
-            elseif is_known_call(stmt, Core._apply_iterate, compact)
+            elseif f === Core._apply_iterate
                 length(stmt.args) >= 4 || continue
                 lift_apply_args!(compact, idx, stmt)
             end

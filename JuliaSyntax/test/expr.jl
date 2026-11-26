@@ -57,7 +57,7 @@
             @test parsestmt("a;b") ==
                 Expr(:toplevel, :a, :b)
 
-            @test parsestmt("module A\n\nbody\nend"; version=v"1.13") ==
+            @test parsestmt("module A\n\nbody\nend") ==
                 Expr(:module,
                      true,
                      :A,
@@ -824,11 +824,9 @@
     end
 
     @testset "module" begin
-        @test parsestmt("module A end"; version=v"1.13") ==
+        @test parsestmt("module A end") ==
             Expr(:module, true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
-        @test parsestmt("module A end"; version=v"1.14") ==
-            Expr(:module, v"1.14", true,  :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
-        @test parsestmt("baremodule A end"; version=v"1.13") ==
+        @test parsestmt("baremodule A end") ==
             Expr(:module, false, :A, Expr(:block, LineNumberNode(1), LineNumberNode(1)))
     end
 

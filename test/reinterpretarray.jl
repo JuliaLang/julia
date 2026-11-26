@@ -103,6 +103,16 @@ test_many_wrappers(B, (identity, tslow)) do _B
     @test @inferred(axes(reinterpret(reshape, Int128, _B))) === (Base.OneTo(3),)
     @test @inferred(size(reinterpret(reshape, Int128, _B))) == (3,)
 end
+let n = typemax(Int) ÷ sizeof(Int) + 2
+    a = reinterpret(Tuple{Int}, 1:n)
+    @test size(a) == (n,)
+    @test a[n] === (n,)
+end
+let n = typemax(Int) ÷ 2sizeof(Int) + 2
+    b = reinterpret(NTuple{2,Int}, reshape(1:4n, 2n, 2))
+    @test size(b) == (n, 2)
+    @test length(b) == 2n
+end
 
 @test_throws ArgumentError("cannot reinterpret `Int64` as `Vector{Int64}`, type `Vector{Int64}` is not a bits type") reinterpret(Vector{Int64}, A)
 @test_throws ArgumentError("cannot reinterpret `Vector{Int32}` as `Int32`, type `Vector{Int32}` is not a bits type") reinterpret(Int32, Av)

@@ -2910,6 +2910,21 @@ end
     end
 end
 
+@testset "extension of a stdlib that is not in the environment" begin
+    # Pkg mode loads Pkg's REPLExt in an environment that has REPL but not Pkg (#65221)
+    depot_path = mkdepottempdir()
+    dir = mktempdir()
+    write(joinpath(dir, "Project.toml"), "[deps]\nREPL = \"3fa0cd96-eef1-5676-8a61-b3b8758bbffb\"\n")
+    script = """
+    using REPL
+    REPL.load_pkg() isa Module || exit(1)
+    """
+    sep = Sys.iswindows() ? ';' : ':'
+    cmd = addenv(`$(Base.julia_cmd()) --check-bounds=auto --startup-file=no -e $script`,
+                 "JULIA_DEPOT_PATH" => depot_path * sep, "JULIA_LOAD_PATH" => dir)
+    @test success(pipeline(cmd; stdout, stderr))
+end
+
 @testset "dependency loaded with require_stdlib is checked against the environment" begin
     # A manifest from before JuliaSyntaxHighlighting changed its UUID (#59365).
     depot_path = mkdepottempdir()
@@ -3011,8 +3026,8 @@ module M58272_to end
     end
 
     # Test that the selected project affects code evaluation in `Main` for both `-e` and scripts
-    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.13"
-    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print((Base.Experimental.@VERSION).syntax)'`, String)) == v"1.14"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) -e 'print(VersionNumber(Core.get_edition(Main)...))'`, String)) == v"1.13"
+    @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep2")) -e 'print(VersionNumber(Core.get_edition(Main)...))'`, String)) == v"1.14"
 
     syntax_version_script = joinpath(@__DIR__, "testhelpers", "print_syntax_version.jl")
     @test parse(VersionNumber, read(`$(Base.julia_cmd()) --project=$(joinpath(explicit_env, "VersionedDep1")) $syntax_version_script`, String)) == v"1.13"
@@ -3020,10 +3035,10 @@ module M58272_to end
 
     function include_world_age()
        m = @eval(module IncludeWorldAgeTest end)
-       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == (Base.Experimental.@VERSION).syntax
-       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == (Base.Experimental.@VERSION).syntax
+       @test_nowarn @test include_string(m, "VersionNumber(Core.get_edition(@__MODULE__)...)") == VersionNumber(Core.get_edition(@__MODULE__)...)
+       @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == VersionNumber(Core.get_edition(@__MODULE__)...)
        Base.set_syntax_version(m, v"1.13")
-       @test_nowarn @test include_string(m, "Base.Experimental.@VERSION").syntax == v"1.13"
+       @test_nowarn @test include_string(m, "VersionNumber(Core.get_edition(@__MODULE__)...)") == v"1.13"
        @test_nowarn @test Core.include(m, joinpath(@__DIR__, "testhelpers", "return_syntax_version.jl")) == v"1.13"
     end
     include_world_age()
@@ -3033,7 +3048,7 @@ module M58272_to end
         Base.set_syntax_version(m, v"1.13")
         include_string(m, "module NoSlot end")
         noslot = invokelatest(getglobal, m, :NoSlot)
-        @test invokelatest(include_string, noslot, "Base.Experimental.@VERSION").syntax == v"1.13"
+        @test invokelatest(include_string, noslot, "VersionNumber(Core.get_edition(@__MODULE__)...)") == v"1.13"
     end
 end
 

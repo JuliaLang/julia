@@ -229,6 +229,7 @@ end
 const CACHE_MODE_NULL     = 0x00      # not cached, optimization optional
 const CACHE_MODE_GLOBAL   = 0x01 << 0 # cached globally, optimization required
 const CACHE_MODE_LOCAL    = 0x01 << 1 # cached locally, optimization required
+const CACHE_MODE_ROOT     = 0x01 << 2 # cached globally under the owner of `result.ci`, optimization required
 
 abstract type Handler end
 get_enter_idx(handler::Handler) = get_enter_idx_impl(handler)::Int

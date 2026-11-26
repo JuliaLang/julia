@@ -85,7 +85,7 @@ end
 function collect_syntaxunquote!(ctx, unquoted, st, depth)
     if head(st) === :syntaxunquote && depth == 0
         numchildren(st) !== 1 && throw(LoweringError(st, "malformed syntaxunquote"))
-        push!(unquoted, @ast ctx st[1] [:tuple st[1]])
+        push!(unquoted, @ast ctx st[1] [:call [:core "svec"::identifier] st[1]])
     else
         inner_depth = head(st) == :syntaxquote ? depth + 1 :
                       head(st) == :syntaxunquote ? depth - 1 : depth
@@ -107,9 +107,12 @@ function expand_syntaxquote(ctx, st)
             st, raw"unexpected `...` in bare `syntaxunquote` expression"))
     end
     unquoted = collect_syntaxunquote!(ctx, SyntaxList(), st, 0)
-    length(unquoted) == 0 ? @ast(ctx, st, [:syntaxinert st]) :
+    if length(unquoted) == 0
+        @ast(ctx, st, [:syntaxinert st])
+    else
         @ast ctx st [:call interpolate_syntax::value
-                 [:syntaxinert st] unquoted...]
+            [:syntaxinert st] [:call [:core "svec"::identifier] unquoted...]]
+    end
 end
 
 struct MacroExpansionError <: Exception
@@ -204,26 +207,6 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
     end
 end
 
-function _macrocall_expr_location(st::SyntaxTree)
-    @jl_assert head(st) === :macrocall st
-    if head(st[2]) === :value
-        loc = st[2].value
-        if loc isa MacroSource
-            loc
-        elseif loc isa LineNumberNode
-            # Some macros, e.g. @cmd, don't play nicely with file == nothing
-            isnothing(loc.file) ? LineNumberNode(loc.line, :var"") : loc
-        else
-            LineNumberNode(0, :var"")
-        end
-    elseif head(st[2]) === :version
-        loc = first_linenode(st)
-        @static isdefinedglobal(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
-    else
-        LineNumberNode(0, :var"")
-    end
-end
-
 function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     @jl_assert head(st) === :macrocall st
     numchildren(st) >= 2 || throw(LoweringError(
@@ -254,11 +237,9 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             expr_to_est(expanded, st)
         end
     else
-        macro_loc = _macrocall_expr_location(st)
-        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
-        macro_args = Any[macro_loc, base_layer(ctx.syntax_context).mod]
+        macro_lnn = first_linenode(st)
+        macro_args = Any[macro_lnn, base_layer(ctx.syntax_context).mod]
         for arg in raw_args
-            @jl_assert head(arg) !== :version arg # handled in EST conversion
             push!(macro_args, est_to_expr(arg))
         end
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)

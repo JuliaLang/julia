@@ -19,7 +19,24 @@ precompile_test_harness() do load_path
             import Base.Compiler: Compiler
             include($newinterp_path)
             @newinterp PrecompileInterpreter
+
+            # the owner of a root inferred with constant arguments: found again in a
+            # package image because separately constructed owners are `===`
+            struct SeededOwner
+                owner
+                argtypes::Tuple
+            end
+            seeded_root(n::Int) = n
+            function infer_seeded(n::Int)
+                interp = PrecompileInterpreter()
+                mi = Base.method_instance(seeded_root, (Int,))
+                argtypes = Any[Core.Const(seeded_root), Core.Const(n)]
+                result = Compiler.InferenceResult(mi, argtypes, BitVector((false, true)))
+                owner = SeededOwner(Compiler.cache_owner(interp), Tuple(argtypes))
+                return Compiler.typeinf_ext(interp, result, owner, Compiler.SOURCE_MODE_NOT_REQUIRED)
+            end
         end
+        const seeded_ci = Custom.infer_seeded(1)
 
         Base.return_types((Float64,)) do x
             basic_caller(x)
@@ -51,6 +68,17 @@ precompile_test_harness() do load_path
             @test ci.max_world == typemax(UInt)
             @test Base.module_build_id(TestAbsIntPrecompile1) ==
                 Base.object_build_id(ci)
+        end
+        let Custom = TestAbsIntPrecompile1.Custom, ci = TestAbsIntPrecompile1.seeded_ci
+            mi = Base.method_instance(Custom.seeded_root, (Int,))
+            owner = Custom.SeededOwner(cache_owner,
+                (Core.Const(Custom.seeded_root), Core.Const(1)))
+            @test check_presence(mi, owner) === ci
+            @test ci.rettype_const === 1
+            @test Base.module_build_id(TestAbsIntPrecompile1) ==
+                Base.object_build_id(ci)
+            @test Custom.infer_seeded(1) === ci
+            @test Custom.infer_seeded(2) !== ci
         end
         let m = only(methods(sum, (Vector{Float64},)))
             for mi in Base.specializations(m)

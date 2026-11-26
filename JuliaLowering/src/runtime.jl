@@ -27,7 +27,7 @@ const _lowering_world = Ref{UInt}(0)
     return invokelatest(f, args...)
 end
 
-function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
+function __interpolate_syntax(st::SyntaxTree, depth, vals::Core.SimpleVector, val_i)
     is_leaf(st) && return st
     k = head(st)
     inner_depth = k == :syntaxquote ? depth + 1 :
@@ -35,10 +35,10 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     cs_out = SyntaxList()
     for c in children(st)
         if head(c) == :syntaxunquote && inner_depth == 0
-            tup = vals[val_i[] += 1]::Tuple
+            sv = vals[val_i[] += 1]::Core.SimpleVector
             @jl_assert numchildren(c) == 1 st
-            @jl_assert head(c[1]) === :... || length(tup) == 1 st
-            for v in tup
+            @jl_assert head(c[1]) === :... || length(sv) == 1 st
+            for v in sv
                 v2 = !(v isa SyntaxTree) ? expr_to_est(v, c) : v
                 push!(cs_out, v2)
             end
@@ -48,16 +48,14 @@ function __interpolate_syntax(st::SyntaxTree, depth, @nospecialize(vals), val_i)
     end
     @mknode(st; children=cs_out)
 end
-function _interpolate_syntax(st::SyntaxTree, @nospecialize(vals::Tuple))
-    # TODO: copy probably not required if immutable
-    st = mktree(st)
+function _interpolate_syntax(st::SyntaxTree, vals::Core.SimpleVector)
     val_i = Ref(0)
     out = __interpolate_syntax((@ast _ st [:none st]), 0, vals, val_i)
     @jl_assert val_i[] == length(vals) st
     @jl_assert numchildren(out) == 1 st
     out[1]
 end
-@noinline function interpolate_syntax(st::SyntaxTree, @nospecialize(vals...))
+@noinline function interpolate_syntax(st::SyntaxTree, vals::Core.SimpleVector)
     return __script_exit_invoke_in_lowering_world(
         _interpolate_syntax, st, vals)::SyntaxTree
 end

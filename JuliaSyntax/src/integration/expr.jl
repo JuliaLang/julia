@@ -197,7 +197,7 @@ end
 
 function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt32)
     args = retexpr.args
-    firstchildhead = secondchildhead = head(cursor)
+    firstchildhead = head(cursor)
     firstchildrange::UnitRange{UInt32} = byte_range(cursor)
     itr = reverse_nontrivia_children(cursor)
     r = iterate(itr)
@@ -206,19 +206,12 @@ function parseargs!(retexpr::Expr, loc::LineNumberNode, cursor, source, txtbuf::
         r = iterate(itr, state)
         expr = node_to_expr(child, source, txtbuf, txtbuf_offset)
         @assert expr !== nothing
-        secondchildhead = firstchildhead
         firstchildhead = head(child)
         firstchildrange = byte_range(child)
         pushfirst!(args, fixup_Expr_child(
             typeof(cursor), head(cursor), expr, r === nothing))
     end
-    return (firstchildhead, secondchildhead, firstchildrange)
-end
-
-function version_to_expr(node)
-    @assert kind(node) === K"VERSION"
-    nv = numeric_flags(flags(node))
-    return VersionNumber(1, nv ÷ 10, nv % 10)
+    return (firstchildhead, firstchildrange)
 end
 
 # TODO: no longer extended by JuliaLowering; remove
@@ -241,8 +234,6 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
             return k == K"error" ?
                 Expr(:error) :
                 Expr(:error, "$(_token_error_descriptions[k]): `$(source[srcrange])`")
-        elseif k == K"VERSION"
-            return version_to_expr(nodehead)
         else
             val = _expr_leaf_val(cursor, txtbuf, txtbuf_offset)
             if val isa Union{Int128,UInt128,BigInt}
@@ -297,11 +288,11 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
     end
 
     # Now recurse to parse all arguments
-    (firstchildhead, secondchildhead, firstchildrange) =
+    (firstchildhead, firstchildrange) =
         parseargs!(retexpr, loc, cursor, source, txtbuf, txtbuf_offset)
 
     return _node_to_expr(retexpr, loc, srcrange,
-                         firstchildhead, secondchildhead, firstchildrange,
+                         firstchildhead, firstchildrange,
                          nodehead, source)
 end
 
@@ -324,7 +315,7 @@ end
 # tree types.
 @noinline function _node_to_expr(retexpr::Expr, loc::LineNumberNode,
                                  srcrange::UnitRange{UInt32},
-                                 firstchildhead::SyntaxHead, secondchildhead::SyntaxHead,
+                                 firstchildhead::SyntaxHead,
                                  firstchildrange::UnitRange{UInt32},
                                  nodehead::SyntaxHead,
                                  source)
@@ -371,16 +362,6 @@ end
             if @isexpr(a2, :macrocall) && kind(firstchildhead) == K"CmdMacroName"
                 # Fix up for custom cmd macros like foo`x`
                 args[2] = a2.args[3]
-            end
-            if kind(secondchildhead) == K"VERSION"
-                # Encode the syntax version into `loc` so that the argument order
-                # matches what ordinary macros expect.
-                # Core.MacroSource was added in Julia 1.13+; fall back to plain loc on older versions.
-                @static if isdefined(Core, :MacroSource)
-                    loc = Core.MacroSource(loc, popat!(args, 2))
-                else
-                    popat!(args, 2)  # discard the version argument
-                end
             end
         end
         do_lambda = _extract_do_lambda!(args)
@@ -583,7 +564,7 @@ end
             pushfirst!((args[2]::Expr).args, loc)
         end
     elseif k == K"module"
-        insert!(args, kind(firstchildhead) == K"VERSION" ? 2 : 1, !has_flags(nodehead, BARE_MODULE_FLAG))
+        pushfirst!(args, !has_flags(nodehead, BARE_MODULE_FLAG))
         pushfirst!((args[end]::Expr).args, loc)
     elseif k == K"quote"
         if length(args) == 1
