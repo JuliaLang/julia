@@ -1,0 +1,102 @@
+From 695b2189a551b4f5a84037842a5ac9c59c04021c Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Thu, 26 Nov 2026 09:42:12 -0500
+Subject: [PATCH 2/2] [DAGCombiner] Merge TokenFactor operand searches without
+ rescanning
+
+When visitTokenFactor's chain search from one operand reaches another
+operand, it looked that operand up in Ops linearly and then rewrote every
+pending worklist entry of the reached operand's search. Both scans are
+linear in the operand count (up to 2048) per merge, so pruning a large
+token factor was quadratic. Keep a map from operand node to its index,
+and record merges in a union-find array that is resolved when an entry is
+read. The same operands are pruned.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | 40 +++++++++++--------
+ 1 file changed, 24 insertions(+), 16 deletions(-)
+
+diff --git a/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp b/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+index 4eb6f97..a4c487c 100644
+--- a/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
++++ b/llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp
+@@ -2344,28 +2344,36 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
+   bool DidPruneOps = false;
+ 
+   unsigned NumLeftToConsider = 0;
++  // The index of each operand, and the operand each search was merged into.
++  // Merges are resolved when an entry is read, so pending entries are never
++  // rewritten.
++  SmallDenseMap<SDNode *, unsigned, 16> OpIndex;
++  SmallVector<unsigned, 8> MergedInto;
+   for (const SDValue &Op : Ops) {
++    OpIndex.try_emplace(Op.getNode(), NumLeftToConsider);
++    MergedInto.push_back(NumLeftToConsider);
+     Worklist.push_back(std::make_pair(Op.getNode(), NumLeftToConsider++));
+     OpWorkCount.push_back(1);
+   }
++  auto FindOpNumber = [&](unsigned OpNumber) {
++    while (MergedInto[OpNumber] != OpNumber)
++      OpNumber = MergedInto[OpNumber] = MergedInto[MergedInto[OpNumber]];
++    return OpNumber;
++  };
+ 
+-  auto AddToWorklist = [&](unsigned CurIdx, SDNode *Op, unsigned OpNumber) {
++  auto AddToWorklist = [&](SDNode *Op, unsigned OpNumber) {
+     // If this is an Op, we can remove the op from the list. Remark any
+     // search associated with it as from the current OpNumber.
+     if (SeenOps.contains(Op)) {
+       Changed = true;
+       DidPruneOps = true;
+-      unsigned OrigOpNumber = 0;
+-      while (OrigOpNumber < Ops.size() && Ops[OrigOpNumber].getNode() != Op)
+-        OrigOpNumber++;
+-      assert((OrigOpNumber != Ops.size()) &&
+-             "expected to find TokenFactor Operand");
+-      // Re-mark worklist from OrigOpNumber to OpNumber
+-      for (unsigned i = CurIdx + 1; i < Worklist.size(); ++i) {
+-        if (Worklist[i].second == OrigOpNumber) {
+-          Worklist[i].second = OpNumber;
+-        }
+-      }
++      auto It = OpIndex.find(Op);
++      assert(It != OpIndex.end() && "expected to find TokenFactor Operand");
++      unsigned OrigOpNumber = It->second;
++      // Re-mark worklist from OrigOpNumber to OpNumber. An operand merged
++      // before has no entries of its own left.
++      if (MergedInto[OrigOpNumber] == OrigOpNumber)
++        MergedInto[OrigOpNumber] = OpNumber;
+       OpWorkCount[OpNumber] += OpWorkCount[OrigOpNumber];
+       OpWorkCount[OrigOpNumber] = 0;
+       NumLeftToConsider--;
+@@ -2382,7 +2390,7 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
+     if (NumLeftToConsider <= 1)
+       break;
+     auto CurNode = Worklist[i].first;
+-    auto CurOpNumber = Worklist[i].second;
++    auto CurOpNumber = FindOpNumber(Worklist[i].second);
+     assert((OpWorkCount[CurOpNumber] > 0) &&
+            "Node should not appear in worklist");
+     switch (CurNode->getOpcode()) {
+@@ -2395,17 +2403,17 @@ SDValue DAGCombiner::visitTokenFactor(SDNode *N) {
+       break;
+     case ISD::TokenFactor:
+       for (const SDValue &Op : CurNode->op_values())
+-        AddToWorklist(i, Op.getNode(), CurOpNumber);
++        AddToWorklist(Op.getNode(), CurOpNumber);
+       break;
+     case ISD::LIFETIME_START:
+     case ISD::LIFETIME_END:
+     case ISD::CopyFromReg:
+     case ISD::CopyToReg:
+-      AddToWorklist(i, CurNode->getOperand(0).getNode(), CurOpNumber);
++      AddToWorklist(CurNode->getOperand(0).getNode(), CurOpNumber);
+       break;
+     default:
+       if (auto *MemNode = dyn_cast<MemSDNode>(CurNode))
+-        AddToWorklist(i, MemNode->getChain().getNode(), CurOpNumber);
++        AddToWorklist(MemNode->getChain().getNode(), CurOpNumber);
+       break;
+     }
+     OpWorkCount[CurOpNumber]--;
