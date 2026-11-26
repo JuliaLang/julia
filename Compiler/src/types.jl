@@ -535,7 +535,8 @@ end
 
 function NativeInterpreter(world::UInt = get_world_counter();
                            inf_params::InferenceParams = InferenceParams(),
-                           opt_params::OptimizationParams = OptimizationParams())
+                           opt_params::OptimizationParams = OptimizationParams(),
+                           codegen::IdDict{CodeInstance,CodeInfo} = IdDict{CodeInstance,CodeInfo}())
     curr_max_world = get_world_counter()
     # Sometimes the caller is lazy and passes typemax(UInt).
     # we cap it to the current world age for correctness
@@ -547,7 +548,6 @@ function NativeInterpreter(world::UInt = get_world_counter();
     @assert world <= curr_max_world
     method_table = CachedMethodTable(InternalMethodTable(world))
     inf_cache = InferenceCache() # Initially empty cache
-    codegen = IdDict{CodeInstance,CodeInfo}()
     return NativeInterpreter(world, method_table, inf_cache, codegen, inf_params, opt_params)
 end
 

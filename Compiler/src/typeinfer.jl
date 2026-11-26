@@ -2361,6 +2361,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
     trim::Bool = false,
     external_linkage::Bool,
+    emitted::IdSet{CodeInstance} = IdSet{CodeInstance}(),
 )
     interp = workqueue.interp
     world = get_inference_world(interp)
@@ -2430,10 +2431,16 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
                     else
                         # Use an existing CI from the cache, if there is available one that is compatible
                         callee = cached
+                        # and keep the source under that name too, so a later request for it
+                        # (from another caller or another world) does not infer it again
+                        get!(interp.codegen, callee, src)
                     end
                 end
-                push!(codeinfos, callee)
-                push!(codeinfos, src)
+                if !(callee in emitted)
+                    push!(emitted, callee)
+                    push!(codeinfos, callee)
+                    push!(codeinfos, src)
+                end
             end
         else @assert false "unexpected item in queue" end
     end
@@ -2452,29 +2459,34 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     cache_owner = trim_mode == TRIM_NO ? nothing : :trim
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO, cache_owner)
 
+    # Most CodeInstances are valid in every world compiled here, so share their source
+    # between the interpreters and emit each of them only once.
+    codegen = IdDict{CodeInstance,CodeInfo}()
+    emitted = IdSet{CodeInstance}()
+
     # Create an "invokelatest" queue to enable eager compilation of speculative
     # invokelatest calls such as from `Core.finalizer` and `ccallable`
     invokelatest_queue = CompilationQueue(;
-        interp = NativeInterpreter(get_world_counter(); inf_params)
+        interp = NativeInterpreter(get_world_counter(); inf_params, codegen)
     )
 
     codeinfos = []
     workqueue = CompilationQueue(; interp = nothing)
     for this_world in reverse!(sort!(worlds))
         workqueue = CompilationQueue(workqueue;
-            interp = NativeInterpreter(this_world; inf_params)
+            interp = NativeInterpreter(this_world; inf_params, codegen)
         )
 
         append!(workqueue, methods)
         compile!(codeinfos, workqueue; invokelatest_queue, external_linkage,
-                 trim = trim_mode != TRIM_NO)
+                 trim = trim_mode != TRIM_NO, emitted)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
         compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage,
-                 trim = trim_mode != TRIM_NO)
+                 trim = trim_mode != TRIM_NO, emitted)
     end
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
