@@ -166,8 +166,9 @@ emit(f7, Tuple{Int,Int})
 # CHECK-SAME: %"y::Int64"
 # CHECK: %parent_bits
 # CHECK: %parent_old_marked
-# CHECK: %child_bit
-# CHECK: %child_not_marked
+# CHECK: %parent_threshold
+# CHECK: %child_level
+# CHECK: %should_trigger_wb
 emit(f8, Barrier, Int)
 
 # CHECK: define {{(swiftcc )?}}nonnull ptr @julia_Barrier

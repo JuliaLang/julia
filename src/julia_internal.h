@@ -426,11 +426,15 @@ static inline void memassign_safe(int hasptr, char *dst, const jl_value_t *src, 
 #define GC_CLEAN  0 // freshly allocated
 #define GC_MARKED 1 // reachable and young
 #define GC_OLD    2 // if it is reachable it will be marked as old
-#define GC_IN_IMAGE 4
-#define GC_IN_IMAGE_REMSET 8
+// permanent and not yet in the `image_remset` (only with `GC_PERM`); it is the lower bit so
+// that the write barrier can compare levels (see `jl_gc_wb_must_remember`)
+#define GC_PERM_NOT_REMSET 4
+// permanent (in an image or from `jl_gc_permobj`): never freed, nor traced except from the
+// `image_remset`; `jl_object_in_image` tells which objects are in an image
+#define GC_PERM 8
 
 #define GC_OLD_MARKED (GC_OLD | GC_MARKED) // reachable and old
-#define GC_IN_IMAGE_NOT_REMSET (GC_IN_IMAGE) // permalloc'd and not yet modified
+#define GC_PERM_BITS (GC_OLD_MARKED | GC_PERM | GC_PERM_NOT_REMSET) // a new permanent object
 
 // data structures for runtime codegen
 typedef struct _jl_abi_t {
@@ -2133,6 +2137,16 @@ extern jl_mutex_t world_counter_lock;
 typedef uint_t (*smallintset_hash)(size_t val, jl_value_t *data);
 typedef int (*smallintset_eq)(size_t val, const void *key, jl_value_t *data, uint_t hv);
 ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, const void *key, jl_value_t *data, uint_t hv, int pop);
+
+// An insert that probes further than this checks the load and doubles a table that is more
+// than half full. 2 * log2(sz), capped below the max probe (16) of small tables.
+STATIC_INLINE size_t jl_table_long_probe(size_t sz) JL_NOTSAFEPOINT
+{
+    size_t p = 2 * (size_t)__builtin_ctzll(sz);
+    return sz <= 1024 && p > 8 ? 8 : p;
+}
+// the load is estimated from at most 1024 evenly spaced slots
+#define jl_table_sample_stride(sz) ((sz) > 1024 ? (sz) / 1024 : 1)
 
 // probe sequence, shared by lookup and insert
 #define smallintset_max_probe(size) ((size) <= 1024 ? 16 : (size) >> 6)

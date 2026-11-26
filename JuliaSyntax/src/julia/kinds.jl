@@ -248,7 +248,6 @@ register_kinds!(JuliaSyntax, 0, [
             "public"
             "type"
             "var"
-            "VERSION"
         "END_CONTEXTUAL_KEYWORDS"
     "END_KEYWORDS"
 

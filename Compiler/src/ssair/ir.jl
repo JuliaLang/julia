@@ -579,12 +579,18 @@ end
 struct OOBToken end; const OOB_TOKEN = OOBToken()
 struct UndefToken end; const UNDEF_TOKEN = UndefToken()
 
+# Fast path: the operands of any `Expr` except `=` are its `args`.
+@inline is_call_like_expr(@nospecialize(stmt)) = isa(stmt, Expr) && stmt.head !== :(=)
+
 # Split into op==1 and op>1 cases to avoid redundant comparisons. Most IR node
 # types only have a single operand, so the op==1 path can return directly without
 # checking `op == 1 || return OOB_TOKEN` for each type. The op>1 path only needs
 # to handle Expr, PhiNode, and PhiCNode which can have multiple operands.
-function _useref_getindex(@nospecialize(stmt), op::Int)
-    if op == 1
+@inline function _useref_getindex(@nospecialize(stmt), op::Int)
+    if is_call_like_expr(stmt)
+        args = stmt.args
+        return op > length(args) ? OOB_TOKEN : args[op]
+    elseif op == 1
         return _useref_getindex_op1(stmt)
     else
         return _useref_getindex_opN(stmt, op)
@@ -657,14 +663,13 @@ end
 @inline getindex(x::UseRef) = _useref_getindex(x.urs.stmt, x.op)
 
 function is_relevant_expr(e::Expr)
-    return e.head in (:call, :invoke, :invoke_modify,
-                      :new, :splatnew, :(=), :(&),
-                      :gc_preserve_begin, :gc_preserve_end,
-                      :foreigncall, :foreignglobal, :isdefined, :copyast,
-                      :throw_undef_if_not,
-                      :cfunction, :pop_exception,
-                      :leave,
-                      :new_opaque_closure)
+    head = e.head
+    return head === :call || head === :invoke || head === :new || head === :foreigncall ||
+           head === :gc_preserve_begin || head === :gc_preserve_end ||
+           head === :leave || head === :foreignglobal || head === :splatnew ||
+           head === :pop_exception || head === :isdefined || head === :invoke_modify ||
+           head === :throw_undef_if_not || head === :cfunction || head === :copyast ||
+           head === :(=) || head === :(&) || head === :new_opaque_closure
 end
 
 @noinline function _useref_setindex!(@nospecialize(stmt), op::Int, @nospecialize(v))
@@ -715,7 +720,12 @@ end
 end
 
 @inline function setindex!(x::UseRef, @nospecialize(v))
-    x.urs.stmt = _useref_setindex!(x.urs.stmt, x.op, v)
+    stmt = x.urs.stmt
+    if is_call_like_expr(stmt)
+        stmt.args[x.op] = v
+    else
+        x.urs.stmt = _useref_setindex!(stmt, x.op, v)
+    end
     return x
 end
 
@@ -737,7 +747,13 @@ end
 
 @inline function iterate(it::UseRefIterator, op::Int=0)
     it.relevant || return nothing
-    op = _advance(it.stmt, op)
+    stmt = it.stmt
+    if is_call_like_expr(stmt)
+        op += 1
+        op > length(stmt.args) && return nothing
+        return (UseRef(it, op), op)
+    end
+    op = _advance(stmt, op)
     op === nothing && return nothing
     return (UseRef(it, op), op)
 end

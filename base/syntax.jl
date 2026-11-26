@@ -185,7 +185,6 @@ function _assert_syntax_node(st::Syntax)
             h === :cmdmacroname ? (true, String) :
             h === :lambdabindings ? (true, Any) : # JL.LambdaBindings
             h === :slots ? (true, Vector) : # Vector{JL.Slot}
-            h === :version ? (true, VersionNumber) :
             # too lenient, but the green tree includes unspecified leaf nodes.
             # we hit this when JuliaSyntax.is_trivia(node) with some operators.
             st.source isa SourceRef ? (false, Any) :
@@ -666,6 +665,7 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
             error("expr heads :value and :identifier are reserved")
         end
         src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
+        h === :macrocall && (old_src = something(_first_linenode(e), old_src))
         cs = Syntax[]
         rm_linenodes = h in (:block, :toplevel)
         quoted |= h in (:quote, :inert)

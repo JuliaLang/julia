@@ -1,0 +1,97 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Tim Besard <tim.besard@gmail.com>
+Date: Fri, 20 Nov 2026 10:01:44 +0100
+Subject: [PATCH] Retry when commits race a reader copying the meta page
+
+Two commits can replace a reader's selected meta page while it copies
+the database records and last page number, leaving it with roots newer
+than its txnid, or with a mixture of snapshots.
+
+The first commit publishes a new head before the second can overwrite
+the slot. Recheck the head after the copy and retry if it changed.
+Order the copy after the first read of the head, and publish the head
+only after the meta page, which weakly ordered CPUs could reorder.
+---
+ libraries/liblmdb/mdb.c | 45 ++++++++++++++++++++++++++---------------
+ 1 file changed, 29 insertions(+), 16 deletions(-)
+
+diff --git a/libraries/liblmdb/mdb.c b/libraries/liblmdb/mdb.c
+index d6c008f..c43f63f 100644
+--- a/libraries/liblmdb/mdb.c
++++ b/libraries/liblmdb/mdb.c
+@@ -3322,6 +3322,7 @@ mdb_txn_renew0(MDB_txn *txn)
+ 		} else {
+ 			MDB_reader *r = (env->me_flags & MDB_NOTLS) ? txn->mt_u.reader :
+ 				pthread_getspecific(env->me_txkey);
++			txnid_t head;
+ 			if (r) {
+ 				if (r->mr_pid != env->me_pid || r->mr_txnid != (txnid_t)-1)
+ 					return MDB_BAD_RSLOT;
+@@ -3369,17 +3370,29 @@ mdb_txn_renew0(MDB_txn *txn)
+ 					return rc;
+ 				}
+ 			}
+-			do /* LY: Retry on a race, ITS#7970. */
+-				r->mr_txnid = ti->mti_txnid;
+-			while(r->mr_txnid != ti->mti_txnid);
+-			if (!r->mr_txnid && (env->me_flags & MDB_RDONLY)) {
+-				meta = mdb_env_pick_meta(env);
+-				r->mr_txnid = meta->mm_txnid;
+-			} else {
+-				meta = env->me_metas[r->mr_txnid & 1];
+-			}
+-			txn->mt_txnid = r->mr_txnid;
++			do {
++				do /* LY: Retry on a race, ITS#7970. */
++					r->mr_txnid = ti->mti_txnid;
++				while(r->mr_txnid != ti->mti_txnid);
++				head = r->mr_txnid;
++				/* Read the meta page only after the head. */
++				__sync_synchronize();
++				if (!head && (env->me_flags & MDB_RDONLY)) {
++					meta = mdb_env_pick_meta(env);
++					r->mr_txnid = meta->mm_txnid;
++				} else {
++					meta = env->me_metas[head & 1];
++				}
++				txn->mt_txnid = r->mr_txnid;
++				memcpy(txn->mt_dbs, meta->mm_dbs, CORE_DBS * sizeof(MDB_db));
++				txn->mt_next_pgno = meta->mm_last_pg+1;
++				/* Two commits can replace this meta page during the copy.
++				 * Retry if the published head advanced.
++				 */
++				__sync_synchronize();
++			} while (head != ti->mti_txnid);
+ 			txn->mt_u.reader = r;
++			goto copied;
+ 		}
+ 
+ 	} else {
+@@ -3427,6 +3440,7 @@ mdb_txn_renew0(MDB_txn *txn)
+ 
+ 	/* Moved to here to avoid a data race in read TXNs */
+ 	txn->mt_next_pgno = meta->mm_last_pg+1;
++copied:
+ #if MDB_RPAGE_CACHE
+ 	if (MDB_REMAPPING(env->me_flags))
+ 		txn->mt_last_pgno = txn->mt_next_pgno - 1;
+@@ -5011,14 +5025,13 @@ fail:
+ 	/* MIPS has cache coherency issues, this is a no-op everywhere else */
+ 	CACHEFLUSH(env->me_map + off, len, DCACHE);
+ done:
+-	/* Memory ordering issues are irrelevant; since the entire writer
+-	 * is wrapped by wmutex, all of these changes will become visible
+-	 * after the wmutex is unlocked. Since the DB is multi-version,
+-	 * readers will get consistent data regardless of how fresh or
+-	 * how stale their view of these values is.
++	/* Readers copy the meta page that this txnid selects, without
++	 * taking wmutex, so the page must be visible to them first.
+ 	 */
+-	if (env->me_txns)
++	if (env->me_txns) {
++		__sync_synchronize();
+ 		env->me_txns->mti_txnid = txn->mt_txnid;
++	}
+ 
+ 	return MDB_SUCCESS;
+ }
