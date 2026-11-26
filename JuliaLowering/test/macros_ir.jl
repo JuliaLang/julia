@@ -53,9 +53,10 @@ end
 9   (call core.define_method TestMod TestMod.@add_one %₈
     --- code_info
     slots: [slot₁/#self#(!read) slot₂/__context__(!read) slot₃/ex]
-    1   (call core.tuple slot₃/ex)
-    2   (call JuliaLowering.interpolate_syntax (syntaxinert (block (call + (syntaxunquote ex) 1))) %₁)
-    3   (return %₂)
+    1   (call core.svec slot₃/ex)
+    2   (call core.svec %₁)
+    3   (call JuliaLowering.interpolate_syntax (syntaxinert (block (call + (syntaxunquote ex) 1))) %₂)
+    4   (return %₃)
 10  latestworld
 11  TestMod.@add_one
 12  (return %₁₁)
