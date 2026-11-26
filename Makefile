@@ -774,8 +774,9 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 .PHONY: testall
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)
+	$(if $(filter 1,$(SPLIT_SYSIMAGE)),cp $(JULIA_SYSIMG:.$(SHLIB_EXT)=.ji) $(BUILDROOT)/local.ji)
 	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true')
-	rm $(BUILDROOT)/local.$(SHLIB_EXT)
+	rm $(BUILDROOT)/local.$(SHLIB_EXT) $(if $(filter 1,$(SPLIT_SYSIMAGE)),$(BUILDROOT)/local.ji)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 .PHONY: testall1
