@@ -250,7 +250,7 @@ end
 
 nbitslen(r::StepRangeLen) = nbitslen(eltype(r), length(r), r.offset)
 nbitslen(::Type{T}, len, offset) where {T<:IEEEFloat} =
-    min(cld(precision(T), 2), nbitslen(len, offset))
+    min(precision(T) - 1, nbitslen(len, offset))
 # The +1 here is for safety, because the precision of the significand
 # is 1 bit higher than the number that is explicitly stored.
 nbitslen(len, offset) = len < 2 ? 0 : top_set_bit(max(offset-1, len-offset) - 1) + 1
@@ -432,7 +432,7 @@ function (:)(start::T, step::T, stop::T) where T<:IEEEFloat
         # if we've overshot the end, subtract one:
         len -= (start < stop < stop′) + (start > stop > stop′)
     end
-    steprangelen_hp(T, start, step, 0, len, 1)
+    steprangelen_hp(T, start, step, nbitslen(T, len, 1), len, 1)
 end
 
 step(r::StepRangeLen{T,TwicePrecision{T},TwicePrecision{T}}) where {T<:AbstractFloat} = T(r.step)
@@ -462,7 +462,7 @@ function range_start_step_length(a::T, st::T, len::Integer) where T<:IEEEFloat
             return floatrange(T, start_n, step_n, len, den)
         end
     end
-    steprangelen_hp(T, a, st, 0, len, 1)
+    steprangelen_hp(T, a, st, nbitslen(T, len, 1), len, 1)
 end
 
 range_step_stop_length(step::Real, stop::IEEEFloat, len::Integer) =
@@ -702,7 +702,7 @@ function _linspace(start::T, stop::T, len::Integer) where {T<:IEEEFloat}
     # preventing overflow in ref_hi+(i-offset)*step_hi
     m, k = prevfloat(floatmax(T)), max(imin-1, len-imin)
     step_hi_pre = clamp(step, max(-(m+ref)/k, (-m+ref)/k), min((m-ref)/k, (m+ref)/k))
-    nb = nbitslen(T, len, imin)
+    nb = min(cld(precision(T), 2), nbitslen(len, imin))
     step_hi = truncbits(step_hi_pre, nb)
     x1_hi, x1_lo = add12((1-imin)*step_hi, ref)
     x2_hi, x2_lo = add12((len-imin)*step_hi, ref)
