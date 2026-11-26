@@ -79,8 +79,8 @@ If `v.typ === Bottom` it means that the variable is strictly undefined.
 If zero, then the value comes from an argument.
 If negative, this refers to a "virtual ϕ-block" preceding the given index,
 that would have been inserted as the value of this slot in a truly SSA-form IR.
-If a slot has the same `ssadef` at two different points of execution,
-the slot contents are guaranteed to share identity (`x₀ === x₁`).
+If a slot has the same `ssadef` at two program points with no intervening
+redefinition along the execution path, the slot contents share identity (`x₀ === x₁`).
 """
 struct VarState
     typ

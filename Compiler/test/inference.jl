@@ -8519,6 +8519,120 @@ stale_cond4(n, m) = (h = n isa Int; n = m; Core.ifelse(h, n, 0))
 @test Base.infer_return_type(stale_cond4, (Union{Nothing,Int}, Union{Nothing,Int})) == Union{Nothing, Int}
 @test stale_cond4(1, nothing) === nothing
 
+struct C64183 end
+function issue64183(a, b)
+    was_c = false
+    result = false
+    for element in (a, b)
+        result = was_c && element isa String
+        was_c = element isa C64183
+    end
+    result
+end
+@test Base.infer_return_type((C64183, String)) do a, b
+    issue64183(a, b) ? 1 : ""
+end == Union{Int, String}
+
+function issue64183_while(a, b)
+    was_c = false
+    result = false
+    i = 1
+    while i <= 2
+        element = i == 1 ? a : b
+        result = was_c && element isa String
+        was_c = element isa C64183
+        i += 1
+    end
+    result
+end
+@test Base.infer_return_type((C64183, String)) do a, b
+    issue64183_while(a, b) ? 1 : ""
+end == Union{Int, String}
+
+function issue64183_phi(a, b, flag::Bool)
+    was_c = false
+    result = false
+    for i in 1:2
+        if flag
+            x = i == 1 ? a : b
+        else
+            x = i == 1 ? a : b
+        end
+        result = was_c && x isa String
+        was_c = x isa C64183
+    end
+    result
+end
+@test Base.infer_return_type((C64183, String, Bool)) do a, b, flag
+    issue64183_phi(a, b, flag) ? 1 : ""
+end == Union{Int, String}
+
+function issue64183_ssa_copy(a::Union{C64183,String}, b::Union{C64183,String}, c::Union{C64183,String})
+    was_c = false
+    result = false
+    element = a
+    for i in 1:3
+        v = Core.ifelse(was_c, element, C64183())
+        result = v isa String
+        if i == 1
+            element = b
+            was_c = false
+        else
+            element, was_c = c, (element isa C64183)
+        end
+    end
+    result
+end
+@test Base.infer_return_type((Union{C64183,String}, Union{C64183,String}, Union{C64183,String})) do a, b, c
+    issue64183_ssa_copy(a, b, c) ? 1 : ""
+end == Union{Int, String}
+
+struct Box64183
+    x::Union{C64183,String}
+end
+function issue64183_mustalias_isa(a::Box64183, b::Box64183)
+    local prev
+    res = false
+    for box in (a, b)
+        if @isdefined(prev) && (prev::Union{C64183,String}) isa C64183
+            res = getfield(box, :x) isa String
+        end
+        prev = getfield(box, :x)
+    end
+    res
+end
+@test Base.infer_return_type((Box64183, Box64183)) do a, b
+    issue64183_mustalias_isa(a, b) ? 1 : ""
+end == Union{Int, String}
+
+@noinline _issue64183_same_field(x, y) = x isa C64183 && y isa String
+function issue64183_mustalias_call(a::Box64183, b::Box64183)
+    local prev
+    res = false
+    for box in (a, b)
+        if @isdefined(prev)
+            res = _issue64183_same_field(prev, getfield(box, :x))
+        end
+        prev = getfield(box, :x)
+    end
+    res
+end
+@test Base.infer_return_type((Box64183, Box64183)) do a, b
+    issue64183_mustalias_call(a, b) ? 1 : ""
+end == Union{Int, String}
+
+function issue64183_same_iter(a, b)
+    result = false
+    for element in (a, b)
+        is_c = element isa C64183
+        result = is_c && element isa String
+    end
+    result
+end
+@test Base.infer_return_type((C64183, String)) do a, b
+    issue64183_same_iter(a, b) ? 1 : ""
+end == String
+
 # issue #60883: conditional propagation through wrapper functions
 mutable struct A60883
     a::Int
