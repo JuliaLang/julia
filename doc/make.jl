@@ -369,6 +369,7 @@ Manual = [
     "manual/environment-variables.md",
     "manual/embedding.md",
     "manual/code-loading.md",
+    "manual/editions.md",
     "manual/profile.md",
     "manual/stacktraces.md",
     "manual/memory-management.md",
