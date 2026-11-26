@@ -39,15 +39,16 @@ inline bool isInLLVMHeaderFile(SourceLocation Loc, const SourceManager &SM) {
   return Name.starts_with("llvm-");
 }
 
-// True if `Name` is named like one of the `uv_`/`unw_`/`_U` runtime helpers
-// that live in an upstream dependency's headers (libuv, libunwind) which are
+// True if `Name` is named like one of the `uv_`/`unw_`/`_U`/`mi_` runtime helpers
+// that live in an upstream dependency's headers (libuv, libunwind, mimalloc) which are
 // not ours to edit. This is a purely lexical test on the name -- it says
 // nothing about whether the function reaches a safepoint (see
 // nameIsNonSafepointRuntimeHelper for that narrower question, which excludes
 // uv_run).
 inline bool nameIsExternalRuntimeHelper(StringRef Name) {
   return Name.starts_with("uv_") || Name.starts_with("unw_") ||
-         Name.starts_with("_U") || Name.starts_with("mdb_");
+         Name.starts_with("_U") || Name.starts_with("mdb_") ||
+         Name.starts_with("mi_");
 }
 
 // True if `Name` is one of the `uv_`/`unw_`/`_U` runtime helpers the analyzer

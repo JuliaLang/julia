@@ -42,7 +42,7 @@ static void jl_gc_register_callback(jl_gc_callback_list_t **list,
             return;
         list = &((*list)->next);
     }
-    *list = (jl_gc_callback_list_t *)malloc_s(sizeof(jl_gc_callback_list_t));
+    *list = (jl_gc_callback_list_t *)jl_malloc_wrapper(sizeof(jl_gc_callback_list_t));
     (*list)->next = NULL;
     (*list)->func = func;
 }
@@ -54,7 +54,7 @@ static void jl_gc_deregister_callback(jl_gc_callback_list_t **list,
         if ((*list)->func == func) {
             jl_gc_callback_list_t *tmp = *list;
             (*list) = (*list)->next;
-            free(tmp);
+            jl_free_wrapper(tmp);
             return;
         }
         list = &((*list)->next);
@@ -116,10 +116,6 @@ JL_DLLEXPORT void jl_gc_set_cb_notify_gc_pressure(jl_gc_cb_notify_gc_pressure_t 
     else
         jl_gc_deregister_callback(&gc_cblist_notify_gc_pressure, (jl_gc_cb_func_t)cb);
 }
-
-// =========================================================================== //
-// malloc wrappers, aligned allocation
-// =========================================================================== //
 
 #if defined(_OS_WINDOWS_)
 // helper function based partly on wine msvcrt80+ heap.c
