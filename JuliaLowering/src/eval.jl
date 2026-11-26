@@ -127,11 +127,9 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt,
         push!(iter.todo, (ex, false, 1))
         return lower_step(iter, mod, world, softscope)
     elseif k == :module
-        (version, notbare, mname, body) = @stm ex begin
-            [:module version nb_st mname body] ->
-                (version.value, nb_st.value, mname, body)
-            [:module nb_st mname body] ->
-                (nothing, nb_st.value, mname, body)
+        (notbare, mname, body) = @stm ex begin
+            [:module nb_st mname body] -> (nb_st.value, mname, body)
+            _ -> throw(LoweringError(ex, "malformed module expression"))
         end
         if head(mname) != :identifier
             throw(LoweringError(mname, "expected module name"))
@@ -143,7 +141,7 @@ function lower_step(iter::LoweringIterator, mod::Module, world::UInt,
         coverage_visit_line(mod, ex)
         loc = first_linenode(ex)
         push!(iter.todo, (body, true, 1))
-        return Core.svec(:begin_module, version, newmod_name, notbare, loc)
+        return Core.svec(:begin_module, newmod_name, notbare, loc)
     elseif k === :thunk && numchildren(ex) == 1
         return Core.svec(:thunk, Expr(:thunk, ex[1].value))
     else
@@ -833,8 +831,7 @@ function to_compatible_exception(@nospecialize(exc))
     if exc isa LoweringError && !exc.internal
         ErrorException(sprint(showerror, exc))
     elseif exc isa MacroExpansionError
-        loc = _macrocall_expr_location(exc.context.macrocall)
-        lnn = loc isa MacroSource ? loc.lno : loc
+        lnn = first_linenode(exc.context.macrocall)
         file = lnn.file isa Symbol && lnn.file !== :var"" ? String(lnn.file) : "<macrocall>"
         LoadError(file, lnn.line, to_compatible_exception(exc.err))
     else
@@ -863,10 +860,10 @@ function _eval(mod::Module, iter::LoweringIterator,
         if type == :done
             break
         elseif type == :begin_module
-            loc = thunk[5]::LineNumberNode
+            loc = thunk[4]::LineNumberNode
             filename = something(loc.file, :var"")::Symbol
             mod = @ccall jl_begin_new_module(
-                modules[end]::Any, thunk[3]::Symbol, thunk[2]::Any, (thunk[4]::Bool)::Cint,
+                modules[end]::Any, thunk[2]::Symbol, (thunk[3]::Bool)::Cint,
                 filename::Cstring, loc.line::Cint)::Module
             push!(modules, mod)
         elseif type == :end_module

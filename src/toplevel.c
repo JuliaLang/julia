@@ -132,7 +132,7 @@ static int jl_is__toplevel__mod(jl_module_t *mod, jl_task_t *ct) JL_CANSAFEPOINT
         (jl_value_t*)mod == jl_get_global_value(jl_base_module, jl_symbol("__toplevel__"), ct->world_age);
 }
 
-JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name, jl_value_t *syntax_version,
+JL_DLLEXPORT jl_module_t *jl_begin_new_module(jl_module_t *parent_module, jl_sym_t *name,
                                               int std_imports, const char *filename, int lineno) JL_CANSAFEPOINT
 {
     jl_task_t *ct = jl_current_task;
@@ -233,27 +233,20 @@ JL_DLLEXPORT void jl_end_new_module(jl_module_t *newm) JL_CANSAFEPOINT {
 static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex, const char **toplevel_filename, int *toplevel_lineno) JL_CANSAFEPOINT
 {
     assert(ex->head == jl_module_sym);
-
-    jl_value_t *syntax_version = jl_nothing;
-    int idx = 0;
-    if (!jl_is_bool(jl_exprarg(ex, idx))) {
-        syntax_version = jl_exprarg(ex, idx++);
-    }
-
-    if (jl_array_nrows(ex->args) != idx+3 || !jl_is_expr(jl_exprarg(ex, idx+2))) {
+    if (jl_array_nrows(ex->args) != 3 || !jl_is_expr(jl_exprarg(ex, 2))) {
         jl_error("syntax: malformed module expression");
     }
 
-    int std_imports = (jl_exprarg(ex, idx++) == jl_true);
-    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, idx++);
+    if (((jl_expr_t *)(jl_exprarg(ex, 2)))->head != jl_symbol("block")) {
+        jl_error("syntax: module expression third argument must be a block");
+    }
+    jl_array_t *stmts = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
+
+    int std_imports = (jl_exprarg(ex, 0) == jl_true);
+    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 1);
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_symbol_type, (jl_value_t*)name);
     }
-
-    if (((jl_expr_t *)(jl_exprarg(ex, idx)))->head != jl_symbol("block")) {
-        jl_error("syntax: module expression third argument must be a block");
-    }
-    jl_array_t *stmts = ((jl_expr_t*)jl_exprarg(ex, idx))->args;
 
     int lineno = 0;
     const char *filename = "none";
@@ -267,7 +260,7 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
     }
 
-    jl_module_t *newm = jl_begin_new_module(parent_module, name, syntax_version, std_imports, filename, lineno);
+    jl_module_t *newm = jl_begin_new_module(parent_module, name, std_imports, filename, lineno);
     JL_GC_PROMISE_ROOTED(newm); // Rooted in jl_current_modules
     jl_eval_toplevel_stmts(newm, stmts, 1, 0, toplevel_filename, toplevel_lineno);
     jl_end_new_module(newm);

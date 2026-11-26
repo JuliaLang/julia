@@ -1,3 +1,3 @@
 module VersionedDep2
-    const ver = (@Base.Experimental.VERSION).syntax
+    const ver = VersionNumber(Core.get_edition(@__MODULE__)...)
 end

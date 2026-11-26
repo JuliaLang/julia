@@ -1,1 +1,1 @@
-print((Base.Experimental.@VERSION).syntax)
+print(VersionNumber(Core.get_edition(@__MODULE__)...))

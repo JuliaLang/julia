@@ -1,1 +1,1 @@
-(Base.Experimental.@VERSION).syntax
+VersionNumber(Core.get_edition(@__MODULE__)...)

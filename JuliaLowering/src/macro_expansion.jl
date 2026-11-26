@@ -204,26 +204,6 @@ function eval_macro_name(ctx, mctx::MacroContext, st0::SyntaxTree)
     end
 end
 
-function _macrocall_expr_location(st::SyntaxTree)
-    @jl_assert head(st) === :macrocall st
-    if head(st[2]) === :value
-        loc = st[2].value
-        if loc isa MacroSource
-            loc
-        elseif loc isa LineNumberNode
-            # Some macros, e.g. @cmd, don't play nicely with file == nothing
-            isnothing(loc.file) ? LineNumberNode(loc.line, :var"") : loc
-        else
-            LineNumberNode(0, :var"")
-        end
-    elseif head(st[2]) === :version
-        loc = first_linenode(st)
-        @static isdefinedglobal(Core, :MacroSource) ? Core.MacroSource(loc, st[2].value) : loc
-    else
-        LineNumberNode(0, :var"")
-    end
-end
-
 function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     @jl_assert head(st) === :macrocall st
     numchildren(st) >= 2 || throw(LoweringError(
@@ -254,11 +234,9 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
             expr_to_est(expanded, st)
         end
     else
-        macro_loc = _macrocall_expr_location(st)
-        macro_lnn = macro_loc isa MacroSource ? macro_loc.lno : macro_loc
-        macro_args = Any[macro_loc, base_layer(ctx.syntax_context).mod]
+        macro_lnn = first_linenode(st)
+        macro_args = Any[macro_lnn, base_layer(ctx.syntax_context).mod]
         for arg in raw_args
-            @jl_assert head(arg) !== :version arg # handled in EST conversion
             push!(macro_args, est_to_expr(arg))
         end
         macro_mi = lookup_method_instance(macfunc, macro_args, macro_world)
