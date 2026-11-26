@@ -684,8 +684,13 @@ close(proc.in)
 @testset "spawn and wait *a lot* of tasks in @profile" begin
     # Not using threads_exec.jl for better isolation, reproducibility, and a
     # tighter timeout.
+    # Fix the thread count instead of inheriting JULIA_NUM_THREADS. Every task switch
+    # on the thread that owns the libuv loop polls it, which on macOS costs a context
+    # switch. With a single thread all the tasks run there, and the largest case
+    # takes minutes and gigabytes on a loaded machine. `--threads=2` also adds an
+    # interactive thread, which owns the loop, so the spawned tasks run elsewhere.
     script = "profile_spawnmany_exec.jl"
-    cmd_base = `$(Base.julia_cmd()) --depwarn=error --rr-detach --startup-file=no $script`
+    cmd_base = `$(Base.julia_cmd()) --threads=2 --depwarn=error --rr-detach --startup-file=no $script`
     @testset for n in [20000, 200000, 2000000]
         cmd = ignorestatus(addenv(Cmd(cmd_base; dir = @__DIR__), "NTASKS" => n))
         cmd = pipeline(cmd; stdout = stderr, stderr)
