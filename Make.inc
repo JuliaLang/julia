@@ -293,8 +293,27 @@ else
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
-# Override `JULIA_COMMIT` to `JULIA_VERSION` if we're on a tagged commit
-ifeq ($(shell git -C $(JULIAHOME) describe --tags --exact-match > /dev/null 2>&1 && echo true),true)
+# JULIA_RELEASE_BUILD=1 declares this build to be the release build of
+# $(JULIA_VERSION), independent of whether the v$(JULIA_VERSION) git tag exists:
+# the release pipeline builds and validates the artifacts first and creates the
+# tag last. It forces the same naming (here) and `tagged_commit` state
+# (base/version_git.sh) that building from the tag would produce, and a zero
+# build number.
+JULIA_RELEASE_BUILD ?= 0
+ifeq ($(filter 0 1,$(JULIA_RELEASE_BUILD)),)
+$(error JULIA_RELEASE_BUILD must be 0 or 1, got "$(JULIA_RELEASE_BUILD)")
+endif
+ifeq ($(JULIA_RELEASE_BUILD),1)
+ifneq (,$(findstring DEV,$(JULIA_VERSION))$(findstring pre,$(JULIA_VERSION)))
+$(error JULIA_RELEASE_BUILD=1 requires a releasable VERSION, got "$(JULIA_VERSION)")
+endif
+endif
+
+# Override `JULIA_COMMIT` to `JULIA_VERSION` for a declared release build or a
+# checkout of the v$(JULIA_VERSION) tag itself
+ifeq ($(JULIA_RELEASE_BUILD),1)
+JULIA_COMMIT := $(JULIA_VERSION)
+else ifneq ($(shell git -C $(JULIAHOME) tag --points-at HEAD --list 'v$(JULIA_VERSION)' 2>/dev/null),)
 JULIA_COMMIT := $(JULIA_VERSION)
 endif
 
