@@ -1715,18 +1715,22 @@ static jl_cgval_t emit_ccall(jl_codectx_t &ctx, jl_value_t **args, size_t nargs)
         Value *retval;
         if (isboxed) {
             retval = boxed(ctx, argv[0]);
-            retval = emit_pointer_from_objref(ctx, retval /*T_prjlvalue*/);
-        }
-        else if (tti == (jl_value_t*)jl_voidpointer_type) {
-            retval = emit_unbox(ctx, largty, voidpointer_update(ctx, argv[0], make_errmsg("ccall", 1, "")));
+            if (!retboxed)
+                retval = emit_pointer_from_objref(ctx, retval /*T_prjlvalue*/);
         }
         else {
-            retval = emit_unbox(ctx, largty, update_julia_type(ctx, argv[0], tti));
+            if (tti == (jl_value_t*)jl_voidpointer_type)
+                retval = emit_unbox(ctx, largty, voidpointer_update(ctx, argv[0], make_errmsg("ccall", 1, "")));
+            else
+                retval = emit_unbox(ctx, largty, update_julia_type(ctx, argv[0], tti));
+            // retval is now an untracked jl_value_t*
+            if (retboxed) {
+                if (retval->getType()->isIntegerTy()) // the argument was declared as an integer
+                    retval = emit_inttoptr(ctx, retval, ctx.types().T_ptr);
+                // the object has to be alive here, and is rooted through the result from here on
+                retval = emit_pointer_to_objref(ctx, retval);
+            }
         }
-        // retval is now an untracked jl_value_t*
-        if (retboxed)
-            // WARNING: this addrspace cast necessarily implies that the value is rooted elsewhere!
-            retval = ctx.builder.CreateAddrSpaceCast(retval, ctx.types().T_prjlvalue);
         JL_GC_POP();
         return mark_or_box_ccall_result(ctx, retval, retboxed, rt, unionall, static_rt);
     }

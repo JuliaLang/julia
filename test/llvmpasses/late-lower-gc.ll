@@ -538,6 +538,46 @@ exit:
   ret void
 }
 
+declare ptr addrspace(10) @julia.pointer_to_objref(ptr)
+
+; The object is rooted through the result of julia.pointer_to_objref from the call on
+define ptr addrspace(10) @pointer_to_objref_root(ptr %p, i1 %cond) {
+top:
+; CHECK-LABEL: @pointer_to_objref_root
+; CHECK: %gcframe = call ptr @julia.new_gc_frame(i32 1)
+; FINAL-LABEL: @pointer_to_objref_root
+; FINAL-NOT: @julia.pointer_to_objref
+  %pgcstack = call ptr @julia.get_pgcstack()
+; CHECK: %obj = addrspacecast ptr %p to ptr addrspace(10)
+; CHECK-NEXT: [[OBJ_SLOT:%.*]] = call ptr @julia.get_gc_frame_slot(ptr %gcframe, i32 0)
+; CHECK-NEXT: store ptr addrspace(10) %obj, ptr [[OBJ_SLOT]]
+; CHECK-NEXT: call void @jl_safepoint()
+  %obj = call ptr addrspace(10) @julia.pointer_to_objref(ptr %p)
+  call void @jl_safepoint()
+  br i1 %cond, label %use, label %exit
+
+use:
+  ret ptr addrspace(10) %obj
+
+exit:
+  ret ptr addrspace(10) null
+}
+
+; The call is not a safepoint itself
+define ptr addrspace(10) @pointer_to_objref_no_safepoint(ptr %p, i64 %a) {
+top:
+; CHECK-LABEL: @pointer_to_objref_no_safepoint
+; CHECK-NOT: @julia.new_gc_frame
+; CHECK: %obj = addrspacecast ptr %p to ptr addrspace(10)
+; CHECK-NOT: @julia.new_gc_frame
+; CHECK: ret ptr addrspace(10) %aboxed
+  %pgcstack = call ptr @julia.get_pgcstack()
+  %aboxed = call ptr addrspace(10) @jl_box_int64(i64 signext %a)
+  %obj = call ptr addrspace(10) @julia.pointer_to_objref(ptr %p)
+  store ptr addrspace(10) %obj, ptr %p
+  ret ptr addrspace(10) %aboxed
+}
+
 attributes #10 = { nounwind willreturn memory(argmem: read) "julia.safepoint" }
 attributes #11 = { nounwind willreturn memory(read) "julia.safepoint" }
 attributes #12 = { nounwind willreturn memory(argmem: read) }

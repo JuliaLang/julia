@@ -27,5 +27,18 @@ function buildarray()
     out
 end
 
+# COM: the reference from unsafe_pointer_to_objref is in a GC root before the next safepoint
+# CHECK-LABEL: @julia_objref_root
+# CHECK: [[OBJ:%.*]] = call ptr @{{.*}}jl_call1
+# CHECK: store ptr [[OBJ]], ptr
+# CHECK: call void @{{.*}}jl_gc_collect
+function objref_root(r::Base.RefValue{Any}, c::Bool)
+    x = GC.@preserve r unsafe_pointer_to_objref(ccall(:jl_call1, Ptr{Cvoid}, (Any, Any), getindex, r))
+    GC.gc()
+    c && return x
+    return nothing
+end
+
 emit(simple)
 emit(buildarray)
+emit(objref_root, Base.RefValue{Any}, Bool)

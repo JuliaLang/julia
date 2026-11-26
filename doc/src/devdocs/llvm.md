@@ -304,6 +304,8 @@ First, only the following address space casts are allowed:
   others. However, do note that the optimizer has broad license to not root
   such a value. It is never safe to have a value in address space 0 in any part
   of the program if it is (or is derived from) a value that requires a GC root.
+  A pointer that has to become a GC root is converted with the
+  `julia.pointer_to_objref` intrinsic described below instead.
 - Tracked->Derived: This is the standard decay route for interior values. The placement
   pass will look for these to identify the base pointer for any use.
 - Tracked->CalleeRooted: Addrspace CalleeRooted serves merely as a hint that a GC root is not
@@ -385,6 +387,34 @@ for the function. As a result, the external rooting must be arranged while the
 value is still tracked by the system. I.e. it is not valid to attempt to use the
 result of this operation to establish a global root - the optimizer may have
 already dropped the value.
+
+### Supporting [`unsafe_pointer_to_objref`](@ref)
+
+[`unsafe_pointer_to_objref`](@ref) goes the other way. It turns an untracked pointer
+into a reference to the object it points at, and that reference has to keep the
+object alive like any other one, even after whatever kept it alive until then is gone.
+An address space cast from 0 to Tracked does not achieve this. Such a cast is the idiom
+for a value that needs no root, like a constant that is loaded from a global, and the
+GC root placement pass handles it accordingly. It does root the result of a cast of
+another pointer where that is live across a safepoint, but a cast does not count when
+the pass checks whether the function has a safepoint after its first definition, and
+without one it places no roots at all. A cast also has no effects, so the optimizer is
+free to move it: past a safepoint at which nothing else roots the object anymore, or
+above the branch that decides whether the pointer refers to an object at all. We thus
+provide a second intrinsic:
+```llvm
+declare ptr addrspace(10) @julia.pointer_to_objref(ptr)
+```
+A call to it is the definition of a tracked value, which the GC root placement pass
+roots at every later safepoint where it is live. The call is not a safepoint itself,
+and is lowered to the corresponding address space cast after GC root lowering. To
+keep it in place until then, the intrinsic is not speculatable and is declared to
+modify memory that only the runtime can access, so the optimizer may neither
+execute it speculatively nor move it across another call. The caller remains
+responsible for the object being alive when the call is made. A pointer that
+`julia.pointer_from_objref` returned is no proof of that: as described above, the
+optimizer may already have removed the object it was taken from, or moved it to the
+stack.
 
 ### Keeping values alive in the absence of uses
 

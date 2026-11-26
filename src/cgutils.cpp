@@ -361,6 +361,16 @@ static Value *emit_pointer_from_objref(jl_codectx_t &ctx, Value *V)
     return Call;
 }
 
+// The reference to the object that the untracked pointer V points at (see `pointer_to_objref_func`)
+static Value *emit_pointer_to_objref(jl_codectx_t &ctx, Value *V)
+{
+    assert(V->getType() == ctx.types().T_ptr);
+    Function *F = prepare_call(pointer_to_objref_func);
+    CallInst *Call = ctx.builder.CreateCall(F, V);
+    Call->setAttributes(F->getAttributes());
+    return Call;
+}
+
 static Value *emit_unbox(jl_codectx_t &ctx, Type *to, const jl_cgval_t &x, MaybeAlign align = MaybeAlign()) JL_CANSAFEPOINT;
 static void emit_unbox_store(jl_codectx_t &ctx, const jl_cgval_t &x, Value* dest, const jl_aliasinfo_t &ai_dest, MaybeAlign align_src, Align align_dst, bool isVolatile=false) JL_CANSAFEPOINT;
 
