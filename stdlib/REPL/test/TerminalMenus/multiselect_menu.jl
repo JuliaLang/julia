@@ -55,3 +55,8 @@ multi_menu = MultiSelectMenu(string.(1:10), charset=:ascii)
 @test simulate_input(multi_menu, :enter, :down, :enter, 'd') == Set([1,2])
 multi_menu = MultiSelectMenu(["single option"], charset=:ascii)
 @test simulate_input(multi_menu, :up, :up, :down, :enter, 'd') == Set([1])
+# select all, then toggle one off; select none; cancel
+multi_menu = MultiSelectMenu(string.(1:3), charset=:ascii)
+@test simulate_input(multi_menu, 'a', :enter, 'd') == Set([2, 3])
+@test simulate_input(multi_menu, 'A', 'n', :down, :enter, 'd') == Set([2])
+@test simulate_input(multi_menu, :enter, 'q') == Set{Int}()

@@ -93,8 +93,8 @@ function test_repr(x::String, remove_linenums::Bool = false)
     end
 
     x4 = Base.remove_linenums!(Meta.parse(x))
-    x5 = eval(Base.remove_linenums!(Meta.parse(repr(x4))))
-    x6 = eval(Base.remove_linenums!(Meta.parse(repr(x5))))
+    x5 = Base.remove_linenums!(eval(Meta.parse(repr(x4))))
+    x6 = Base.remove_linenums!(eval(Meta.parse(repr(x5))))
     if ! (x4 == x5 == x6)
         error(string(
             "\nrepr test (Rule 2) without line numbers failed:",
@@ -1106,7 +1106,7 @@ end
             end
             lower = textwidth("\"\" ⋯ $(ncodeunits(str)) bytes ⋯ \"\"")
             limit = max(limit, lower)
-            if textwidth(str) + 2 ≤ limit+1 && !contains(out, '⋯')
+            if textwidth(str) + 2 ≤ limit && !contains(out, '⋯')
                 @test eval(Meta.parse(out)) == str
             else
                 @test limit-2 <= textwidth(out) <= limit
@@ -1121,6 +1121,19 @@ end
                     ncodeunits(head) + skip + ncodeunits(tail)
             end
         end
+    end
+
+    @testset "escaped characters" begin
+        for chunk in ("\0", "\"", "\\", "\$", "\xff", "\x01\n", "\0" * "7", "\u0085a", "\U0001FFFEF")
+            str = chunk^1000
+            out = sprint(io -> show(io, MIME"text/plain"(), str; limit=80))
+            @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 80
+            @test sprint(io -> show(io, MIME"text/plain"(), chunk; limit=80)) == repr(chunk)
+        end
+        @test textwidth(sprint(io -> show(io, MIME"text/plain"(), "\""^82; limit=20))) <= 20
+        str = "\x01"^15
+        out = sprint(io -> show(io, MIME"text/plain"(), str; limit=25))
+        @test occursin(r" ⋯ \d+ bytes ⋯ ", out) && textwidth(out) <= 25
     end
 
     @testset "default elision limit" begin
@@ -1425,6 +1438,7 @@ z856739 = [:a, :b]
                         LineNumberNode(0, :none), "a b c")) == ":(#= none:0 =# (Core).@cmd \"a b c\")"
 @test_repr "`a b c`"
 @test sprint(show, Meta.parse("`a b c`")) == ":(`a b c`)"
+@test_repr "`echo \\`x\\` \\\\\\``"
 # a"b" and a"b"c
 @test_repr "a\"b\""
 @test_repr "a\"b\"c"
@@ -1627,6 +1641,10 @@ test_repr("(:).a")
 @test repr(NTuple) == "NTuple{N, T} where {N, T}"
 @test repr(Tuple{NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "NTuple{5, NTuple{N, T} where T} where N"
 @test repr(Tuple{Float64, NTuple{N}, Vararg{NTuple{N}, 4}} where N) == "Tuple{Float64, Vararg{NTuple{N, T} where T, 5}} where N"
+@test repr(Tuple{String, Vararg}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any}}) == "Tuple{String, Vararg}"
+@test repr(Tuple{String, Vararg{Any, N}} where N) == "Tuple{String, Vararg{Any, N}} where N"
+@test repr(Vararg{Any}) == "Vararg{Any}"
 
 # Test printing of NamedTuples using the macro syntax
 @test repr(@NamedTuple{kw::Int64}) == "@NamedTuple{kw::Int64}"
@@ -3272,12 +3290,11 @@ using .Issue49382
 @test sprint(show, methods(Issue49382.Type49382)) isa String
 
 # Showing of bad SlotNumber in Expr(:toplevel)
-let lowered = Meta.lower(Main, Expr(:let, Expr(:block), Expr(:block, Expr(:toplevel, :(x = 1)), :(y = 1))))
+let lowered = Meta.lower(Main, :(let y = 1; end))
     ci = lowered.args[1]
     @assert isa(ci, Core.CodeInfo)
     @test !isempty(ci.slotnames)
-    @assert ci.code[1].head === :toplevel
-    ci.code[1].args[1] = :($(Core.SlotNumber(1)) = 1)
+    ci.code[1] = Expr(:toplevel, Expr(:block, :($(Core.SlotNumber(1)) = 1)))
     # Check that this gets printed as `_1 = 1` not `y = 1`
     @test contains(sprint(show, ci), "_1 = 1")
 end

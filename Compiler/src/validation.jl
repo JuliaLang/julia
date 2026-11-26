@@ -208,9 +208,7 @@ a `CodeInfo` instance associated with `mi`.
 """
 function validate_code!(errors::Vector{InvalidCodeError}, mi::Core.MethodInstance, c::Union{Nothing,CodeInfo})
     is_top_level = mi.def isa Module
-    if is_top_level
-        mnargs = 0
-    else
+    if !is_top_level
         m = mi.def::Method
         mnargs = Int(m.nargs)
         n_sig_params = length((unwrap_unionall(m.sig)::DataType).parameters)

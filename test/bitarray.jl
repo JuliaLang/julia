@@ -168,6 +168,10 @@ timesofar("promotions")
         let b1 = trues(1)
             @test all(copyto!(b1, []))
         end
+        let b1 = bitrand(200)
+            r1 = reverse(b1)
+            @test copyto!(b1, view(b1, 200:-1:1)) == r1
+        end
         for n in [1; 1023:1025]
             b1 = falses(n)
             for m in [1; 10; 1023:1025]
@@ -237,6 +241,15 @@ timesofar("promotions")
         b2 = copy(b1)
         resize!(b1, 63; first=true)
         @test b1[32:63] == b2
+    end
+
+    @testset "sizehint! with non-Int sizes" begin
+        for sz in (UInt(100), Int32(100), Int8(100))
+            b1 = bitrand(3)
+            b2 = copy(b1)
+            @test sizehint!(b1, sz) === b1
+            @test b1 == b2
+        end
     end
 
     @testset "sizeof (issue #7515)" begin

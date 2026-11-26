@@ -607,9 +607,16 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 // the other threads will just wait for an individual wake signal to resume
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_enter = cycleclock() );
                 int8_t gc_state = jl_gc_safe_enter(ptls);
+                jl_atomic_store_relaxed(&ptls->sleep_parked, 1);
                 jl_safepoint_take_sleep_lock(ptls); // This puts the thread in GC_SAFE and takes the sleep lock
                 while (may_sleep(ptls)) {
                     if (ptls->tid == 0) {
+                        if (jl_atomic_load_relaxed(&jl_exit_thread0_pending)) {
+                            // woken by jl_exit_thread0_wake, which leaves the accounting to us
+                            jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
+                            set_not_sleeping(ptls);
+                            break;
+                        }
                         task = wait_empty;
                         if (task && jl_atomic_load_relaxed(&n_threads_running) == 0) {
                             wasrunning = jl_atomic_fetch_add_relaxed(&n_threads_running, 1);
@@ -630,9 +637,15 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                 assert(jl_atomic_load_relaxed(&n_threads_running));
                 start_cycles = 0;
                 uv_mutex_unlock(&ptls->sleep_lock);
+                jl_atomic_store_relaxed(&ptls->sleep_parked, 0);
                 JULIA_DEBUG_SLEEPWAKE( ptls->sleep_leave = cycleclock() );
                 jl_gc_notify_task_resume(ct);
                 jl_gc_safe_leave(ptls, gc_state); // contains jl_gc_safepoint
+#ifndef _OS_WINDOWS_
+                // a fatal signal found this thread parked (see jl_exit_thread0_wake)
+                if (ptls->tid == 0 && jl_atomic_load_relaxed(&jl_exit_thread0_pending))
+                    jl_exit_thread0_pending_cb();
+#endif
                 if (task) {
                     assert(task == wait_empty);
                     wait_empty = NULL;

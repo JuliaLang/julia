@@ -7,7 +7,7 @@
 using Base, Core.IR
 
 import Base: show
-using Base: isexpr, prec_decl, show_unquoted, with_output_color
+using Base: isexpr, prec_decl, show_tuple_as_call, show_unquoted, with_output_color
 using .Compiler: ALWAYS_FALSE, ALWAYS_TRUE, BasicBlock, CFG, CachedMethodTable,
     DebugInfoStream, EMPTY_SPTYPES, Effects, IRCode, IncrementalCompact, InferenceResult,
     InferenceState, InvalidIRError, LimitedAccuracy, NativeInterpreter, StmtRange,
@@ -851,7 +851,7 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
     before_iter = Ref(1)
     after_iter = Ref(1)
 
-    return function get_new_node(idx::Int; attach_after=false)
+    function get_new_node(idx::Int; attach_after=false)
         iter = attach_after ? after_iter : before_iter
         iter[] <= length(new_nodes_perm) || return nothing
         node_idx = new_nodes_perm[iter[]]
@@ -877,6 +877,7 @@ function _new_nodes_iter(stmts, new_nodes, new_nodes_info, new_nodes_idx)
         node_idx += length(stmts)
         return node_idx, new_node_inst, new_node_type
     end
+    return get_new_node
 end
 
 function new_nodes_iter(ir::IRCode, new_nodes_idx=1)

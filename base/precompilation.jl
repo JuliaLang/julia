@@ -266,6 +266,9 @@ Base.@kwdef mutable struct PrecompileSession
     ext_to_parent::Dict{PkgId, PkgId}
     parent_to_exts::Dict{PkgId, Vector{PkgId}}
     triggers::Dict{PkgId, Vector{PkgId}}
+    loadable::Dict{PkgId, Vector{PkgId}}
+    extensions::Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}
+    env_path::String # the environment the graph was built from, or "" if there are several
     project_deps::Vector{PkgId}
     serial_deps::Vector{PkgId}
     circular_deps::Vector{PkgId}
@@ -289,6 +292,7 @@ Base.@kwdef mutable struct PrecompileSession
     was_processed::Dict{PkgConfig, Base.Event}
     stale_cache::Dict{StaleCacheKey, Bool}         = Dict{StaleCacheKey,Bool}()
     cachepath_cache::Dict{PkgId, Vector{String}}   = Dict{PkgId,Vector{String}}()
+    sourcespecs::Dict{PkgId, Union{Nothing,Base.PkgLoadSpec}} = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}()
     # cache files accepted without reading them, because their checksums passed earlier in this process
     unverified::Set{String}                        = Set{String}()
     pkg_queue::Vector{PkgConfig}                   = PkgConfig[]
@@ -582,7 +586,7 @@ function ExplicitEnv(::Nothing, envpath::String="")
 end
 function ExplicitEnv(envpath::String)
     # Handle missing project file by creating an empty environment
-    if !isfile(envpath) || project_file_manifest_path(envpath) === nothing
+    if !isfile(envpath)
         envpath = abspath(envpath)
         return ExplicitEnv(nothing, envpath)
     end
@@ -629,6 +633,12 @@ function ExplicitEnv(envpath::String)
         names[proj_uuid] = proj_name
     end
 
+    manifest = project_file_manifest_path(envpath)
+    # A project of only stdlibs needs no manifest, since each stdlib's Project.toml lists its deps.
+    stdlibs_only = manifest === nothing && !project_is_package && !isempty(project_deps) &&
+        all(((name, uuid),) -> Base.is_stdlib(PkgId(uuid, name)), project_deps)
+    manifest === nothing && !stdlibs_only && return ExplicitEnv(nothing, envpath)
+
     project_extensions = Dict{String, Vector{UUID}}()
     # Collect all extensions of the project
     for (name, triggers) in get(Dict{String, Any}, project_d, "extensions")::Dict{String, Any}
@@ -648,7 +658,6 @@ function ExplicitEnv(envpath::String)
         project_extensions[name] = uuids
     end
 
-    manifest = project_file_manifest_path(envpath)
     manifest_d = manifest === nothing ? Dict{String, Any}() : parsed_toml(manifest)
 
     # Dependencies in a manifest can either be stored compressed (when name is unique among all packages)
@@ -658,6 +667,11 @@ function ExplicitEnv(envpath::String)
     extensions = Dict{UUID, Dict{String, Vector{String}}}()
     name_to_uuid = Dict{String, UUID}()
     lookup_strategy = Dict{UUID, Union{SHA1, String, Nothing, Missing}}()
+    if stdlibs_only
+        for uuid in values(project_deps)
+            lookup_strategy[uuid] = nothing
+        end
+    end
 
     sizehint!(deps, length(manifest_d))
     sizehint!(weakdeps, length(manifest_d))
@@ -733,14 +747,6 @@ function ExplicitEnv(envpath::String)
     sizehint!(weakdeps_expanded, length(deps))
     sizehint!(extensions_expanded, length(deps))
 
-    if proj_name !== nothing && proj_uuid !== nothing
-        deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
-        extensions_expanded[proj_uuid] = project_extensions
-        path = get(project_d, "path", nothing)::Union{String, Nothing}
-        entry_point = path !== nothing ? path : dirname(envpath)
-        lookup_strategy[proj_uuid] = entry_point
-    end
-
     for key in ["deps", "weakdeps"]
         d = key == "deps" ? deps :
             key == "weakdeps" ? weakdeps :
@@ -768,16 +774,31 @@ function ExplicitEnv(envpath::String)
     end
 
     for (pkg, exts) in extensions
+        # a trigger names one of the package's own dependencies, which matters when a name is not unique
+        own = Dict{String, UUID}()
+        for d in (weakdeps_expanded, deps_expanded), uuid in get(Vector{UUID}, d, pkg)
+            own[names[uuid]] = uuid
+        end
         exts_expanded = Dict{String, Vector{UUID}}()
         for (ext, triggers) in exts
             triggers_expanded = UUID[]
             sizehint!(triggers_expanded, length(triggers))
             for trigger in triggers
-                push!(triggers_expanded, name_to_uuid[trigger])
+                push!(triggers_expanded, get(() -> name_to_uuid[trigger], own, trigger))
             end
             exts_expanded[ext] = triggers_expanded
         end
         extensions_expanded[pkg] = exts_expanded
+    end
+
+    # Loading takes the project's dependencies and extensions from its own file, also when
+    # the manifest has an entry for it, as it does for a workspace member.
+    if proj_name !== nothing && proj_uuid !== nothing
+        deps_expanded[proj_uuid] = filter!(!=(proj_uuid), collect(values(project_deps)))
+        extensions_expanded[proj_uuid] = project_extensions
+        path = get(project_d, "path", nothing)::Union{String, Nothing}
+        entry_point = path !== nothing ? path : dirname(envpath)
+        lookup_strategy[proj_uuid] = entry_point
     end
 
     fixup_stdlib_deps!(deps_expanded, weakdeps_expanded, extensions_expanded, names, lookup_strategy)
@@ -895,9 +916,13 @@ function fixup_stdlib_deps!(deps::Dict{UUID, Vector{UUID}}, weakdeps::Dict{UUID,
             push!(pkg_weakdeps, dep_uuid)
             get!(names, dep_uuid, dep_name)
         end
-        pkg_extensions = get!(Dict{String, Vector{UUID}}, extensions, uuid)
+        # The extensions are those of the copy that gets loaded: the manifest's for a path or
+        # an installed tree, and the ones listed here for the stdlib itself.
+        strategy = lookup_strategy[uuid]
+        strategy isa String && continue
+        strategy isa SHA1 && Base.find_installed_tree(PkgId(uuid, name), strategy) !== nothing && continue
+        pkg_extensions = empty!(get!(Dict{String, Vector{UUID}}, extensions, uuid))
         for (ext, triggers) in project_extensions
-            haskey(pkg_extensions, ext) && continue
             triggers = triggers isa String ? [triggers] : triggers::Vector{String}
             trigger_uuids = UUID[]
             for trigger in triggers
@@ -1020,12 +1045,15 @@ function visit_indirect_deps!(direct_deps::Dict{PkgId, Vector{PkgId}}, visited::
 end
 
 # Build dependency graph from an ExplicitEnv.
-# Returns a NamedTuple of (direct_deps, ext_to_parent, parent_to_exts, triggers, project_deps, serial_deps).
+# Returns a NamedTuple of (direct_deps, ext_to_parent, parent_to_exts, triggers, loadable, extensions, project_deps, serial_deps).
 function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, requested_pkgids::Vector{PkgId})
     direct_deps = Dict{PkgId, Vector{PkgId}}()
     parent_to_exts = Dict{PkgId, Vector{PkgId}}()
     ext_to_parent = Dict{PkgId, PkgId}()
     triggers = Dict{PkgId, Vector{PkgId}}()
+    # What code loading resolves for each node, which workers are handed instead of looking it up:
+    loadable = Dict{PkgId, Vector{PkgId}}() # the packages it may load by name
+    extensions = Dict{PkgId, Vector{Pair{String, Vector{PkgId}}}}() # all its extensions and their triggers
 
     # Determine which packages to consider for precompilation by walking
     # transitive dependencies from the appropriate roots.
@@ -1041,10 +1069,15 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         pkg = PkgId(dep, env.names[dep])
         Base.in_sysimage(pkg) && continue
         deps = [PkgId(x, env.names[x]) for x in env.deps[dep]]
+        # a name is the first dependency listed with it, as in the manifest
+        loadable[pkg] = unique(d -> d.name, deps)
         direct_deps[pkg] = filter!(!Base.in_sysimage, deps)
+        extensions[pkg] = Pair{String, Vector{PkgId}}[]
         for (ext_name, trigger_uuids) in get(Dict{String, Vector{UUID}}, env.extensions, dep)
             ext_uuid = Base.uuid5(pkg.uuid, ext_name)
             ext = PkgId(ext_uuid, ext_name)
+            ext_triggers = PkgId[PkgId(x, env.names[x]) for x in trigger_uuids]
+            push!(extensions[pkg], ext_name => ext_triggers)
             triggers[ext] = PkgId[pkg]
             all_triggers_available = true
             for trigger_uuid in trigger_uuids
@@ -1058,6 +1091,9 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
             end
             all_triggers_available || continue
             ext_to_parent[ext] = pkg
+            # an extension may load its parent, its triggers, and what its parent may load
+            loadable[ext] = unique(d -> d.name, PkgId[pkg; ext_triggers; loadable[pkg]])
+            extensions[ext] = Pair{String, Vector{PkgId}}[]
             direct_deps[ext] = filter(!Base.in_sysimage, triggers[ext])
             if !haskey(parent_to_exts, pkg)
                 parent_to_exts[pkg] = PkgId[ext]
@@ -1139,7 +1175,7 @@ function build_dep_graph(env::ExplicitEnv, manifest::Bool, _from_loading::Bool, 
         end
     end
 
-    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, project_deps, serial_deps)
+    return (; direct_deps, ext_to_parent, parent_to_exts, triggers, loadable, extensions, project_deps, serial_deps)
 end
 
 # Detect circular dependencies and notify their Events so waiting tasks can skip them.
@@ -1191,10 +1227,42 @@ function filter_dep_graph!(direct_deps, pkg_names, ext_to_parent, requested_pkgi
     return isempty(direct_deps)
 end
 
-# Include only cache files that are ready for workers.
-function preresolved_snapshot(s::PrecompileSession)
-    paths = @lock s.cache_lock Pair{Base.PkgId,String}[k => first(v) for (k, v) in s.cachepath_cache if !isempty(v)]
-    return filter!(kv -> checked_now!(s, kv.second), paths)
+# What this session resolved for everything a worker precompiling `pkg` may load, so that
+# the worker does not look any of it up again. The dependencies of `pkg` are done by now.
+function preresolved_closure(s::PrecompileSession, pkg::PkgId)
+    load_path = Base.load_path()
+    # the graph only says what the environment it was built from resolves
+    resolved = !isempty(load_path) && abspath(load_path[1]) == s.env_path
+    nodes = PkgId[pkg]
+    seen = Set{PkgId}(nodes)
+    loadable = Vector{PkgId}[]
+    extensions = Union{Nothing, Vector{Pair{String, Vector{PkgId}}}}[]
+    @lock s.print_lock begin # the drainer extends the graph under this lock
+        i = 0
+        while i < length(nodes)
+            node = nodes[i += 1]
+            for dep in get(Vector{PkgId}, s.direct_deps, node)
+                dep in seen && continue
+                push!(seen, dep)
+                push!(nodes, dep)
+            end
+            push!(loadable, resolved ? get(Vector{PkgId}, s.loadable, node) : PkgId[])
+            push!(extensions, resolved ? get(s.extensions, node, nothing) : nothing)
+        end
+    end
+    sourcespecs = Vector{Union{Nothing, Base.PkgLoadSpec}}(nothing, length(nodes))
+    cachefiles = Vector{Union{Nothing, String}}(nothing, length(nodes))
+    @lock s.cache_lock for (i, node) in enumerate(nodes)
+        resolved && (sourcespecs[i] = get(s.sourcespecs, node, nothing))
+        freshpaths = get(s.cachepath_cache, node, nothing)
+        freshpaths === nothing || isempty(freshpaths) || (cachefiles[i] = first(freshpaths))
+    end
+    for (i, path) in enumerate(cachefiles)
+        path === nothing || checked_now!(s, path) || (cachefiles[i] = nothing)
+    end
+    return Base.PreresolvedPkg[
+        Base.PreresolvedPkg(nodes[i], loadable[i], sourcespecs[i], cachefiles[i], UInt128(0), extensions[i])
+        for i in eachindex(nodes)]
 end
 
 # Workers and loading trust these paths without checks, so check a file the scan did not read.
@@ -2524,42 +2592,60 @@ function spawn_print_loop!(s::PrecompileSession)
     end
 end
 
-function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe, single_requested_pkg::Bool)
+function precompilepkgs_monitor_std(s::PrecompileSession, pkg_config, job::PrecompileJob, pipe::Base.PipeEndpoint, single_requested_pkg::Bool)
     pkg, _ = pkg_config
     liveprinting = false
     thistaskwaiting = false
-    while !eof(pipe)
-        str = readline(pipe, keep=true)
-        # the marker may follow package output that lacks a trailing newline
-        i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
-        if i !== nothing
-            job.verbose_timing = strip(SubString(str, first(i)))
-            str = str[1:prevind(str, first(i))]
-            isempty(str) && continue
-        end
-        if single_requested_pkg && (liveprinting || !isempty(str))
-            BG.monitoring && @lock s.print_lock begin
-                if !liveprinting
-                    liveprinting = true
-                    s.pkg_liveprinted = pkg
+    relay = true
+    try
+        while !eof(pipe)
+            str = readline(pipe, keep=true)
+            # the marker may follow package output that lacks a trailing newline
+            i = findfirst(Base.PRECOMPILE_VERBOSE_TIMING_MARKER, str)
+            if i !== nothing
+                job.verbose_timing = strip(SubString(str, first(i)))
+                str = str[1:prevind(str, first(i))]
+                isempty(str) && continue
+            end
+            write(job.output, str)
+            waiting = !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
+            if waiting
+                thistaskwaiting = true
+                job.waiting_for_bg = true
+            end
+            relay || continue
+            try
+                if single_requested_pkg && (liveprinting || !isempty(str))
+                    BG.monitoring && @lock s.print_lock begin
+                        if !liveprinting
+                            liveprinting = true
+                            s.pkg_liveprinted = pkg
+                        end
+                        # in fancy mode clear the progress bar residue from the line first
+                        print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                    end
                 end
-                # in fancy mode clear the progress bar residue from the line first
-                print(s.io, s.fancyprint ? ansi_cleartoendofline : "", str)
+                if waiting
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
+                    end
+                elseif !thistaskwaiting
+                    # XXX: don't just re-enable IO for random packages without printing the context for them first
+                    !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
+                        print(s.io, str)
+                    end
+                end
+            catch err
+                err isa InterruptException && rethrow()
+                # keep draining so the worker cannot block on a full pipe,
+                # and let the final report show the captured output instead
+                relay = false
+                @lock s.print_lock (s.pkg_liveprinted == pkg && (s.pkg_liveprinted = nothing))
             end
         end
-        write(job.output, str)
-        if !thistaskwaiting && occursin("Waiting for background task / IO / timer", str)
-            thistaskwaiting = true
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                println(s.io, full_name(s.ext_to_parent, pkg), color_string(str, Base.warn_color(), s.hascolor))
-            end
-            job.waiting_for_bg = true
-        elseif !thistaskwaiting
-            # XXX: don't just re-enable IO for random packages without printing the context for them first
-            !liveprinting && !s.fancyprint && BG.monitoring && @lock s.print_lock begin
-                print(s.io, str)
-            end
-        end
+    finally
+        # closing the reader unblocks the worker's writes if draining stops early
+        close(pipe)
     end
 end
 
@@ -2693,6 +2779,7 @@ function spawn_precompile_tasks!(s::PrecompileSession;
     batch_tasks = Task[]
     sourcespecs = Dict{PkgId,Union{Nothing,Base.PkgLoadSpec}}(pkg => Base.locate_package_load_spec(pkg) for pkg in keys(direct_deps))
     priorities = SchedulePriorities(direct_deps, sourcespecs)
+    @lock s.cache_lock merge!(s.sourcespecs, sourcespecs)
     for (pkg, deps) in direct_deps
         cachepaths = Base.find_all_in_cache_path(pkg)
         freshpaths = String[]
@@ -2782,8 +2869,18 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                     end
                     Base.acquire(s.parallel_limiter; priority=schedule_priority(priorities, pkg), cancel=() -> should_stop(s))
 
-                    std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_pipe,
+                    # The worker gets the write end as a raw handle. Opening it here as well would
+                    # bind it to our IOCP on Windows, after which every write in the worker takes a
+                    # thread-pool round trip; with output-heavy packages under load that is minutes.
+                    std_rd, std_wr = Base.link_pipe(true, true)
+                    std_out = try
+                        Base.open_pipe!(Base.PipeEndpoint(), std_rd)
+                    catch
+                        Base.close_pipe_sync(std_rd)
+                        Base.close_pipe_sync(std_wr)
+                        rethrow()
+                    end
+                    t_monitor = Threads.@spawn :samepool precompilepkgs_monitor_std(s, pkg_config, job, std_out,
                         single_requested_pkg)
 
                     name = describe_pkg(s, pkg, is_project_dep, is_serial_dep, flags, cacheflags)
@@ -2812,10 +2909,10 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 pid > 0 && @lock s.print_lock set_pid!(job, pid)
                             end)
                             t = @elapsed ret = begin
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
-                                                  preresolved=preresolved_snapshot(s))
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         else
                             fullname = full_name(s.ext_to_parent, pkg)
@@ -2838,10 +2935,10 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                                 s.logcalls === CoreLogging.Debug && @lock s.print_lock begin
                                     @debug "Precompiling $(repr(MIME"text/plain"(), pkg))"
                                 end
-                                Base.compilecache(pkg, sourcespec, std_pipe, std_pipe, !s.ignore_loaded;
+                                Base.compilecache(pkg, sourcespec, std_wr, std_wr, !s.ignore_loaded;
                                                   flags=flags_, cacheflags, loadable_exts, signal_channel=make_signal_channel(),
                                                   pid_channel=pid_ch, report_timing=true,
-                                                  preresolved=preresolved_snapshot(s))
+                                                  preresolved=preresolved_closure(s, pkg))
                             end
                         end
                         if ret isa Exception
@@ -2883,8 +2980,6 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     catch err
-                        close(std_pipe.in)
-                        wait(t_monitor)
                         err isa InterruptException && rethrow()
                         # If cancel was requested, this failure is almost certainly the
                         # subprocess being SIGKILL'd by the cancel; don't report it as
@@ -2896,11 +2991,14 @@ function spawn_precompile_tasks!(s::PrecompileSession;
                             end
                         end
                     finally
-                        isopen(std_pipe.in) && close(std_pipe.in)
-                        wait(t_monitor)
-                        try; close(pid_ch); catch; end
-                        @lock s.print_lock clear_pid!(job)
-                        Base.release(s.parallel_limiter)
+                        try
+                            Base.close_pipe_sync(std_wr)
+                            wait(t_monitor)
+                        finally
+                            try; close(pid_ch); catch; end
+                            @lock s.print_lock clear_pid!(job)
+                            Base.release(s.parallel_limiter)
+                        end
                     end
                 else
                     if !is_stale
@@ -2962,6 +3060,9 @@ function drain_work_channel!(s::PrecompileSession, work_channel::Channel{Precomp
                     merge!(s.ext_to_parent, new_graph.ext_to_parent)
                     merge!(s.parent_to_exts, new_graph.parent_to_exts)
                     merge!(s.triggers, new_graph.triggers)
+                    merge!(s.loadable, new_graph.loadable)
+                    merge!(s.extensions, new_graph.extensions)
+                    new_env.path == s.env_path || (s.env_path = "")
                     union!(s.project_deps, new_graph.project_deps)
                     union!(s.serial_deps, new_graph.serial_deps)
                     union!(s.requested_pkgids, effective_pkgids)
@@ -3099,12 +3200,14 @@ function report_precompile_results!(s::PrecompileSession)
         if !quick_exit
             logstr = sprint(context=s.logio) do iostr
                 if s.fancyprint
+                    # loading also requests the extensions it makes loadable, so leave them out
+                    names = [p.name for p in s.requested_pkgids if !haskey(s.ext_to_parent, p)]
                     what = if s.n_batches > 1
                         "done."
-                    elseif isempty(s.requested_pkgids) || s.requested_all
+                    elseif isempty(names) || s.requested_all
                         "packages finished."
                     else
-                        "$(join((full_name(s.ext_to_parent, p) for p in s.requested_pkgids), ", ", " and ")) finished."
+                        "$(join(names, ", ", " and ")) finished."
                     end
                     printpkgstyle(iostr, :Precompiling, what)
                 end
@@ -3432,7 +3535,8 @@ function do_precompile(pkgs::Union{Vector{String}, Vector{PkgId}},
         start_loaded_modules=Set{PkgId}(keys(Base.loaded_modules)), requested_pkgids, requested_all,
         direct_deps=graph.direct_deps,
         ext_to_parent=graph.ext_to_parent, parent_to_exts=graph.parent_to_exts,
-        triggers=graph.triggers, project_deps=graph.project_deps,
+        triggers=graph.triggers, loadable=graph.loadable, extensions=graph.extensions,
+        env_path=env.path, project_deps=graph.project_deps,
         serial_deps=graph.serial_deps, circular_deps,
         n_total=length(graph.direct_deps) * nconfigs,
         printloop_should_exit=!fancyprint, target,

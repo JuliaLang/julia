@@ -727,7 +727,7 @@ Invariants:
                                    Dict{ClosureKey,SyntaxTree}())
     ex_out = closure_convert_lambda(ctx_out, ex, children(ex[3]))
     if !isempty(ctx_out.toplevel_stmts)
-        throw(LoweringError(first(ctx_out.toplevel_stmts), "Top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
+        throw(LoweringError(first(ctx_out.toplevel_stmts), "top level code was found outside any top level context. `@generated` functions may not contain closures, including `do` syntax and generators/comprehension"))
     end
     ctx_out, flatten_blocks(ex_out)
 end

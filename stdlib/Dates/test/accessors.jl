@@ -49,7 +49,7 @@ end
     # test_dates(-10000, 10000) takes about 15 seconds
     # test_dates(year(typemin(Date)), year(typemax(Date))) is full range
     # and would take.......a really long time
-    let from=0, to=2100, y=0, m=0, d=0
+    let from=0, to=2100
         test_day = Dates.totaldays(from, 1, 1)
         for y in from:to
             for m = 1:12
@@ -65,7 +65,7 @@ end
 end
 
 @testset "year, month, day, hour, minute" begin
-    let y=0, m=0, d=0, h=0, mi=0
+    let y=0
         for m = 1:12
             for d = 1:Dates.daysinmonth(y, m)
                 for h = 0:23
@@ -85,7 +85,7 @@ end
     end
 end
 @testset "second, millisecond" begin
-    let y=0, m=0, d=0, h=0, mi=0, s=0, ms=0
+    let mi=0
         for y in [-2013, -1, 0, 1, 2013]
             for m in [1, 6, 12]
                 for d in [1, 15, Dates.daysinmonth(y, m)]
@@ -108,7 +108,7 @@ end
     end
 end
 @testset "year, month, day, hour, minute, second over many years" begin
-    let from=0, to=2100, y=0, m=0, d=0
+    let from=0, to=2100
         for y in from:to
             for m = 1:12
                 for d = 1:Dates.daysinmonth(y, m)
@@ -122,7 +122,7 @@ end
     end
 
     # test hour, minute, second
-    let h=0, mi=0, s=0, ms=0, us=0, ns=0
+    let
         for h = (0, 23), mi = (0, 59), s = (0, 59),
             ms in (0, 1, 500, 999), us in (0, 1, 500, 999), ns in (0, 1, 500, 999)
             t = Dates.Time(h, mi, s, ms, us, ns)
@@ -193,6 +193,7 @@ end
     end
 end
 @testset "ISO year utils" begin
+    @test Dates.isoyear(Date(2021, 1, 1)) == Year(2020)
     # Tests from https://www.epochconverter.com/weeks
     @test Dates.weeksinyear(Dates.Year(2023)) == 52
     @test Dates.weeksinyear(Dates.Year(2022)) == 52

@@ -248,10 +248,15 @@ static int egal_types(const jl_value_t *a, const jl_value_t *b, jl_typeenv_t *en
     if (dtag == jl_vararg_tag << 4) {
         jl_vararg_t *vma = (jl_vararg_t*)a;
         jl_vararg_t *vmb = (jl_vararg_t*)b;
-        jl_value_t *vmaT = vma->T ? vma->T : (jl_value_t*)jl_any_type;
-        jl_value_t *vmbT = vmb->T ? vmb->T : (jl_value_t*)jl_any_type;
-        if (!egal_types(vmaT, vmbT, env, tvar_names))
+        // compare `T` as stored, like `jl_egal`: tuple construction turns a
+        // bare `Vararg` into `Vararg{Any}`, so no type holds an unset `T`
+        if (vma->T && vmb->T) {
+            if (!egal_types(vma->T, vmb->T, env, tvar_names))
+                return 0;
+        }
+        else if (vma->T || vmb->T) {
             return 0;
+        }
         if (vma->N && vmb->N)
             return egal_types(vma->N, vmb->N, env, tvar_names);
         return !vma->N && !vmb->N;
@@ -1937,7 +1942,7 @@ JL_CALLABLE(jl_f__import)
     else if (nargs == 5) {
         JL_TYPECHK(_import, symbol, args[3]);
         JL_TYPECHK(_import, bool, args[4]);
-        jl_module_import(jl_current_task, (jl_module_t *)args[0], (jl_module_t *)args[1],
+        jl_module_import((jl_module_t *)args[0], (jl_module_t *)args[1],
                          (jl_sym_t *)args[2], (jl_sym_t *)args[3], args[4] == jl_true);
     }
     return jl_nothing;

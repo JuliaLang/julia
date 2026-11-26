@@ -11,7 +11,7 @@
 #define UNAVAILABLE { jl_errorf("%s: not available in this build of Julia", __func__); }
 
 #ifdef JL_LIBRARY_STATIC
-#include "jl_static_codegen_fallbacks.inc"
+#include <jl_static_codegen_fallbacks.inc>
 #endif
 
 JL_DLLEXPORT void jl_dump_native_fallback(void *native_code,
@@ -173,6 +173,8 @@ JL_DLLEXPORT void *jl_get_llvm_function_fallback(void *native_code, uint32_t idx
 JL_DLLEXPORT LLVMOrcThreadSafeModuleRef jl_get_llvm_module_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void jl_free_native_fallback(void *native_code) UNAVAILABLE
+
+JL_DLLEXPORT int jl_native_code_is_empty_fallback(void *native_code) UNAVAILABLE
 
 JL_DLLEXPORT void *jl_type_to_llvm_fallback(jl_value_t *jt, LLVMContextRef llvmctxt, bool_t *isboxed) UNAVAILABLE
 

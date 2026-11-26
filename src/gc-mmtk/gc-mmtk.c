@@ -71,6 +71,7 @@ void jl_gc_init(void) {
 
     arraylist_new(&to_finalize, 0);
     arraylist_new(&finalizer_list_marked, 0);
+    jl_init_shared_free_stacks();
     gc_num.interval = default_collect_interval;
     gc_num.allocd = 0;
     gc_num.max_pause = 0;
@@ -920,6 +921,7 @@ JL_DLLEXPORT void jl_gc_mmtk_sweep_stack_pools(void)
 JL_DLLEXPORT void jl_gc_sweep_stack_pools_and_mtarraylist_buffers(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
     jl_gc_mmtk_sweep_stack_pools();
+    gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
 }
 
@@ -1158,6 +1160,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_small_alloc(jl_ptls_t ptls, int offset, int osize
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_default(ptls, osize, 16, NULL);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, osize, (jl_datatype_t*)type);
     return val;
 }
@@ -1169,6 +1172,7 @@ JL_DLLEXPORT jl_value_t *jl_gc_big_alloc(jl_ptls_t ptls, size_t sz, jl_value_t *
     assert(jl_atomic_load_relaxed(&ptls->gc_state) == 0);
 
     jl_value_t *val = jl_mmtk_gc_alloc_big(ptls, sz);
+    jl_set_typeof(val, type);
     maybe_record_alloc_to_profile(val, sz, (jl_datatype_t*)type);
     return val;
 }

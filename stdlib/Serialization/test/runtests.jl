@@ -722,9 +722,24 @@ end
 if Int === Int64
     let f_data = "N0pMGgQAAAAWAQEFdGh1bmsbFUbnFgEBBXRodW5rGxVG4DoWAQEGbWV0aG9kAQtmMTExX3RvXzExMhUABuABAAAA4BUAB+AAAAAAThVG4DQQAQxMaW5lSW5mb05vZGUfTptEH04BBE1haW5EAQ90b3AtbGV2ZWwgc2NvcGUBBG5vbmW+vhUAAd8V305GTk4JAQAAAAAAAAAJ//////////9MTExMAwADAAUAAAX//xYBAQZtZXRob2QsBwAWAlYkH06bRAEGVHlwZW9mLAcAFgNWJB9Om0QBBHN2ZWMo4iQfTptETxYBViQfTptEAQRzdmVjFgRWJB9Om0QBBHN2ZWMo4yjkGhfgAQRub25lFgMBBm1ldGhvZCwHACjlGxVG5AEBXhYDViQfTptElyQfTp5EAQNWYWzhFgFWKOEWBFYkH06eRAELbGl0ZXJhbF9wb3co4CXhKOI6KOMVAAbkAQAAAAEAAAABAAAAAQAAAAAAAADkFQAH5AAAAAAAAAAAAAAAAAAAAAAAAAAAThVG4DQsCwAfTgEETWFpbkQBBG5vbmUBBG5vbmW/vhUAAeGifRXhAAhORk5OCQEAAAAAAAAACf//////////TExMTAMAAwAFAAAF//86ThUABucBAAAAAQAAAAEAAAABAAAAAQAAAAEAAAABAAAAAAAAAOcVAAfnAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABOFUbgNCwLAB9OAQRNYWluRCwNAAEEbm9uZb6+FQAB3xXfTkZOTgkBAAAAAAAAAAn//////////0xMTEwDAAMABQAABf//"
         @eval Main function f111_to_112 end
-        Core.eval(Main, with(Serialization.current_module => Main) do
-                 deserialize(IOBuffer(base64decode(f_data)))
-             end)
+        ex = with(Serialization.current_module => Main) do
+            deserialize(IOBuffer(base64decode(f_data)))
+        end
+        # v1.11 lowering returns the creation of the generic function from a nested thunk,
+        # whose rewrite into a `Core.define_method` call must not stay in the `return`
+        function returns_expr(src::Core.CodeInfo)
+            for stmt in src.code
+                isa(stmt, Core.ReturnNode) && isdefined(stmt, :val) && isa(stmt.val, Expr) &&
+                    return true
+                Meta.isexpr(stmt, :thunk) && (@__FUNCTION__)(stmt.args[1]::Core.CodeInfo) &&
+                    return true
+            end
+            return false
+        end
+        @test !returns_expr(ex.args[1]::Core.CodeInfo)
+        @test Core.eval(Main, (ex.args[1]::Core.CodeInfo).code[1]) ===
+            @invokelatest getglobal(Main, :f111_to_112)
+        Core.eval(Main, ex)
         @test @invokelatest(Main.f111_to_112(16)) == 256
     end
 end
@@ -761,4 +776,51 @@ end
 
     @test new_d[:m] isa Memory
     @test new_d[:m][5] == 125
+end
+
+function serialize_roundtrip(x)
+    buf = IOBuffer()
+    serialize(buf, x)
+    seekstart(buf)
+    return deserialize(buf)
+end
+
+module SerializeMethodFields
+serrec(x) = x
+end
+
+@testset "serialization errors" begin
+    @test_throws "cannot serialize MethodCache objects" serialize(IOBuffer(), Core.methodtable.cache)
+    @test_throws "GenericMemory{:atomic} currently cannot be serialized" serialize(IOBuffer(), AtomicMemory{Int}(undef, 1))
+end
+
+@testset "MethodInstance, MethodTable and PhiNode" begin
+    m = which(SerializeMethodFields.serrec, (Int,))
+    mi = Base.specialize_method(m, Tuple{typeof(SerializeMethodFields.serrec), Int}, Core.svec())
+    mi2 = serialize_roundtrip(mi)
+    @test mi2 isa Core.MethodInstance
+    @test mi2.specTypes == mi.specTypes
+    @test mi2.def.sig == m.sig
+    @test serialize_roundtrip(Core.methodtable) === Core.methodtable
+    phi = Core.PhiNode(Int32[1, 2], Any[3, 4])
+    phi2 = serialize_roundtrip(phi)
+    @test phi2.edges == phi.edges && phi2.values == phi.values
+end
+
+@testset "finished Tasks" begin
+    t = Task(() -> error("task failed"))
+    schedule(t)
+    @test_throws TaskFailedException wait(t)
+    t2 = serialize_roundtrip(t)
+    @test istaskfailed(t2)
+    @test t2.result.ex == ErrorException("task failed")
+end
+
+@testset "reset_state" begin
+    s = Serializer(IOBuffer())
+    serialize(s, [1, 2])
+    @test s.counter > 0
+    @test Serialization.reset_state(s) === s
+    @test s.counter == 0
+    @test isempty(s.backref_table)
 end

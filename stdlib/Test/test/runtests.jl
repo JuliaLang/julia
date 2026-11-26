@@ -104,6 +104,26 @@ end
     @test isapprox(1, 2, atol=0; atol)
     @test isapprox(1, 3, atol=0; atol) atol=1
 end
+@testset "malformed test macro calls" begin
+    # arguments after the test expression must be keyword arguments
+    @test_throws "invalid test macro call: @test 1 == 1 foo" macroexpand(@__MODULE__, :(@test 1 == 1 foo))
+    @test_throws "invalid test macro call: @test 1 == 1 broken(true)" macroexpand(@__MODULE__, :(@test 1 == 1 broken(true)))
+    for (msg, ex) in (
+            "cannot set broken keyword multiple times" => :(@test 1 == 1 broken=true broken=true),
+            "cannot set both skip and broken keywords" => :(@test 1 == 1 broken=true skip=true),
+            "invalid test macro call: @test_broken 1 == 1 2" => :(@test_broken 1 == 1 2),
+            "@test_throws requires at least 2 arguments" => :(@test_throws ErrorException),
+            "@test_throws expects 2 or 3 positional arguments" => :(@test_throws ErrorException 1 2 3),
+            "invalid @test_throws call: cannot set both skip and broken keywords" =>
+                :(@test_throws ErrorException f() broken=true skip=true),
+            "invalid @test_warn call: expected keyword argument, got foo" => :(@test_warn "x" f() foo),
+            "Expected function call, begin/end block or for loop as argument to @testset" => :(@testset 1),
+            "Malformed `let` expression is given" => :(@testset let x; end),
+            "@testset with a `let` argument cannot be customized" => :(@testset "a" let x = 1; end),
+            "Unexpected argument 1 to @testset" => :(@testset 1 begin end))
+        @test_throws msg macroexpand(@__MODULE__, ex)
+    end
+end
 @testset "@test should only evaluate the arguments once" begin
     g = Int[]
     f = (x) -> (push!(g, x); x)
@@ -1254,56 +1274,57 @@ end
     @test count(contains("Error During Test"), split(msg, '\n')) == 1 # 1 error
     test_properties_macro_source = runtests * ":6"
     test_properties2_macro_source = utils * ":2"
+    # Frames at `file:line` or `file:line:column`
+    atline(file, line) = contains(Regex("\\Q$(file):$(line)\\E(?!\\d)"))
 
     fail = failures[1]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 2 # @testset + test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 10), lines) == 1 # test
 
     fail = failures[2]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":11"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 11), lines) == 1 # test
 
     fail = failures[3]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":12"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 12), lines) == 1 # test
 
     fail = failures[4]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 5
     @test fail.testset == "Other tests" && fail.source == included * ":2" && fail.ex == "1 + 1 == 3"
-    @test count(contains(included * ":2"), lines) == 2 # @testset + test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(atline(included, 1), lines) == 1 # @testset
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 
     fail = failures[5]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 6
     @test fail.testset == "Other tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(included * ":2"), lines) == 1 # @testset
-    @test count(contains(included * ":3"), lines) == 1 # test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(atline(included, 1), lines) == 1 # @testset
+    @test count(atline(included, 3), lines) == 1 # test
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 
     fail = failures[6]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 8
     @test fail.testset == "Tests" && fail.source == test_properties2_macro_source && fail.ex == "isodd(value)"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":14"), lines) == 1 # include
-    @test count(contains(included * ":5"), lines) == 1 # test
+    @test count(atline(runtests, 9), lines) == 1 # @testset
+    @test count(atline(runtests, 14), lines) == 1 # include
+    @test count(atline(included, 5), lines) == 1 # test
 
     fail = failures[7]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 9
     @test fail.testset == "Tests" && fail.source == "none:0" && fail.ex == "false"
-    @test count(contains(runtests * ":10"), lines) == 1 # @testset
-    @test count(contains(runtests * ":14"), lines) == 1 # include
-    @test count(contains(included * ":8"), lines) == 1 # test
+    @test count(atline(runtests, 14), lines) == 1 # include
+    @test count(atline(included, 8), lines) == 1 # test
 
     fail = failures[8]; lines = split(fail.stacktrace, '\n')
     @test length(lines)/2 ≤ 5
     @test fail.testset == "Testset without source" && fail.source == included * ":10" && fail.ex == "false"
-    @test count(contains(included * ":10"), lines) == 2 # @testset + test
-    @test count(contains(runtests * ":10"), lines) == 0 # @testset (stop at the innermost testset)
+    @test count(contains(runtests), lines) == 0 # @testset (stop at the innermost testset)
 end
 
 let io = IOBuffer()

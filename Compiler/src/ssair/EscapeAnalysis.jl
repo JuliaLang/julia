@@ -381,7 +381,6 @@ function merge_alias_info(@nospecialize(xa), @nospecialize(ya))
             end
             return IndexableFields(infos)
         elseif isa(ya, Unindexable)
-            xinfos, yinfo = xa.infos, ya.info
             return merge_to_unindexable(ya, xa)
         else
             return true # handle conflicting case conservatively
@@ -763,7 +762,6 @@ end
 end
 
 @inline function propagate_alias_change!(estate::EscapeState, change::AliasChange)
-    anychange = false
     (; xidx, yidx) = change
     aliasset = estate.aliasset
     xroot = find_root!(aliasset, xidx)
@@ -826,7 +824,6 @@ struct LocalUse
 end
 
 function add_alias_escapes!(astate::AnalysisState, @nospecialize(v), ainfo::AInfo)
-    estate = astate.estate
     for x in ainfo
         isa(x, LocalUse) || continue # ignore def
         x = SSAValue(x.idx) # obviously this won't be true once we implement interprocedural AliasInfo
@@ -1150,7 +1147,7 @@ escape_builtin!(::typeof(Core.throw_methoderror), _...) = false
 
 function escape_builtin!(::typeof(ifelse), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 4 || return false
-    f, cond, th, el = args
+    _, cond, th, el = args
     ret = SSAValue(pc)
     condt = argextype(cond, astate.ir)
     if isa(condt, Const) && (cond = condt.val; isa(cond, Bool))
@@ -1168,7 +1165,7 @@ end
 
 function escape_builtin!(::typeof(typeassert), astate::AnalysisState, pc::Int, args::Vector{Any})
     length(args) == 3 || return false
-    f, obj, typ = args
+    _, obj, _typ = args
     ret = SSAValue(pc)
     add_alias_change!(astate, ret, obj)
     return false
@@ -1327,7 +1324,7 @@ function escape_builtin!(::typeof(getfield), astate::AnalysisState, pc::Int, arg
     else
         # this object has been used as array, but it is used as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
-        objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
+        escape_unanalyzable_obj!(astate, obj, objinfo)
         @label conservative_propagation
         # at the extreme case, a field of `obj` may point to `obj` itself
         # so add the alias change here as the most conservative propagation
@@ -1385,7 +1382,7 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     else
         # this object has been used as array, but it is used as struct here (i.e. should throw)
         # update obj's field information and just handle this case conservatively
-        objinfo = escape_unanalyzable_obj!(astate, obj, objinfo)
+        escape_unanalyzable_obj!(astate, obj, objinfo)
         @label conservative_propagation
         # the field couldn't be analyzed: alias this object to the value being assigned
         # as the most conservative propagation (as required for ArgAliasing)
@@ -1399,8 +1396,8 @@ function escape_builtin!(::typeof(setfield!), astate::AnalysisState, pc::Int, ar
     if length(args) == 4 && setfield!_nothrow(astate.𝕃ₒ,
         argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir))
         return true
-    elseif length(args) == 3 && setfield!_nothrow(astate.𝕃ₒ,
-        argextype(args[2], ir), argextype(args[3], ir))
+    elseif length(args) == 5 && setfield!_nothrow(astate.𝕃ₒ,
+        argextype(args[2], ir), argextype(args[3], ir), argextype(args[4], ir), argextype(args[5], ir))
         return true
     else
         add_thrown_escapes!(astate, pc, args, 2)

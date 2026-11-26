@@ -348,12 +348,23 @@ end
 function _resolved_path(path::AbstractString, keep_link::Bool)
     isabspath(path) || (path = joinpath(pwd(), path))
     if ispath(path)
-        keep_link && islink(path) || return realpath(path)
-        return joinpath(realpath(dirname(path)), basename(path))
+        keep_link && islink(path) || return _try_realpath(path)
+        return joinpath(_try_realpath(dirname(path)), basename(path))
     end
     parent = dirname(path)
     parent == path && return path
     return normpath(joinpath(_resolved_path(parent, false), basename(path)))
+end
+
+# Resolving a path can fail even when it exists, as on some Windows network drives.
+# The checks then use the path as given.
+function _try_realpath(path::AbstractString)
+    try
+        return realpath(path)
+    catch e
+        e isa IOError || rethrow()
+        return normpath(path)
+    end
 end
 
 _is_within(inner::AbstractString, outer::AbstractString) =
@@ -720,8 +731,9 @@ function temp_cleanup_purge_all()
             return true
         end
     end
-    if may_need_gc[]
-        # this is only usually required on Sys.iswindows(), but may as well do it everywhere
+    if Sys.iswindows() && may_need_gc[]
+        # Windows can't delete files that are still open, so let finalizers close them
+        # first. Elsewhere, skip it: for a large heap it delays exit by seconds.
         GC.gc(true)
     end
     @lock TEMP_CLEANUP_LOCK temp_cleanup_purge_prelocked(true)
@@ -804,22 +816,28 @@ function _tempname(parent::AbstractString, suffix::AbstractString, max_tries::In
 end
 
 if Sys.iswindows()
-# While this isn't a true analog of `mkstemp`, it _does_ create an
-# empty file for us, ensuring that other simultaneous calls to
-# `_win_mkstemp()` won't collide, so it's a better name for the
-# function than `tempname()`.
+# Create an empty file with a random name and return its path.
+# GetTempFileNameW is avoided: it takes names from a 16-bit counter, so when other
+# processes create temporary files in the same directory, it can hand back names
+# that this process deleted moments earlier.
 function _win_mkstemp(temppath::AbstractString)
-    tempp = cwstring(temppath)
-    temppfx = cwstring(temp_prefix)
-    tname = Vector{UInt16}(undef, 32767)
-    uunique = ccall(:GetTempFileNameW, stdcall, UInt32,
-                    (Ptr{UInt16}, Ptr{UInt16}, UInt32, Ptr{UInt16}),
-                    tempp, temppfx, UInt32(0), tname)
-    windowserror("GetTempFileName", uunique == 0)
-    lentname = something(findfirst(iszero, tname))
-    @assert lentname > 0 "unexpected index"
-    resize!(tname, lentname - 1)
-    return transcode(String, tname)
+    req = Libc.malloc(_sizeof_uv_fs)
+    try
+        ret = ccall(:uv_fs_mkstemp, Cint,
+                    (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, Ptr{Cvoid}),
+                    C_NULL, req, joinpath(temppath, temp_prefix * "XXXXXX"), C_NULL)
+        if ret < 0
+            uv_fs_req_cleanup(req)
+            uv_error("mktemp($(repr(temppath)))", ret)
+        end
+        handle = ccall(:uv_fs_get_result, Cssize_t, (Ptr{Cvoid},), req)
+        path = unsafe_string(ccall(:jl_uv_fs_t_path, Cstring, (Ptr{Cvoid},), req))
+        uv_fs_req_cleanup(req)
+        close(File(OS_HANDLE(Ptr{Cvoid}(handle))))
+        return path
+    finally
+        Libc.free(req)
+    end
 end
 
 function mktemp(parent::AbstractString=tempdir(); cleanup::Bool=true)

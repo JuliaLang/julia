@@ -811,8 +811,13 @@ function CFGTransformState!(blocks::Vector{BasicBlock}, allow_cfg_transforms::Bo
                 succs[j] = bb_rename[succs[j]]
             end
         end
-        let blocks = blocks, bb_rename = bb_rename
-            result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+        if cur_bb - 1 == length(blocks)
+            # Every block is reachable, so the renaming is the identity: keep the array
+            result_bbs = blocks
+        else
+            let blocks = blocks, bb_rename = bb_rename
+                result_bbs = BasicBlock[blocks[i] for i = 1:length(blocks) if bb_rename[i] != -1]
+            end
         end
         # Reuse the same cache for the initial construction and any later
         # in-place updates while killing edges during compaction.
@@ -861,7 +866,6 @@ mutable struct IncrementalCompact
         code.debuginfo.codelocs = result.line
         used_ssas = fill(0, new_len)
         new_new_used_ssas = Vector{Int}()
-        blocks = code.cfg.blocks
         ssa_rename = Any[SSAValue(i) for i = 1:new_len]
         late_fixup = Vector{Int}()
         new_new_nodes = NewNodeStream()
@@ -1071,7 +1075,7 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
         else
             newline = something(newinst.line, compact.ir.stmts[before.id][:line])
             node = add_pending!(compact, before.id, attach_after)
-            node = inst_from_newinst!(node, newinst, newline, newflag)
+            inst_from_newinst!(node, newinst, newline, newflag)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -1095,7 +1099,7 @@ function insert_node!(compact::IncrementalCompact, @nospecialize(before), newins
             end
             newline = something(newinst.line, compact.ir.stmts[pos][:line])
             node = add_pending!(compact, pos, attach_after)
-            node = inst_from_newinst!(node, newinst, newline, newflag)
+            inst_from_newinst!(node, newinst, newline, newflag)
             os = OldSSAValue(length(compact.ir.stmts) + length(compact.ir.new_nodes) + length(compact.pending_nodes))
             push!(compact.ssa_rename, os)
             push!(compact.used_ssas, 0)
@@ -1135,16 +1139,14 @@ end
 
 function insert_node_here!(compact::IncrementalCompact, newinst::NewInstruction, reverse_affinity::Bool=false)
     newline = newinst.line::NTuple{3,Int32}
-    refinish = false
     result_idx = compact.result_idx
-    result_bbs = compact.cfg_transform.result_bbs
     refinish = reverse_affinity && maybe_reopen_bb!(compact)
     if result_idx > length(compact.result)
         @assert result_idx == length(compact.result) + 1
         resize!(compact, result_idx)
     end
     newflag = recompute_newinst_flag(newinst, compact)
-    node = inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
+    inst_from_newinst!(compact.result[result_idx], newinst, newline, newflag)
     count_added_node!(compact, newinst.stmt) && push!(compact.late_fixup, result_idx)
     compact.result_idx = result_idx + 1
     inst = SSAValue(result_idx)
@@ -2084,7 +2086,6 @@ function iterate_compact(compact::IncrementalCompact)
     compact.idx = idx + 1
     compact.active_bb = active_bb
     if old_result_idx == compact.result_idx
-        idx += 1
         @goto restart
     end
     @assert isassigned(compact.result.stmt, old_result_idx)
@@ -2238,7 +2239,7 @@ function non_dce_finish!(compact::IncrementalCompact)
         # Finish the bb now
         finish_current_bb!(compact, 0)
     end
-    result_bbs = resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
+    resize!(compact.cfg_transform.result_bbs, compact.active_result_bb-1)
     compact.renamed_new_nodes = true
     nothing
 end

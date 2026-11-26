@@ -1217,21 +1217,27 @@ static Value *emit_checked_srem_int(jl_codectx_t &ctx, Value *x, Value *den) JL_
     raise_exception_unless(ctx,
             ndivby0,
             literal_pointer_val(ctx, jl_diverror_exception));
-    BasicBlock *m1BB = BasicBlock::Create(ctx.builder.getContext(), "minus1", ctx.f);
+    // For a nonzero divisor, `srem` is undefined only for `typemin % -1`, which Julia
+    // defines as 0. Branch on exactly that pair rather than on every divisor of -1: LLVM
+    // removes the branch when either operand rules the pair out, after which the remainder
+    // can be CSE'd, hoisted, and paired with a division of the same operands.
+    BasicBlock *ovfBB = BasicBlock::Create(ctx.builder.getContext(), "overflow", ctx.f);
     BasicBlock *okBB = BasicBlock::Create(ctx.builder.getContext(), "oksrem", ctx.f);
     BasicBlock *cont = BasicBlock::Create(ctx.builder.getContext(), "after_srem", ctx.f);
     PHINode *ret = PHINode::Create(t, 2);
-    auto divbym1 = ctx.builder.CreateICmpEQ(den, ConstantInt::get(t, -1, true));
-    setName(ctx.emission_context, divbym1, "divbym1");
-    ctx.builder.CreateCondBr(divbym1, m1BB, okBB);
-    ctx.builder.SetInsertPoint(m1BB);
+    Constant *typemin = ConstantInt::get(t, APInt::getSignedMinValue(t->getIntegerBitWidth()));
+    auto overflow = ctx.builder.CreateAnd(
+                        ctx.builder.CreateICmpEQ(den, ConstantInt::get(t, -1, true)),
+                        ctx.builder.CreateICmpEQ(x, typemin));
+    setName(ctx.emission_context, overflow, "srem_overflow");
+    ctx.builder.CreateCondBr(overflow, ovfBB, okBB);
+    ctx.builder.SetInsertPoint(ovfBB);
     ctx.builder.CreateBr(cont);
     ctx.builder.SetInsertPoint(okBB);
     Value *sremval = ctx.builder.CreateSRem(x, den);
     ctx.builder.CreateBr(cont);
     ctx.builder.SetInsertPoint(cont);
-    ret->addIncoming(// rem(typemin, -1) is undefined
-                     ConstantInt::get(t, 0), m1BB);
+    ret->addIncoming(ConstantInt::get(t, 0), ovfBB);
     ret->addIncoming(sremval, okBB);
     setName(ctx.emission_context, ret, "checked_srem");
     ctx.builder.Insert(ret);
@@ -1377,10 +1383,10 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
             }
             Value *tindex;
             if (!x_tindex && x.constant) {
-                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), t1));
+                x_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(x.constant), t1));
             }
             if (!y_tindex && y.constant) {
-                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80 | get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), t1));
+                y_tindex = ConstantInt::get(getInt8Ty(ctx.builder.getContext()), get_box_tindex((jl_datatype_t*)jl_typeof(y.constant), t1));
             }
             if (x_tindex && y_tindex) {
                 tindex = ctx.builder.CreateSelect(isfalse, y_tindex, x_tindex);
@@ -1404,7 +1410,6 @@ static jl_cgval_t emit_ifelse(jl_codectx_t &ctx, jl_cgval_t c, jl_cgval_t x, jl_
                     ctx.builder.SetInsertPoint(compute);
                     tindex = compute_tindex_unboxed(ctx, x, t1);
                 }
-                tindex = ctx.builder.CreateOr(tindex, ConstantInt::get(getInt8Ty(ctx.builder.getContext()), 0x80));
                 compute = ctx.builder.GetInsertBlock(); // could have changed
                 ctx.builder.CreateBr(post);
                 ret->addIncoming(tindex, compute);
@@ -1755,7 +1760,7 @@ static Value *emit_untyped_intrinsic(jl_codectx_t &ctx, intrinsic f, ArrayRef<Va
     }
 
     case checked_sdiv_int: {
-        Value *typemin = ctx.builder.CreateShl(ConstantInt::get(t, 1), t->getPrimitiveSizeInBits() - 1);
+        Constant *typemin = ConstantInt::get(t, APInt::getSignedMinValue(t->getIntegerBitWidth()));
         auto cond = ctx.builder.CreateAnd(
                         ctx.builder.CreateICmpNE(y, ConstantInt::get(t, 0)),
                         ctx.builder.CreateOr(

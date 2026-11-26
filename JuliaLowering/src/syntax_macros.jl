@@ -83,7 +83,7 @@ end
 function Base.var"@generated"(__context__::MacroContext, ex::SyntaxTree)
     if !(head(ex) === :function ||
         head(ex) === :(=) && is_eventually_call(ex[1]))
-        throw(LoweringError(ex, "Expected a function argument to `@generated`"))
+        throw(LoweringError(ex, "expected a function argument to `@generated`"))
     end
     k = head(ex)
     # Base's `@generated` copies the body's first statement by accident thinking
@@ -256,7 +256,7 @@ function Base.GC.var"@preserve"(__context__::MacroContext, exs::SyntaxTree...)
     idents = exs[1:end-1]
     for e in idents
         if head(e) != :identifier
-            throw(LoweringError(e, "Preserved variable must be a symbol"))
+            throw(LoweringError(e, "preserved variable must be a symbol"))
         end
     end
     @ast __context__ __context__.macrocall [:gc_preserve exs[end] exs[1:end-1]...]
@@ -272,6 +272,10 @@ function Base.Experimental.var"@opaque"(__context__::MacroContext, ex::SyntaxTre
     ]
 end
 
+Base.@constprop :none function _eval_fill_context(st, sc)
+    fill_context(st, sc)::Syntax
+end
+
 # @eval should mostly ignore hygiene against our system's best wishes.  Still
 # attempt to preserve provenance.
 function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex::SyntaxTree)
@@ -285,7 +289,8 @@ function _at_eval_code(mc::MacroContext, mod_st::SyntaxTree, ex::SyntaxTree)
                 val
                 [:call at_eval_hook::value
                     mod_st
-                    [:call fill_context::value trim_provenance(q, true) new_sc::value]
+                    [:call _eval_fill_context::value
+                        trim_provenance(q, true) new_sc::value]
                 ]
             ]
         ]

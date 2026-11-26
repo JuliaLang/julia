@@ -33,6 +33,8 @@
 /LinearAlgebra
 /*_jll/StdlibArtifacts.toml
 /*/Manifest.toml
+/Project.toml
+/Manifest.toml
 /*.image
 
 /checkbounds-release

@@ -96,6 +96,11 @@ end
     @test Dates.Date(Dates.Day(10), Dates.Month(2), y) == Dates.Date(1, 2, 10)
 end
 
+@testset "construction from a UTInstant of another period type" begin
+    @test_throws ArgumentError("DateTime requires a UTInstant{$(Dates.Millisecond)}, got a UTInstant{$(Dates.Day)}") Dates.DateTime(Dates.UTD(1))
+    @test_throws ArgumentError("Date requires a UTInstant{$(Dates.Day)}, got a UTInstant{$(Dates.Millisecond)}") Dates.Date(Dates.UTM(1))
+end
+
 @testset "Time construction by parts" begin
     t = Dates.Time(Dates.Nanosecond(82800000000000))
     @test Dates.Time(23) == t
@@ -116,6 +121,13 @@ end
     @test Dates.Time(Dates.Second(10), Dates.Minute(2), us, Dates.Hour(4)) == Dates.Time(4, 2, 10, 0, 1)
     @test Dates.Time(Dates.Hour(4), Dates.Second(10), Dates.Millisecond(15),
                      Dates.Microsecond(20), Dates.Nanosecond(25)) == Dates.Time(4, 0, 10, 15, 20, 25)
+end
+
+@testset "conversion from TOML dates and times" begin
+    @test Date(Base.TOML.Date(2020, 1, 2)) == Date(2020, 1, 2)
+    @test Time(Base.TOML.Time(1, 2, 3, 4)) == Time(1, 2, 3, 4)
+    @test DateTime(Base.TOML.DateTime(Base.TOML.Date(2020, 1, 2), Base.TOML.Time(1, 2, 3, 4))) ==
+        DateTime(2020, 1, 2, 1, 2, 3, 4)
 end
 
 @testset "various input types for Date/DateTime" begin

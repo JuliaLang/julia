@@ -269,13 +269,19 @@ julia> annotatedstring(AnnotatedString("annotated", [(1:9, :label, 1)]), ", and 
 "annotated, and unannotated"
 ```
 """
-function annotatedstring(xs...)
-    isempty(xs) && return AnnotatedString("")
-    size = mapreduce(_str_sizehint, +, xs)
+function annotatedstring(@nospecialize(xs...))
+    # read the arguments with builtins, so no generic function specializes on their types
+    n = nfields(xs)
+    n == 0 && return AnnotatedString("")
+    size = 0
+    for i in 1:n
+        size += _str_sizehint(getfield(xs, i))
+    end
     buf = IOBuffer(sizehint=size)
     s = IOContext(buf, :color => true)
     annotations = Vector{RegionAnnotation}()
-    for x in xs
+    for i in 1:n
+        x = getfield(xs, i)
         size = filesize(s.io)
         if x isa AnnotatedString
             for annot in x.annotations
@@ -306,6 +312,7 @@ function annotatedstring(xs...)
 end
 
 annotatedstring(s::AnnotatedString) = s
+annotatedstring(s::String) = AnnotatedString(s)
 annotatedstring(c::AnnotatedChar) =
     AnnotatedString(string(c.char), [(region=1:ncodeunits(c), annot...) for annot in c.annotations])
 

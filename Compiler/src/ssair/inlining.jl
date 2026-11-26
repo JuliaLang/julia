@@ -121,7 +121,6 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     inlinee_cfg = todo.ir.cfg
     # Figure out if we need to split the BB
     need_split_before = false
-    need_split = true
     block = block_for_inst(ir, idx)
     inline_into_block!(state, block)
 
@@ -130,22 +129,12 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
     else
         @assert inlinee_cfg.blocks[1].preds[1] == 0
     end
-    last_block_idx = last(state.cfg.blocks[block].stmts)
-    if false # TODO: ((idx+1) == last_block_idx && isa(ir[SSAValue(last_block_idx)], GotoNode))
-        need_split = false
-        post_bb_id = -ir[SSAValue(last_block_idx)][:stmt].label
-    else
-        post_bb_id = length(state.new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
-        need_split = true #!(idx == last_block_idx)
-    end
-
-    need_split || delete!(state.merged_orig_blocks, last(new_range))
+    post_bb_id = length(state.new_cfg_blocks) + length(inlinee_cfg.blocks) + (need_split_before ? 1 : 0)
 
     push!(state.todo_bbs, (length(state.new_cfg_blocks) - 1 + (need_split_before ? 1 : 0), post_bb_id))
 
     from_unionsplit || delete!(state.split_targets, length(state.new_cfg_blocks))
-    local orig_succs
-    need_split && (orig_succs = copy(state.new_cfg_blocks[end].succs))
+    orig_succs = copy(state.new_cfg_blocks[end].succs)
     empty!(state.new_cfg_blocks[end].succs)
     if need_split_before
         l = length(state.new_cfg_blocks)
@@ -159,11 +148,9 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
         append!(state.new_cfg_blocks[end].succs, inlinee_cfg.blocks[1].succs)
         append!(state.new_cfg_blocks, inlinee_cfg.blocks[2:end])
     end
-    if need_split
-        push!(state.new_cfg_blocks, BasicBlock(state.cfg.blocks[block].stmts,
-            Int[], orig_succs))
-        from_unionsplit || push!(state.split_targets, length(state.new_cfg_blocks))
-    end
+    push!(state.new_cfg_blocks, BasicBlock(state.cfg.blocks[block].stmts,
+        Int[], orig_succs))
+    from_unionsplit || push!(state.split_targets, length(state.new_cfg_blocks))
     new_block_range = (length(state.new_cfg_blocks)-length(inlinee_cfg.blocks)+1):length(state.new_cfg_blocks)
 
     # Fixup the edges of the newly added blocks
@@ -200,9 +187,7 @@ function cfg_inline_item!(ir::IRCode, idx::Int, todo::InliningTodo, state::CFGIn
             if isa(terminator, ReturnNode) && isdefined(terminator, :val)
                 any_edges = true
                 push!(state.new_cfg_blocks[new_block].succs, post_bb_id)
-                if need_split
-                    push!(state.new_cfg_blocks[post_bb_id].preds, new_block)
-                end
+                push!(state.new_cfg_blocks[post_bb_id].preds, new_block)
             end
         end
     end
@@ -450,6 +435,7 @@ function ir_inline_item!(compact::IncrementalCompact, idx::Int, argexprs::Vector
                 NewInstruction(pn, argextype(SSAValue(idx), compact), compact.result[idx][:line]))
         end
     end
+    @assert @isdefined(return_value) "linearly inlined IR has no return value"
     return_value
 end
 
@@ -1436,7 +1422,7 @@ function compute_inlining_cases(@nospecialize(info::CallInfo), flag::UInt32, sig
                 else
                     handled_all_cases = false
                 end
-            elseif !(match.spec_types <: match.method.sig) # the requirement for correct union-split
+            elseif !(match.fully_covers || match.spec_types <: match.method.sig) # the requirement for correct union-split
                 handled_all_cases = false
             else
                 handled_all_cases &= handle_any_call_result!(cases,
@@ -1755,7 +1741,7 @@ end
 function early_inline_special_case(ir::IRCode, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
-    (; f, ft, argtypes) = sig
+    (; f, argtypes) = sig
 
     if isa(type, Const) # || isconstType(type)
         val = type.val
@@ -1809,7 +1795,7 @@ end
 function late_inline_special_case!(ir::IRCode, idx::Int, stmt::Expr, flag::UInt32,
                                    @nospecialize(type), sig::Signature, state::InliningState)
     OptimizationParams(state.interp).inlining || return nothing
-    (; f, ft, argtypes) = sig
+    (; f, argtypes) = sig
     if length(argtypes) == 3 && f === Core.:(!==)
         # special-case inliner for !== that precedes _methods_by_ftype union splitting
         # and that works, even though inference generally avoids inferring the `!==` Method

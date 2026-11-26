@@ -1526,13 +1526,48 @@ namespace {
         T &transform;
     };
 
+    // Build the pipeline once for every module compiled with this target machine.
+    struct EmitterT {
+        std::unique_ptr<TargetMachine> TM;
+        std::unique_ptr<legacy::PassManager> PM;
+        SmallVector<char, 0> ObjBuffer;
+        std::unique_ptr<raw_svector_ostream> ObjStream;
+
+        EmitterT(std::unique_ptr<TargetMachine> TM) JL_NOTSAFEPOINT : TM(std::move(TM)) {}
+        ~EmitterT() JL_NOTSAFEPOINT = default;
+
+        Error emit(Module &M, SmallVector<char, 0> &Out) JL_NOTSAFEPOINT {
+            if (!PM) {
+                ObjStream = std::make_unique<raw_svector_ostream>(ObjBuffer);
+                auto NewPM = std::make_unique<legacy::PassManager>();
+                MCContext *Ctx;
+                if (TM->addPassesToEmitMC(*NewPM, Ctx, *ObjStream))
+                    return make_error<StringError>("Target does not support MC emission",
+                                                   inconvertibleErrorCode());
+                PM = std::move(NewPM);
+            }
+            PM->run(M);
+            Out = std::move(ObjBuffer);
+            ObjBuffer.clear();
+            return Error::success();
+        }
+    };
+
+    struct EmitterCreator {
+        TMCreator CreateTM;
+        EmitterCreator(TargetMachine &TM, int optlevel) JL_NOTSAFEPOINT : CreateTM(TM, optlevel) {}
+        std::unique_ptr<EmitterT> operator()() JL_NOTSAFEPOINT {
+            return std::make_unique<EmitterT>(CreateTM());
+        }
+    };
+
     template<size_t N>
     struct CompilerT : orc::IRCompileLayer::IRCompiler {
 
         CompilerT(orc::IRSymbolMapper::ManglingOptions MO, TargetMachine &TM) JL_NOTSAFEPOINT
             : orc::IRCompileLayer::IRCompiler(MO) {
             for (size_t i = 0; i < N; ++i) {
-                TMs[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>>>(TMCreator(TM, i));
+                Emitters[i] = std::make_unique<JuliaOJIT::ResourcePool<std::unique_ptr<EmitterT>>>(EmitterCreator(TM, i));
             }
         }
 
@@ -1547,20 +1582,13 @@ namespace {
             }
             assert(PoolIdx < N && "Invalid optimization level for compiler!");
 
-            auto TM = **TMs[PoolIdx];
+            auto Emitter = **Emitters[PoolIdx];
             if (M.getDataLayout().isDefault())
-                M.setDataLayout((*TM)->createDataLayout());
+                M.setDataLayout((*Emitter)->TM->createDataLayout());
 
             SmallVector<char, 0> ObjBufferSV;
-            {
-                raw_svector_ostream ObjStream(ObjBufferSV);
-                legacy::PassManager PM;
-                MCContext *Ctx;
-                if ((*TM)->addPassesToEmitMC(PM, Ctx, ObjStream))
-                    return make_error<StringError>("Target does not support MC emission",
-                                                   inconvertibleErrorCode());
-                PM.run(M);
-            }
+            if (Error Err = (*Emitter)->emit(M, ObjBufferSV))
+                return std::move(Err);
 
             // OrcJIT requires that all modules / files have unique names:
             // https://llvm.org/doxygen/namespacellvm_1_1orc.html#a1f5a1bc60c220cdccbab0f26b2a425e1
@@ -1571,7 +1599,7 @@ namespace {
                                                              false);
         }
 
-        std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<TargetMachine>>>, N> TMs;
+        std::array<std::unique_ptr<JuliaOJIT::ResourcePool<std::unique_ptr<EmitterT>>>, N> Emitters;
         _Atomic(size_t) bufcounter{0};
     };
 }
@@ -2068,6 +2096,11 @@ orc::SymbolStringPtr JuliaOJIT::mangle(StringRef Name)
 void JuliaOJIT::addGlobalMapping(StringRef Name, uint64_t Addr)
 {
     cantFail(JD.define(orc::absoluteSymbols({{mangle(Name), {ExecutorAddr::fromPtr((void*)Addr), JITSymbolFlags::Exported}}})));
+}
+
+void JuliaOJIT::addSharedGlobalMapping(StringRef Name, uint64_t Addr)
+{
+    cantFail(GlobalJD.define(orc::absoluteSymbols({{mangle(Name), {ExecutorAddr::fromPtr((void*)Addr), JITSymbolFlags::Exported}}})));
 }
 
 
@@ -2755,6 +2788,19 @@ TargetIRAnalysis JuliaOJIT::getTargetIRAnalysis() const {
 static void decorate_module(Module &M) {
     auto TT = Triple(M.getTargetTriple());
     if (TT.isOSWindows() && TT.getArch() == Triple::x86_64) {
+        // debuginfo registers unwind info for each function symbol in the object, and a
+        // private function may get no symbol. Without an entry, Windows unwinds it as a
+        // leaf, so an exception raised below it (e.g. a safepoint fault while a PLT thunk
+        // resolves its symbol) is never dispatched and kills the process.
+        for (Function &F : M) {
+            if (!F.isDeclaration() && F.hasPrivateLinkage()) {
+                // setName picks a name unused in the module; the `__unnamed_N` the mangler
+                // gives unnamed globals may already be taken
+                if (!F.hasName())
+                    F.setName("jl_unnamed");
+                F.setLinkage(GlobalValue::InternalLinkage);
+            }
+        }
         // Add special values used by debuginfo to build the UnwindData table registration for Win64
         // This used to be GV, but with https://reviews.llvm.org/D100944 we no longer can emit GV into `.text`
         // and with JITLink it became difficult to change the content afterwards, but we
@@ -2819,6 +2865,11 @@ void jl_decorate_llvm_module_impl(LLVMModuleRef m) JL_NOTSAFEPOINT
 void add_named_global(StringRef name, void *addr)
 {
     jl_ExecutionEngine->addGlobalMapping(name, (uint64_t)(uintptr_t)addr);
+}
+
+void add_shared_named_global(StringRef name, void *addr)
+{
+    jl_ExecutionEngine->addSharedGlobalMapping(name, (uint64_t)(uintptr_t)addr);
 }
 
 extern "C" JL_DLLEXPORT_CODEGEN

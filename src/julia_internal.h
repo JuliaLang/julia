@@ -965,6 +965,10 @@ void restore_signals(void) JL_NOTSAFEPOINT;
 void jl_exit_with_parent(pid_t parent) JL_NOTSAFEPOINT;
 #endif
 void jl_install_thread_signal_handler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
+extern _Atomic(int) jl_exit_thread0_pending;
+#ifndef _OS_WINDOWS_
+void jl_exit_thread0_pending_cb(void) JL_CANSAFEPOINT;
+#endif
 
 extern uv_loop_t *jl_io_loop;
 JL_DLLEXPORT void jl_uv_flush(uv_stream_t *stream) JL_CANSAFEPOINT;
@@ -1813,7 +1817,7 @@ typedef CONTEXT bt_context_t;
 typedef CONTEXT bt_cursor_t;
 #else
 typedef struct {
-    STACKFRAME64 stackframe;
+    STACKFRAME_EX stackframe;
     CONTEXT context;
 } bt_cursor_t;
 #endif
@@ -2563,6 +2567,7 @@ JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
 JL_DLLIMPORT void jl_free_native(void *native_code);
+JL_DLLIMPORT int jl_native_code_is_empty(void *native_code);
 JL_DLLIMPORT void jl_get_llvm_gvs(void *native_code, size_t *num_els, void **gvs);
 JL_DLLIMPORT void jl_get_llvm_gv_inits(void *native_code, size_t *num_els, void **inits);
 JL_DLLIMPORT void jl_get_llvm_external_fns(void *native_code, size_t *num_els,

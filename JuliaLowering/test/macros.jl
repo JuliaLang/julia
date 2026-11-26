@@ -964,8 +964,7 @@ end == """
 MacroExpansionError while expanding @oldstyle_error in module Main.macro_test:
 @oldstyle_error
 └─────────────┘ ── Error expanding macro
-Caused by:
-Some error in old style macro"""
+Caused by: Some error in old style macro"""
 
 # Old-style macros returning non-Expr values
 fl_eval(test_mod, :(
@@ -1017,8 +1016,7 @@ end
     MacroExpansionError while expanding @sig_mismatch in module Main.macro_test:
     @sig_mismatch(1, 2, 3, 4)
     └───────────────────────┘ ── Error expanding macro
-    Caused by:
-    MethodError: no method matching var"@sig_mismatch"(""")
+    Caused by: MethodError: no method matching var"@sig_mismatch"(""")
 end
 
 @testset "old macros producing exotic expr heads (or are otherwise complex)" for edition in [JL_OLD_EDITION, JL_NEW_EDITION]
@@ -1972,8 +1970,7 @@ end
             @test occursin("Cols", result)
         end
 
-        # Should not access arg-map for local variables
-        # TODO: worth the special case?
+        # reassigning a named self argument should not change `@__FUNCTION__`
         jl_eval(test_mod, raw"""
             function f_thisfunction_argmap end
             function (f_thisfunction_argmap::typeof(f_thisfunction_argmap))()
@@ -1981,7 +1978,7 @@ end
                 @__FUNCTION__
             end
         """; edition=JL_OLD_EDITION)
-        @test_broken test_mod.f_thisfunction_argmap() ===
+        @test test_mod.f_thisfunction_argmap() ===
             test_mod.f_thisfunction_argmap
     end
 
