@@ -935,6 +935,38 @@ let ir = Base.code_ircode(; optimize_until="CC: SLOT2REG") do
     @test na < nb
 end
 
+# `cfg_simplify!` must keep the `PhiCNode` operand of an upsilon in a block that it merges
+# into its successor (here the join block of `x > 0 && ...`, which holds only the
+# upsilon of `done = false`)
+@noinline upsilon_merged_g(x) = x == 1 ? error("boom") : nothing
+@inline function upsilon_merged(x, flag::Bool, r)
+    done = true
+    try
+        x > 0 && upsilon_merged_g(x + 1)
+        done = false
+        @goto next
+        @label next
+        upsilon_merged_g(x)
+        done = true
+    finally
+        r[] = done
+    end
+    return flag
+end
+let ir = only(Base.code_ircode(upsilon_merged, (Int, Bool, Base.RefValue{Bool})))[1]
+    nupsilon_false(ir) = count(s -> s isa UpsilonNode && s.val === false, ir.stmts.stmt)
+    @test nupsilon_false(ir) == 1
+    ir = Compiler.cfg_simplify!(ir)
+    Compiler.verify_ir(ir)
+    @test nupsilon_false(ir) == 1
+end
+# Inlining a const-propagated callee runs `cfg_simplify!` on it
+@noinline upsilon_merged_caller(x, r) = upsilon_merged(x, true, r)
+let r = Ref(true)
+    @test_throws ErrorException upsilon_merged_caller(1, r)
+    @test !r[]
+end
+
 # Issue #29213
 function f_29213()
     while true

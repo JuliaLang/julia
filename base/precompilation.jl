@@ -1053,41 +1053,54 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
     pkgspidlocked = Dict{PkgConfig,String}()
     pkg_liveprinted = Ref{Union{Nothing, PkgId}}(nothing)
 
-    function monitor_std(pkg_config, pipe; single_requested_pkg=false)
+    function monitor_std(pkg_config, pipe::Base.PipeEndpoint; single_requested_pkg=false)
         local pkg, config = pkg_config
         try
             local liveprinting = false
             local thistaskwaiting = false
+            local relay = true
             while !eof(pipe)
                 local str = readline(pipe, keep=true)
-                if single_requested_pkg && (liveprinting || !isempty(str))
-                    @lock print_lock begin
-                        if !liveprinting
-                            liveprinting = true
-                            pkg_liveprinted[] = pkg
-                        end
-                        # in fancy mode clear the progress bar residue from the line first
-                        print(io, fancyprint ? ansi_cleartoendofline : "", str)
-                    end
-                end
                 write(get!(IOBuffer, std_outputs, pkg_config), str)
-                if thistaskwaiting
-                    if occursin("Waiting for background task / IO / timer", str)
-                        thistaskwaiting = true
-                        !liveprinting && !fancyprint && @lock print_lock begin
-                            println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
+                relay || continue
+                try
+                    if single_requested_pkg && (liveprinting || !isempty(str))
+                        @lock print_lock begin
+                            if !liveprinting
+                                liveprinting = true
+                                pkg_liveprinted[] = pkg
+                            end
+                            # in fancy mode clear the progress bar residue from the line first
+                            print(io, fancyprint ? ansi_cleartoendofline : "", str)
                         end
-                        push!(taskwaiting, pkg_config)
                     end
-                else
-                    # XXX: don't just re-enable IO for random packages without printing the context for them first
-                    !liveprinting && !fancyprint && @lock print_lock begin
-                        print(io, str)
+                    if thistaskwaiting
+                        if occursin("Waiting for background task / IO / timer", str)
+                            thistaskwaiting = true
+                            !liveprinting && !fancyprint && @lock print_lock begin
+                                println(io, full_name(ext_to_parent, pkg), color_string(str, Base.warn_color()))
+                            end
+                            push!(taskwaiting, pkg_config)
+                        end
+                    else
+                        # XXX: don't just re-enable IO for random packages without printing the context for them first
+                        !liveprinting && !fancyprint && @lock print_lock begin
+                            print(io, str)
+                        end
                     end
+                catch err
+                    err isa InterruptException && rethrow()
+                    # keep draining so the worker cannot block on a full pipe,
+                    # and let the final report show the captured output instead
+                    relay = false
+                    @lock print_lock (pkg_liveprinted[] == pkg && (pkg_liveprinted[] = nothing))
                 end
             end
         catch err
             err isa InterruptException || rethrow()
+        finally
+            # closing the reader unblocks the worker's writes if draining stops early
+            close(pipe)
         end
     end
 
@@ -1248,8 +1261,18 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                         is_project_dep = pkg in project_deps
 
                         # std monitoring
-                        std_pipe = Base.link_pipe!(Pipe(); reader_supports_async=true, writer_supports_async=true)
-                        t_monitor = @async monitor_std(pkg_config, std_pipe; single_requested_pkg)
+                        # The worker gets the write end as a raw handle. Opening it here as well would
+                        # bind it to our IOCP on Windows, after which every write in the worker takes a
+                        # thread-pool round trip; with output-heavy packages under load that is minutes.
+                        std_rd, std_wr = Base.link_pipe(true, true)
+                        std_out = try
+                            Base.open_pipe!(Base.PipeEndpoint(), std_rd)
+                        catch
+                            Base.close_pipe_sync(std_rd)
+                            Base.close_pipe_sync(std_wr)
+                            rethrow()
+                        end
+                        t_monitor = @async monitor_std(pkg_config, std_out; single_requested_pkg)
 
                         try
                             name = describe_pkg(pkg, is_project_dep, is_serial_dep, flags, cacheflags)
@@ -1275,7 +1298,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                             if _from_loading && pkg in requested_pkgids
                                 # loading already took the cachefile_lock and printed logmsg for its explicit requests
                                 t = @elapsed ret = begin
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcepath, std_wr, std_wr, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts,
                                                       preresolved=preresolved_snapshot(cachepath_cache))
                                 end
@@ -1298,7 +1321,7 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                     logcalls === CoreLogging.Debug && @lock print_lock begin
                                         @debug "Precompiling $(repr("text/plain", pkg))"
                                     end
-                                    Base.compilecache(pkg, sourcepath, std_pipe, std_pipe, !ignore_loaded;
+                                    Base.compilecache(pkg, sourcepath, std_wr, std_wr, !ignore_loaded;
                                                       flags, cacheflags, loadable_exts,
                                                       preresolved=preresolved_snapshot(cachepath_cache))
                                 end
@@ -1330,8 +1353,6 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 end
                             end
                         catch err
-                            close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
                             if err isa ErrorException || (err isa ArgumentError && startswith(err.msg, "Invalid header in cache file"))
                                 failed_deps[pkg_config] = sprint(showerror, err)
                                 !fancyprint && @lock print_lock begin
@@ -1341,9 +1362,12 @@ function _precompilepkgs(pkgs::Union{Vector{String}, Vector{PkgId}},
                                 rethrow()
                             end
                         finally
-                            isopen(std_pipe.in) && close(std_pipe.in) # close pipe to end the std output monitor
-                            wait(t_monitor)
-                            Base.release(parallel_limiter)
+                            try
+                                Base.close_pipe_sync(std_wr) # close pipe to end the std output monitor
+                                wait(t_monitor)
+                            finally
+                                Base.release(parallel_limiter)
+                            end
                         end
                     else
                         if !is_stale

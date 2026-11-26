@@ -2821,6 +2821,44 @@ precompile_test_harness("Constprop CodeInstance invalidation") do load_path
     end
 end
 
+precompile_test_harness("Invalidation through a cached recursion cycle") do load_path
+    write(joinpath(load_path, "CycleUp.jl"),
+        """
+        module CycleUp
+            struct Thing
+                payload::Any
+            end
+            describe(x) = 1
+            inner(t::Thing) = describe(t.payload)
+            function f(t::Thing; flag = false)
+                t.payload isa Thing && return f(t.payload; flag = flag)
+                return inner(t)
+            end
+        end
+        """)
+    write(joinpath(load_path, "CycleMid.jl"),
+        """
+        module CycleMid
+            using CycleUp
+            go(t::CycleUp.Thing, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+            ccall(:jl_tag_newly_inferred_enable, Cvoid, ())
+            go(CycleUp.Thing(CycleUp.Thing(1)), Base.inferencebarrier(false))
+            ccall(:jl_tag_newly_inferred_disable, Cvoid, ())
+        end
+        """)
+    Base.compilecache(Base.PkgId("CycleMid"))
+    @eval using CycleUp, CycleMid
+    @eval begin
+        struct CycleB2 end
+        CycleUp.describe(::CycleB2) = "three"
+        cycle_loose(t, @nospecialize(flag)) = CycleUp.f(t; flag = flag)
+    end
+    invokelatest() do
+        @test Base.infer_return_type(cycle_loose, (CycleUp.Thing, Any)) == Union{Int, String}
+        @test cycle_loose(CycleUp.Thing(CycleB2()), Base.inferencebarrier(false)) == "three"
+    end
+end
+
 precompile_test_harness("llvmcall validation") do load_path
     write(joinpath(load_path, "LLVMCall.jl"),
         """
@@ -4056,6 +4094,94 @@ precompile_test_harness("cache files are only touched in the primary depot") do 
         end
     finally
         popfirst!(DEPOT_PATH)
+    end
+end
+
+# A failure relaying a worker's output must not strand the worker on a full pipe.
+# Runs in a subprocess so a regression can be timed out and killed.
+@testset "precompilepkgs with a failing output stream (single=$single)" for single in (false, true)
+    mkdepottempdir() do depot
+        pkg_path = joinpath(depot, "dev", "NoisyPkg")
+        mkpath(joinpath(pkg_path, "src"))
+        write(joinpath(pkg_path, "Project.toml"), """
+            name = "NoisyPkg"
+            uuid = "c4000000-0000-0000-0000-000000000001"
+            version = "0.1.0"
+            """)
+        project_path = joinpath(depot, "project")
+        mkpath(project_path)
+        write(joinpath(project_path, "Project.toml"), """
+            [deps]
+            NoisyPkg = "c4000000-0000-0000-0000-000000000001"
+            """)
+        write(joinpath(project_path, "Manifest.toml"), """
+            manifest_format = "2.0"
+
+            [[deps.NoisyPkg]]
+            path = "../dev/NoisyPkg"
+            uuid = "c4000000-0000-0000-0000-000000000001"
+            version = "0.1.0"
+            """)
+        write(joinpath(pkg_path, "src", "NoisyPkg.jl"), """
+            module NoisyPkg
+            # far more than a pipe buffer holds, in one write: 20000 separate writes take
+            # minutes on a loaded Windows machine
+            let io = IOBuffer()
+                println(io, "NOISY-FIRST")
+                for i in 1:20000
+                    println(io, "noisy line ", i, " ", "x"^50)
+                end
+                println(io, "NOISY-LAST")
+                write(stdout, take!(io))
+            end
+            end
+            """)
+        script = """
+            # if this hangs, dump the tasks before the parent kills it; stdout is a buffered
+            # file, so the flushes below keep the log showing how far it got
+            Timer(_ -> ccall(:jl_print_task_backtraces, Cvoid, (Cint,), 0), 270)
+            # fails the first write of the package's output, then works
+            mutable struct FailOnceIO <: IO
+                buf::IOBuffer
+                failed::Bool
+            end
+            function Base.unsafe_write(io::FailOnceIO, p::Ptr{UInt8}, n::UInt)
+                if !io.failed && occursin("NOISY-FIRST", unsafe_string(p, n))
+                    io.failed = true
+                    throw(Base.IOError("write: broken pipe (EPIPE)", Base.UV_EPIPE))
+                end
+                return unsafe_write(io.buf, p, n)
+            end
+            Base.write(io::FailOnceIO, x::UInt8) = write(io.buf, x)
+            io = FailOnceIO(IOBuffer(), false)
+            println("precompiling"); flush(stdout)
+            Base.Precompilation.precompilepkgs($(single ? "[\"NoisyPkg\"]" : "String[]"); io, fancyprint=false)
+            println("precompiled"); flush(stdout)
+            output = String(take!(io.buf))
+            r = findlast("had output during precompilation:", output)
+            report = r === nothing ? "" : output[last(r)+1:end]
+            println("failed=", io.failed, " cached=", Base.isprecompiled(Base.identify_package("NoisyPkg")),
+                    " reported=", occursin("NOISY-FIRST", report) && occursin("NOISY-LAST", report))
+            flush(stdout)
+            """
+        cmd = addenv(`$(Base.julia_cmd()) --startup-file=no --project=$project_path -e $script`,
+                     "JULIA_DEPOT_PATH" => depot)
+        log = joinpath(depot, "log.txt")
+        p = open(log, "w") do logio
+            run(pipeline(cmd; stdout=logio, stderr=logio); wait=false)
+        end
+        finished = try
+            timedwait(() -> process_exited(p), 300) === :ok
+        finally
+            process_exited(p) || kill(p, Base.SIGKILL)
+            wait(p)
+        end
+        output = read(log, String)
+        passed = occursin("failed=true cached=true reported=true", output)
+        @test finished
+        @test success(p)
+        @test passed
+        finished && success(p) && passed || println(output)
     end
 end
 
