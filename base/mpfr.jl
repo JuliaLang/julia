@@ -950,7 +950,8 @@ end
 # TODO: use a higher-precision BigFloat(pi) here?
 rem2pi(x::BigFloat, r::RoundingMode) = rem(x, 2*BigFloat(pi), r)
 
-function sum(arr::AbstractArray{BigFloat})
+function sum(arr::AbstractArray{BigFloat}; dims=:, kw...)
+    dims === (:) && isempty(kw) || return invoke(sum, Tuple{AbstractArray}, arr; dims=dims, kw...)
     z = BigFloat(0)
     for i in arr
         @ccall gc_safe=true libmpfr.mpfr_add(
@@ -1146,10 +1147,14 @@ for (f,R) in ((:roundeven, :Nearest),
               (:trunc, :ToZero),
               (:round, :NearestTiesAway))
     @eval begin
-        function round(x::BigFloat, ::RoundingMode{$(QuoteNode(R))})
-            z = BigFloat()
-            @ccall gc_safe=true libmpfr.$(Symbol(:mpfr_,f))(z::Ref{BigFloat}, x::Ref{BigFloat})::Int32
-            return z
+        function round(x::BigFloat, r::RoundingMode{$(QuoteNode(R))};
+                       digits::Union{Nothing,Integer}=nothing, sigdigits::Union{Nothing,Integer}=nothing, base::Union{Nothing,Integer}=nothing)
+            if digits === nothing && sigdigits === nothing
+                z = BigFloat()
+                @ccall gc_safe=true libmpfr.$(Symbol(:mpfr_,f))(z::Ref{BigFloat}, x::Ref{BigFloat})::Int32
+                return z
+            end
+            Base._round_kwargs(x, r, digits, sigdigits, base)
         end
     end
 end
