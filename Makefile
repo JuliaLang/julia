@@ -571,12 +571,15 @@ endif
 
 ifneq ($(reverse_private_libexecdir_rel),$(reverse_build_private_libexecdir_rel))
 ifeq ($(OS), Darwin)
+# A zstd built from source links libzstd statically, so it has no rpath to change.
+ifeq ($(USE_BINARYBUILDER_ZSTD), 1)
 	for j in $(JL_PRIVATE_EXES) ; do \
 		[ $$j = 7z ] && continue; \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
 		install_name_tool -rpath @executable_path/$(reverse_build_private_libexecdir_rel) @executable_path/$(reverse_private_libexecdir_rel) $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 		codesign -s - -f $(DESTDIR)$(private_libexecdir)/$$j || exit 1; \
 	done
+endif
 else ifneq (,$(findstring $(OS),Linux FreeBSD))
 	for j in $(JL_PRIVATE_EXES) ; do \
 		[ -L $(DESTDIR)$(private_libexecdir)/$$j ] && continue; \
