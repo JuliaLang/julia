@@ -120,7 +120,8 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     dest = Array{T}(undef, _trimmedshape(V.indices...))
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
-    copyto!(vdest, view(V, _trimmedvind(V.indices...)...))
+    src = view(V, _trimmedvind(V.indices...)...)
+    copyto_unaliased!(IndexStyle(vdest), vdest, IndexStyle(src), src)
     indices = map(_trimmedindex, V.indices)
     if LD
         offset1, stride1 = _compute_linear_layout(dest, indices)

@@ -1191,27 +1191,33 @@ _indicesmightoverlap(A::Tuple{Any, Vararg{Any}}, B::Tuple{Any, Vararg{Any}}) = t
 
 function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
                   src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
-    isempty(Rdest) && return dest
+    @_propagate_inbounds_meta
     if size(Rdest) != size(Rsrc)
-        throw(ArgumentError("source and destination must have same size (got $(size(Rsrc)) and $(size(Rdest)))"))
+        throw(ArgumentError(LazyString("source and destination must have same size (got ", size(Rsrc), " and ", size(Rdest), ")")))
     end
-    checkbounds(dest, first(Rdest))
-    checkbounds(dest, last(Rdest))
-    checkbounds(src, first(Rsrc))
-    checkbounds(src, last(Rsrc))
+    isempty(Rdest) && return dest
+    @boundscheck checkbounds(dest, first(Rdest))
+    @boundscheck checkbounds(dest, last(Rdest))
+    @boundscheck checkbounds(src, first(Rsrc))
+    @boundscheck checkbounds(src, last(Rsrc))
     src′ = unalias(dest, src)
+    return _copyto_loops!(dest, Rdest, src′, Rsrc)
+end
+
+function _copyto_loops!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
+                        src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
     CRdest = CartesianIndices(Rdest)
     CRsrc = CartesianIndices(Rsrc)
     ΔI = first(CRdest) - first(CRsrc)
     if @generated
         quote
             @nloops $N i (n->CRsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src′,n->Rsrc.indices[n][i_n])
+                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][i_n])
             end
         end
     else
         for I in CRsrc
-            @inbounds dest[Rdest[I + ΔI]] = src′[Rsrc[I]]
+            @inbounds dest[Rdest[I + ΔI]] = src[Rsrc[I]]
         end
     end
     dest
