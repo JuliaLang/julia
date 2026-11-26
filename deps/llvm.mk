@@ -284,6 +284,8 @@ $$(LLVM_BUILDDIR_withtype)/build-compiled: $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patc
 LLVM_PATCH_PREV := $$(SRCCACHE)/$$(LLVM_SRC_DIR)/$1.patch-applied
 endef
 
+$(eval $(call LLVM_PROJ_PATCH,llvm-rp-downward-delta))
+
 ifeq ($(USE_SYSTEM_ZLIB), 0)
 $(LLVM_BUILDDIR_withtype)/build-configured: | $(build_prefix)/manifest/zlib
 endif
