@@ -288,8 +288,6 @@
     XX(jl_is_not_broken_subtype) \
     XX(jl_is_operator) \
     XX(jl_is_task_started) \
-    XX(jl_is_unary_and_binary_operator) \
-    XX(jl_is_unary_operator) \
     XX(jl_lazy_load_and_lookup) \
     XX(jl_load) \
     XX(jl_load_) \
@@ -356,7 +354,6 @@
     XX(jl_object_id) \
     XX(jl_object_id_) \
     XX(jl_obvious_subtype) \
-    XX(jl_operator_precedence) \
     XX(jl_parse) \
     XX(jl_parse_opts) \
     XX(jl_pathname_for_handle) \

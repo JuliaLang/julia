@@ -72,7 +72,14 @@ end
 
 is_op_suffix_char(c::AbstractChar) = isvalid(c) && ccall(:jl_op_suffix_char, Cint, (UInt32,), c) != 0
 
-_isoperator(s) = ccall(:jl_is_operator, Cint, (Cstring,), s) != 0
+# How names classify as operators (for printing): as Base's JuliaSyntax
+# classifies them (`JuliaSyntax.operator_info`) once Base has loaded it, and
+# before that, as while bootstrapping, as the runtime's frontend does.
+const _operators_from_syntax = Base.RefValue(false)
+_syntax_operator_info(s) = Base.JuliaSyntax.operator_info(s)
+
+_isoperator(s) = _operators_from_syntax[] ? _syntax_operator_info(s).isop :
+    ccall(:jl_frontend_is_operator, Cint, (Cstring,), s) != 0
 
 """
     isoperator(s::Symbol)
@@ -98,9 +105,12 @@ julia> Meta.isunaryoperator(:-), Meta.isunaryoperator(:√), Meta.isunaryoperato
 (true, true, false)
 ```
 """
-isunaryoperator(s::Symbol) = ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0
-is_unary_and_binary_operator(s::Symbol) = ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
-is_syntactic_operator(s::Symbol) = ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0
+isunaryoperator(s::Symbol) = _operators_from_syntax[] ? _syntax_operator_info(s).unary :
+    ccall(:jl_frontend_is_unary_operator, Cint, (Cstring,), s) != 0
+is_unary_and_binary_operator(s::Symbol) = _operators_from_syntax[] ? _syntax_operator_info(s).unary_binary :
+    ccall(:jl_frontend_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0
+is_syntactic_operator(s::Symbol) = _operators_from_syntax[] ? _syntax_operator_info(s).syntactic :
+    ccall(:jl_frontend_is_syntactic_operator, Cint, (Cstring,), s) != 0
 
 """
     isbinaryoperator(s::Symbol)

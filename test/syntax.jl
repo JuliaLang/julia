@@ -4890,24 +4890,26 @@ end
     @test (@macroexpand @call_cdecl_20392()).args[2] == GlobalRef(@__MODULE__, :cdecl)
 end
 
-# The runtime's operator queries, which printing relies on, come from the
-# frontend: from Base's JuliaSyntax (`JuliaSyntax.operator_info`), and before it
-# has started, as while bootstrapping, from flisp (jl_frontend_is_operator
-# etc.). The two must agree.
+# The classification of names as operators that printing relies on comes from
+# the frontend: from Base's JuliaSyntax (`JuliaSyntax.operator_info`), and
+# before Base has loaded it, as while bootstrapping, from flisp
+# (jl_frontend_is_operator etc.). The two must agree, except that precedences
+# are JuliaSyntax's `PrecedenceLevel`s, which are flisp's for all levels flisp
+# has but its last: flisp has no `where`, so its `.` is one lower.
 module OperatorQueries
 const _JS = Base.JuliaSyntax
-frontend_info(s) = (
+flisp_info(s) = (
     ccall(:jl_frontend_is_operator, Cint, (Cstring,), s) != 0,
     ccall(:jl_frontend_is_unary_operator, Cint, (Cstring,), s) != 0,
     ccall(:jl_frontend_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0,
     ccall(:jl_frontend_is_syntactic_operator, Cint, (Cstring,), s) != 0,
-    Int(ccall(:jl_frontend_operator_precedence, Cint, (Cstring,), s)))
-runtime_info(s) = (
-    ccall(:jl_is_operator, Cint, (Cstring,), s) != 0,
-    ccall(:jl_is_unary_operator, Cint, (Cstring,), s) != 0,
-    ccall(:jl_is_unary_and_binary_operator, Cint, (Cstring,), s) != 0,
-    ccall(:jl_is_syntactic_operator, Cint, (Cstring,), s) != 0,
-    Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s)))
+    let prec = Int(ccall(:jl_frontend_operator_precedence, Cint, (Cstring,), s))
+        prec == 17 ? Int(_JS.PREC_DOT) : prec
+    end)
+base_info(s) = let sym = Symbol(s)
+    (Base.Meta._isoperator(sym), Base.isunaryoperator(sym), Base.Meta.is_unary_and_binary_operator(sym),
+     Base.Meta.is_syntactic_operator(sym), Base.operator_precedence(sym))
+end
 juliasyntax_info(s) = let info = _JS.operator_info(s)
     (info.isop, info.unary, info.unary_binary, info.syntactic, Int(info.prec))
 end
@@ -4946,10 +4948,12 @@ end
     # n.b. in no particular order: flisp interns every name it is asked about,
     # in a binary tree that sorted names would degenerate
     cands = sort!(OperatorQueries.candidates(), by=hash)
-    @test isempty(filter(s -> OperatorQueries.frontend_info(s) != OperatorQueries.juliasyntax_info(s), cands))
-    # the runtime asks JuliaSyntax (n.b. each name it is asked about becomes a Symbol)
+    @test isempty(filter(s -> OperatorQueries.flisp_info(s) != OperatorQueries.juliasyntax_info(s), cands))
+    # Base and the runtime's jl_is_operator ask JuliaSyntax (n.b. each name
+    # they are asked about becomes a Symbol)
     ops = filter(s -> OperatorQueries.juliasyntax_info(s)[1], cands)[1:min(end, 5000)]
-    @test isempty(filter(s -> OperatorQueries.runtime_info(s) != OperatorQueries.juliasyntax_info(s),
-                         [ops; ["x", "if", "foo", "in", "isa"]]))
+    sample = [ops; ["x", "if", "foo", "in", "isa", "where"]]
+    @test isempty(filter(s -> OperatorQueries.base_info(s) != OperatorQueries.juliasyntax_info(s), sample))
+    @test all(s -> (ccall(:jl_is_operator, Cint, (Cstring,), s) != 0) == OperatorQueries.juliasyntax_info(s)[1], sample)
     @test Base.isoperator(:+) && Base.isunaryoperator(:-) && Base.operator_precedence(:*) == 12
 end

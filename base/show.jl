@@ -1716,13 +1716,14 @@ where an operator can be either unary or binary.)
 # Examples
 ```jldoctest
 julia> Base.operator_precedence(:+), Base.operator_precedence(:*), Base.operator_precedence(:.)
-(11, 12, 17)
+(11, 12, 18)
 
 julia> Base.operator_precedence(:sin), Base.operator_precedence(:+=), Base.operator_precedence(:(=))  # (Note the necessary parens on `:(=)`)
 (0, 1, 1)
 ```
 """
-operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Cstring,), s))
+operator_precedence(s::Symbol) = Meta._operators_from_syntax[] ? Int(Meta._syntax_operator_info(s).prec) :
+    Int(ccall(:jl_frontend_operator_precedence, Cint, (Cstring,), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_assignment = operator_precedence(:(=))
 const prec_pair = operator_precedence(:(=>))
