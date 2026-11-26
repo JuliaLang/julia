@@ -515,8 +515,7 @@ function _convert_closures(ctx::ClosureConversionCtx, ex)
 
         # rm method table argument if it's a closure id, since it's unnecessary
         # and requires the `(= id (new ...))` call to be lifted above the
-        # method.  flisp might be messing up overlays when it does this, since
-        # it removes all locals, not just closure ids.
+        # method.
         mtable = head(ex[1]) === :bindingid &&
             haskey(ctx.closure_bindings, closure_key(ctx, ex[1])) ?
             @ast(ctx, ex[1], (::nothing)) : _convert_closures(ctx, ex[1])

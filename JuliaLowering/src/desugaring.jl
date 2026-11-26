@@ -2632,7 +2632,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @jl_assert head(body) === :_generated_body && numchildren(body) == 2 body
     gen_name = let mangled = reserve_module_binding_i(
         ctx.layer.mod,
-        string("#", head(mtable) === :nothing ? "_" : mtable, "@generator"))
+        string("#", head(mtable) === :identifier ? syntax_name(mtable) : "_", "@generator"))
         m1_sc = escape_layer(mtable.context, true)
         @mknode(newsym(ctx, mtable, mangled);
                 context=SyntaxContext(
@@ -3061,6 +3061,13 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
         end
     end
     (overlay, mtable, a1) = expand_function_arg1(ctx, raw_args[1])
+    mtable_check = nothing
+    if overlay
+        mt = ssavar(ctx, mtable, "mt")
+        mtable_check = @ast ctx mtable [:(=) mt
+            [:call "typeassert"::core mtable "MethodTable"::core]]
+        mtable = mt
+    end
     argl = SyntaxList(a1)
     has_kws = head(raw_args[end]) === :parameters && numchildren(raw_args[end]) > 0
     let force_used = length(pos_opt_args(raw_args)) > 0 || has_kws
@@ -3074,11 +3081,13 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
-        keywords_method_def_expr(
+        kwdefs = keywords_method_def_expr(
             ctx, src, mtable, sparams, argl, body, rett, overlay)
+        overlay ? @ast(ctx, src, [:block mtable_check kwdefs]) : kwdefs
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [:block
+            mtable_check
             [:method_defs (::nothing)
                 method_def_sparams(ctx, src, sparams)
                 [:block [:(=) mtmp method_def_expr(

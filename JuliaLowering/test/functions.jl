@@ -2458,4 +2458,38 @@ end
         Tuple{typeof(identity), Int}, nothing, 1, Base.get_world_counter())
         @test only(ms).method.module === Base
     end
+
+    # but it must evaluate to a `MethodTable`, rather than the methods be added to the
+    # global method table
+    JL.include_string(OverlayModule, "overlay_target(x) = :global")
+    @test_throws TypeError JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay overlay_target overlay_target(x::Int) = :overlay
+    """)
+    @test_throws TypeError JL.include_string(OverlayModule, """
+        Base.Experimental.@overlay overlay_target overlay_target(x::Int; k) = :overlay
+    """)
+    @test OverlayModule.overlay_target(1) === :global
+    @test !hasmethod(OverlayModule.overlay_target, Tuple{Int}, (:k,))
+
+    # in a local scope, with the method table given as a local variable
+    JL.include_string(OverlayModule, """
+        let t = mt
+            Base.Experimental.@overlay t sqrt(x::Float64; k=1) = 4
+        end
+    """)
+    # the method table expression is evaluated once per definition
+    JL.include_string(OverlayModule, """
+        const nmt = Ref(0)
+        getmt() = (nmt[] += 1; mt)
+        Base.Experimental.@overlay getmt() atan(x::Float64, y=1; k=1) = 5
+    """)
+    @test OverlayModule.nmt[] == 1
+    for tt in (Tuple{typeof(sqrt), Float64},
+               Tuple{typeof(Core.kwcall), NamedTuple, typeof(sqrt), Float64},
+               Tuple{typeof(atan), Float64}, Tuple{typeof(atan), Float64, Int},
+               Tuple{typeof(Core.kwcall), NamedTuple, typeof(atan), Float64},
+               Tuple{typeof(Core.kwcall), NamedTuple, typeof(atan), Float64, Int})
+        ms = Base._methods_by_ftype(tt, OverlayModule.mt, 1, Base.get_world_counter())
+        @test only(ms).method.module === OverlayModule
+    end
 end
