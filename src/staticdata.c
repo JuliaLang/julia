@@ -3960,7 +3960,8 @@ static void jl_image_get_split_ji(void *handle, jl_image_buf_t *image, int map) 
         if (ok && !match && !(h.flags & JI_FLAG_PKGIMAGE))
             jl_error("Image checksum mismatch: the heap image (.ji) was not "
                      "compiled for use with this native image.");
-        if (ok)
+        // a .ji that fails verification is left unloaded, for the caller to reject
+        if (ok || !match)
             return;
     }
     jl_printf(JL_STDERR, "unable to load .ji associated with native image: %s\n", ji_path);
@@ -3980,7 +3981,7 @@ JL_DLLEXPORT void jl_image_unpack_split_zstd(void *handle, jl_image_buf_t *image
     jl_image_load_metadata(handle, image);
     jl_image_get_split_ji(handle, image, 0);
     char *comp_data = (char*)image->data;
-    if (comp_data == NULL) // checksum mismatch
+    if (comp_data == NULL) // mismatched .ji
         return;
     jl_image_decompress(image, comp_data);
     free(comp_data);
