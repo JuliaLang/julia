@@ -165,7 +165,9 @@ function trylock end
 @inline function trylock(rl::ReentrantLock)
     ct = current_task()
     if rl.locked_by === ct
-        rl.reentrancy_cnt += 0x0000_0001
+        n = rl.reentrancy_cnt
+        n == typemax(UInt32) && error("lock count overflow")
+        rl.reentrancy_cnt = n + 0x0000_0001
         return true
     end
     return _trylock(rl, ct)
