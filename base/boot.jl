@@ -1345,11 +1345,4 @@ function get_edition(mod::Module)
     (maj, min)
 end
 
-# Used only by the magic @VERSION macro
-struct MacroSource
-    lno::Any # ::LineNumberNode, but needs to be a pointer
-    syntax_ver::Any # ::VersionNumber =#
-    MacroSource(@nospecialize(lno), @nospecialize(syntax_ver)) = new(lno, syntax_ver)
-end
-
 ccall(:jl_set_istopmod, Cvoid, (Any, Bool), Core, true)

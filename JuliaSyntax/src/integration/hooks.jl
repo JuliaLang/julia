@@ -97,9 +97,7 @@ function _incomplete_tag(theerror::ErrorSpec, codelen)
         return :block
     elseif kp in KSet"for while function if"
         return i == 1 ? :other : :block
-    elseif kp == K"module"
-        return i <= 2 ? :other : :block
-    elseif kp == K"struct"
+    elseif kp in KSet"module struct"
         return i == 1 ? :other : :block
     elseif kp == K"do"
         return i < 3  ? :other : :block

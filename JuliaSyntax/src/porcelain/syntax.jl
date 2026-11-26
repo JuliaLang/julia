@@ -83,12 +83,6 @@ end
 
 should_include_node(st::Syntax) = !is_trivia(st) || head(st) === :error
 
-function version_to_expr(ex::Syntax)
-    @assert head(ex) === :version
-    nv = numeric_flags(flags(ex))
-    return VersionNumber(1, nv ÷ 10, nv % 10)
-end
-
 function build_tree(::Type{Syntax}, stream::ParseStream;
                     filename=nothing, first_line=1)
     cursor = RedTreeCursor(stream)
@@ -139,7 +133,7 @@ function _insert_green(src::SourceCode,
         end
         st = @mknode(;head=h, children=reverse!(cs), source, context, syntax_flags)
     else
-        v = if is_identifier(k) || is_literal(k) || is_operator(k) || k === K"VERSION"
+        v = if is_identifier(k) || is_literal(k) || is_operator(k)
             let v = parse_julia_literal(
                 txtbuf, head(cursor), byte_range(cursor) .+ offset)
                 # TODO: Fixes in JuliaSyntax to avoid ever converting to Symbol
@@ -196,8 +190,6 @@ function _green_to_est(parent::Syntax, parent_i::Int,
         return if k === :cmdmacroname || k === :strmacroname
             name = lower_identifier_name(syntax_name(st), k)
             symleaf(name)
-        elseif k === :version
-            valleaf(version_to_expr(st))
         elseif (v = st.value; v isa Union{Int128,UInt128,BigInt})
             # syntax TODO: likely unnecessary; this is just to match RGN->Expr,
             # which added this to match flisp parsing text->Expr.
@@ -279,16 +271,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     elseif k === :macrocall && n_cs > 0
         # LineNumberNodes are not usually added to the tree as they are in Expr,
         # but this specifically inserts the macrocall child for compatibility
-        loc_st = let loc = first_linenode(st)
-            if n_cs >= 2 && head(cs[2]) === :version
-                v = version_to_expr(popat!(cs, 2))
-                @static if isdefined(Core, :MacroSource)
-                    loc = Core.MacroSource(loc, v)
-                end
-            end
-            valleaf(loc)
-        end
-        insert!(cs, 2, loc_st)
+        insert!(cs, 2, valleaf(first_linenode(st)))
         # foo`x` parses to (macrocall foo::cmdmacroname (cmdstring ::cmdstring))
         # so we need to unwrap the cmdstring literal or else we get two macrocalls
         if n_cs >= 2 && head(cs[1]) === :cmdmacroname
@@ -491,8 +474,7 @@ function _green_to_est(parent::Syntax, parent_i::Int,
             return @mknode(;source=st, context, head=ret_k, children=ret_cs)
         end
     elseif k === :module
-        not_bare = valleaf(!has_flags(st, BARE_MODULE_FLAG))
-        insert!(cs, head(cs[1]) === :version ? 2 : 1, not_bare)
+        pushfirst!(cs, valleaf(!has_flags(st, BARE_MODULE_FLAG)))
     elseif k === :quote && n_cs === 1
         # (quote something_simple) => (inert something_simple)
         ret_c = _green_to_est(st, 1, cs[1])

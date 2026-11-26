@@ -2623,7 +2623,7 @@ end
                 readuntil(stdout_read, "julia> ")
 
                 # Check syntax version is 1.13 from proj1
-                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                write(stdin_write, "VersionNumber(Core.get_edition(Main)...)\r")
                 readuntil(stdout_read, "v\"1.13")
                 found_113 = true
 
@@ -2635,7 +2635,7 @@ end
                 readuntil(stdout_read, "julia> ")
 
                 # Next prompt should use syntax version 1.14 from proj2
-                write(stdin_write, "(Base.Experimental.@VERSION).syntax\r")
+                write(stdin_write, "VersionNumber(Core.get_edition(Main)...)\r")
                 readuntil(stdout_read, "v\"1.14")
                 found_114 = true
 
