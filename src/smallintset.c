@@ -107,7 +107,8 @@ ssize_t jl_smallintset_lookup(jl_genericmemory_t *cache, smallintset_eq eq, cons
     return idx;
 }
 
-static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL_NOTSAFEPOINT
+// returns 1 + the probe distance, or 0 if full
+static size_t smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL_NOTSAFEPOINT
 {
     size_t sz = a->length;
     if (sz <= 1)
@@ -120,7 +121,7 @@ static int smallintset_insert_(jl_genericmemory_t *a, uint_t hv, size_t val1) JL
     do {
         if (jl_intref(a, index) == 0) {
             jl_intset_release(a, index, val1);
-            return 1;
+            return iter + 1;
         }
         index = (index + 1) & (sz - 1);
         iter++;
@@ -138,8 +139,21 @@ void jl_smallintset_insert(_Atomic(jl_genericmemory_t*) *pcache, jl_value_t *par
         jl_atomic_store_release(pcache, a);
     }
     while (1) {
-        if (smallintset_insert_(a, hash(val, data), val + 1))
+        size_t probe = smallintset_insert_(a, hash(val, data), val + 1);
+        if (probe) {
+            size_t sz = a->length;
+            if (probe - 1 <= jl_table_long_probe(sz))
+                return;
+            size_t step = jl_table_sample_stride(sz), n = 0;
+            for (size_t i = 0; i < sz; i += step)
+                n += jl_intref(a, i) != 0;
+            if (2 * n * step <= sz)
+                return;
+            a = smallintset_rehash(a, hash, data, sz << 1, 0);
+            if (parent) jl_gc_wb(parent, (void*)pcache, a);
+            jl_atomic_store_release(pcache, a);
             return;
+        }
 
         /* table full */
         /* rehash to grow and retry the insert */
