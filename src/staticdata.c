@@ -768,6 +768,49 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
     return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
 }
 
+static int should_store_source(jl_code_instance_t *ci, jl_value_t *inferred, int incremental, int has_native) JL_CANSAFEPOINT
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    jl_method_t *def = mi->def.method;
+    int is_relocatable = !incremental || jl_is_code_info(inferred) ||
+        (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+    int may_discard_trees = !jl_get_type_infer_preserve_ir();
+    if (!is_relocatable)
+        return 0;
+    if (def->source == NULL && def->generator == NULL)
+        return 1; // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+    if (!may_discard_trees) // if allowed to delete
+        return 1;
+    if (!codeinst_may_be_runnable(ci, incremental)) // delete all code that cannot run
+        return 0;
+    if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) // delete all code that just returns a constant
+        return 0;
+    if (jl_ir_inlining_cost(inferred) != UINT16_MAX) // don't delete inlineable code
+        return 1;
+    if (has_native) {
+        if (ci->owner != jl_nothing && ci->owner != (jl_value_t*)jl_trim_sym) // don't delete code for external interpreters
+            return 1;
+        // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+        return effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)); // don't delete code we may want for irinterp
+    }
+    if (ci->owner != jl_nothing)
+        return 1;
+    return jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, def);
+}
+
+// Whether the image being generated will drop the source of a non-inlineable
+// CodeInstance of `def` with effects `ipo_effects`, cached by the native interpreter
+// (a case of should_store_source that inference can decide).
+JL_DLLEXPORT int jl_image_drops_source(jl_method_t *def, uint32_t ipo_effects)
+{
+    int has_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
+    if (!has_native || jl_get_type_infer_preserve_ir())
+        return 0;
+    if (def->source == NULL && def->generator == NULL)
+        return 0;
+    return !effects_foldable(ipo_effects);
+}
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -1007,37 +1050,11 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (inferred && inferred != jl_nothing && !jl_is_uint8(inferred)) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
             jl_method_t *def = mi->def.method;
             if (jl_is_method(def)) { // don't delete toplevel code
-                int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
-                    (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
-                int may_discard_trees = !jl_get_type_infer_preserve_ir();
-                int discard = 0;
-                if (may_discard_trees && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
-                    (def->source != NULL || def->generator != NULL) &&
-                    jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Drop IR retained only to generate native code (see jl_precompile_keep_ir).
-                    // Optimized opaque closures keep theirs, since it can't be rebuilt.
-                    record_field_change((jl_value_t*)ci, (jl_value_t**)&ci->inferred, jl_nothing);
-                }
-                else if (!is_relocatable) {
-                    discard = 1;
-                }
-                else if (def->source == NULL) {
-                    // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
-                }
-                else if (may_discard_trees && // if allowed to delete
-                         (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
-                          jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return)) { // delete all code that just returns a constant
-                    discard = 1;
-                }
-                else if (may_discard_trees &&
-                         native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) && // don't delete code for external interpreters
-                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
-                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
-                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
-                    discard = 1;
-                }
+                int discard = !should_store_source(ci, inferred, s->incremental, native_functions != NULL);
+                // inference compresses the source that an image with native code stores (see jl_image_drops_source)
+                assert(discard || !native_functions || !jl_is_code_info(inferred) || ci->owner != jl_nothing ||
+                       (def->source == NULL && def->generator == NULL) || jl_get_type_infer_preserve_ir() ||
+                       jl_ir_inlining_cost(inferred) != UINT16_MAX);
                 if (discard) {
                     // keep only the inlining cost, so inference can later decide if it is worth getting the source back
                     if (jl_is_string(inferred) || jl_is_code_info(inferred))
@@ -3851,8 +3868,6 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    // IR retained only to generate native code is not serialized (see jl_queue_for_serialization)
-    jl_set_precompile_keep_ir(0);
     jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;

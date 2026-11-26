@@ -1125,21 +1125,6 @@ JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v)
     jl_atomic_store_relaxed(&jl_type_infer_preserve_ir, v);
 }
 
-// Set by precompile workers around `Base.include` so non-inlineable inferred
-// IR is retained on `CodeInstance.inferred` through the irgen phase instead of
-// being discarded. The image leaves them out (see jl_queue_for_serialization).
-static _Atomic(int8_t) jl_precompile_keep_ir = 0;
-
-JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void)
-{
-    return jl_atomic_load_relaxed(&jl_precompile_keep_ir);
-}
-
-JL_DLLEXPORT void jl_set_precompile_keep_ir(int8_t v)
-{
-    jl_atomic_store_relaxed(&jl_precompile_keep_ir, v);
-}
-
 static int invalidate_all_entries(jl_typemap_entry_t *entry, void *env)
 {
     jl_atomic_store_relaxed(&entry->max_world, 0);
