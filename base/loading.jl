@@ -4172,11 +4172,12 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                     rm(joinpath(ocachefile * ".dSYM", "Contents", "Resources", "Relocations"); force=true, recursive=true)
                 end
             end
-            if cache_objects && !has_native
+            if !has_native
                 # A loaded image keeps its .ji mapped, which Windows will not replace,
                 # so fall back to a new name as for a loaded native image.
                 cachefile = rename_unique_ocachefile(tmppath, cachefile)
-                ocachefile = cachefile # an image without code is restored from its .ji alone
+                # an image without code is restored from its .ji alone
+                cache_objects && (ocachefile = cachefile)
             else
                 # this is atomic according to POSIX (not Win32):
                 # but force=true means it will fall back to non atomic
