@@ -584,6 +584,23 @@ end
         ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
     end
     @test clipboard() == ""
+    # clipboard without text (julia#47913)
+    let fmt = ccall((:RegisterClipboardFormatW, "user32"), stdcall, Cuint, (Cwstring,), "Julia InteractiveUtils test")
+        fmt == 0 && Base.windowserror("RegisterClipboardFormatW")
+        ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && Base.windowserror("OpenClipboard")
+        try
+            ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("EmptyClipboard")
+            h = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Cvoid}, (Cuint, Csize_t), 2 #=GMEM_MOVEABLE=#, 1)
+            h == C_NULL && Base.windowserror("GlobalAlloc")
+            if ccall((:SetClipboardData, "user32"), stdcall, Ptr{Cvoid}, (Cuint, Ptr{Cvoid}), fmt, h) == C_NULL
+                ccall((:GlobalFree, "kernel32"), stdcall, Ptr{Cvoid}, (Ptr{Cvoid},), h)
+                Base.windowserror("SetClipboardData")
+            end
+        finally
+            ccall((:CloseClipboard, "user32"), stdcall, Cint, ()) == 0 && Base.windowserror("CloseClipboard")
+        end
+        @test clipboard() == ""
+    end
     # nul error (unsupported data)
     @test_throws ArgumentError("Windows clipboard strings cannot contain NUL character") clipboard("abc\0")
 end
