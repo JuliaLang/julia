@@ -117,6 +117,7 @@ unaliascopy(A::SubArray) = typeof(A)(unaliascopy(A.parent), map(unaliascopy, A.i
 # When the parent is an Array we can trim the size down a bit. In the future this
 # could possibly be extended to any mutable array.
 function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Vararg{Union{ScalarIndex,AbstractRange{<:ScalarIndex},Array{<:Union{ScalarIndex,AbstractCartesianIndex}}}}},LD}
+    @noinline # rarely taken: keep the copy loop out of broadcast callers
     dest = Array{T}(undef, _trimmedshape(V.indices...))
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
