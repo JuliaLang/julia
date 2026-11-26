@@ -960,12 +960,15 @@ static jl_value_t *read_verify_mod_list(ios_t *s, jl_array_t *depmods) JL_CANSAF
 
 static int jl_verify_header(const jl_ji_header_t *h) JL_NOTSAFEPOINT
 {
+    if (memcmp(h->magic, JI_MAGIC, sizeof(h->magic)) != 0 ||
+        h->format_version != JI_FORMAT_VERSION || h->bom != BOM ||
+        h->pointer_size != sizeof(void *))
+        return 0; // not this format, so `flags` means nothing
+    if ((h->flags & JI_FLAG_PKGIMAGE) && !jl_git_commit)
+        return 0; // a package image can't match before the system image sets the commit
     char compat[JI_COMPAT_SIZE];
     jl_image_compat(compat, h->flags);
-    return memcmp(h->magic, JI_MAGIC, sizeof(h->magic)) == 0 &&
-           h->format_version == JI_FORMAT_VERSION && h->bom == BOM &&
-           h->pointer_size == sizeof(void *) &&
-           memcmp(h->compat, compat, JI_COMPAT_SIZE) == 0;
+    return memcmp(h->compat, compat, JI_COMPAT_SIZE) == 0;
 }
 
 static int jl_read_verify_header(ios_t *s, jl_ji_header_t *h) JL_NOTSAFEPOINT
