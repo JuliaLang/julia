@@ -15,14 +15,30 @@ endif
 $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured: $(BUILDDIR)/$(ZSTD_SRC_DIR)/source-extracted
 	echo 1 > $@
 
+# link the zstd program to libzstd like the JLL does, instead of building the library into it
 $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured
+ifeq ($(OS), WINNT)
 	$(MAKE) -C $(dir $<) $(MAKE_COMMON) $(ZSTD_BUILD_OPTS)
+else
+	$(MAKE) -C $(dir $<) $(MAKE_COMMON) $(ZSTD_BUILD_OPTS) lib-release
+	$(MAKE) -C $(dir $<)programs $(MAKE_COMMON) $(ZSTD_BUILD_OPTS) BACKTRACE=0 zstd-dll
+endif
 	echo 1 > $@
+
+ZSTD_POST_INSTALL := $(INSTALL_NAME_CMD)libzstd.$(SHLIB_EXT) $(build_shlibdir)/libzstd.$(SHLIB_EXT)
+ifeq ($(OS), Darwin)
+ZSTD_POST_INSTALL += && install_name_tool -change $(build_libdir)/libzstd.1.dylib @rpath/libzstd.1.dylib \
+	-add_rpath @executable_path/$(reverse_build_private_libexecdir_rel) $(build_private_libexecdir)/zstd \
+	&& codesign -s - -f $(build_private_libexecdir)/zstd
+else ifneq (,$(findstring $(OS),Linux FreeBSD))
+ZSTD_POST_INSTALL += && $(PATCHELF) $(PATCHELF_SET_RPATH_ARG) '$$$$ORIGIN/$(reverse_build_private_libexecdir_rel)' $(build_private_libexecdir)/zstd
+$(build_prefix)/manifest/zstd: | $(PATCHELF_MANIFEST)
+endif
 
 $(eval $(call staged-install, \
 	zstd,$(ZSTD_SRC_DIR), \
 	MAKE_INSTALL,$(ZSTD_BUILD_OPTS) MT=1,, \
-	$(INSTALL_NAME_CMD)libzstd.$(SHLIB_EXT) $(build_shlibdir)/libzstd.$(SHLIB_EXT)))
+	$(ZSTD_POST_INSTALL)))
 
 clean-zstd:
 	-rm -f $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-configured $(BUILDDIR)/$(ZSTD_SRC_DIR)/build-compiled
