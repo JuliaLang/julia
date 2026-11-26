@@ -1363,6 +1363,22 @@ end
 
 @inline unsafe_getindex(A::AbstractArray, I...) = @inbounds getindex(A, I...)
 
+"""
+    CanonicalIndexError(func, type)
+
+An error occurring when a method such as [`getindex`](@ref) or [`setindex!`](@ref) is
+called on an [`AbstractArray`](@ref) subtype `type` without a definition for the canonical
+index method required by its [`IndexStyle`](@ref). `func` is the name of the offending
+method (e.g. `"getindex"` or `"setindex!"`).
+
+Array types that opt into the `AbstractArray` interface are expected to define
+`getindex(A, i::Int)` when their `IndexStyle` is [`IndexLinear`](@ref), or
+`getindex(A, I::Vararg{Int,N})` when their `IndexStyle` is [`IndexCartesian`](@ref).
+Falling through to the generic fallbacks raises `CanonicalIndexError` to signal the
+missing definition.
+
+See also [`IndexStyle`](@ref).
+"""
 struct CanonicalIndexError <: Exception
     func::String
     type::Any
