@@ -257,7 +257,7 @@ constexpr auto znver2 = znver1 | get_feature_masks(clwb, rdpid); // wbnoinvd (pr
 constexpr auto znver3 = znver2 | get_feature_masks(shstk, pku, vaes, vpclmulqdq);
 constexpr auto znver4 = znver3 | get_feature_masks(avx512f, avx512cd, avx512dq, avx512bw, avx512vl, avx512ifma, avx512vbmi,
                                                    avx512vbmi2, avx512vnni, avx512bitalg, avx512vpopcntdq, avx512bf16, gfni, shstk, xsaves);
-constexpr auto znver5 = znver4 | get_feature_masks(avxvnni, movdiri, movdir64b, avx512vp2intersect, prefetchi, avxvnni);
+constexpr auto znver5 = znver4 | get_feature_masks(avxvnni, movdiri, movdir64b, avx512vp2intersect, prefetchi);
 
 }
 
@@ -618,14 +618,15 @@ static inline void features_disable_avx(T &features)
 {
     using namespace Feature;
     unset_bits(features, avx, Feature::fma, f16c, xsave, avx2, xop, fma4,
-               xsaveopt, xsavec, xsaves, vaes, vpclmulqdq);
+               xsaveopt, xsavec, xsaves, vaes, vpclmulqdq, avxvnni, avxifma,
+               avxvnniint8, avxneconvert, avxvnniint16);
 }
 
 template<typename T>
 static inline void features_disable_amx(T &features)
 {
     using namespace Feature;
-    unset_bits(features, amx_bf16, amx_tile, amx_int8);
+    unset_bits(features, amx_bf16, amx_tile, amx_int8, amx_fp16, amx_complex);
 }
 
 // Collect CPUID/XCR0-derived features on the currently running core.
@@ -646,9 +647,11 @@ static NOINLINE FeatureList<feature_sz> _get_host_cpu_features(void)
     // Fill in the features
     features[0] = info1[2];
     features[1] = info1[3];
+    uint32_t maxsubleaf7 = 0;
     if (maxleaf >= 7) {
         int32_t info7[4];
         jl_cpuidex(info7, 7, 0);
+        maxsubleaf7 = info7[0];
         features[2] = info7[1];
         features[3] = info7[2];
         features[4] = info7[3];
@@ -672,11 +675,23 @@ static NOINLINE FeatureList<feature_sz> _get_host_cpu_features(void)
         jl_cpuidex(infoex8, 0x80000008, 0);
         features[8] = infoex8[1];
     }
-    if (maxleaf >= 7) {
+    // Some CPUs return nonzero data for subleaves they do not have.
+    if (maxsubleaf7 >= 1) {
         int32_t info7[4];
         jl_cpuidex(info7, 7, 1);
         features[9] = info7[0];
-        features[10] = info7[1];
+        features[10] = info7[3];
+        // With avxneconvert LLVM 18 converts Float32 to BFloat16 with
+        // vcvtneps2bf16, which treats subnormals as zero.
+        unset_bits(features, Feature::avxneconvert);
+    }
+    // AMD reports PREFETCHI in CPUID 0x80000021 EAX[20] rather than in the
+    // Intel location (leaf 7 subleaf 1 EDX[14]); fold it into the same bit.
+    if (maxexleaf >= 0x80000021) {
+        int32_t infoex21[4];
+        jl_cpuidex(infoex21, 0x80000021, 0);
+        if (test_all_bits(infoex21[0], 1 << 20))
+            set_bit(features, Feature::prefetchi, true);
     }
     if (maxleaf >= 0x14) {
         int32_t info14[4];
@@ -857,8 +872,8 @@ static NOINLINE std::pair<uint32_t,FeatureList<feature_sz>> _get_host_cpu(void)
     feature[6] = leaf 0x80000001 edx
     feature[7] = leaf 0xd subleaf 1 eax
     feature[8] = leaf 0x80000008 ebx
-    feature[9] = leaf 7 ebx subleaf 1 eax
-    feature[10] = leaf 7 ebx subleaf 1 ebx
+    feature[9] = leaf 7 subleaf 1 eax
+    feature[10] = leaf 7 subleaf 1 edx
     feature[11] = leaf 0x14 ebx
     */
     return std::make_pair(cpu, features);
