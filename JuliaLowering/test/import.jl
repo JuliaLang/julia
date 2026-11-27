@@ -105,11 +105,13 @@ end
     macname_mod = Module()
     jl_eval(macname_mod, raw"""
     module Macros
-        macro mac1(); "mac1"; end
-        macro mac2(); "mac2"; end
+        using JuliaLowering: @legacy_quote_to_syntax
+        macro mac1(); @legacy_quote_to_syntax :("mac1"); end
+        macro mac2(); @legacy_quote_to_syntax :("mac2"); end
         module Inner
-            macro mac3(); "mac3"; end
-            macro mac4(); "mac4"; end
+            using JuliaLowering: @legacy_quote_to_syntax
+            macro mac3(); @legacy_quote_to_syntax :("mac3"); end
+            macro mac4(); @legacy_quote_to_syntax :("mac4"); end
         end
     end
     """; edition)

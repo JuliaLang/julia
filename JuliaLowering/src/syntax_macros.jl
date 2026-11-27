@@ -482,7 +482,7 @@ end
 Retrieve the edition of the macrocall
 """
 function var"@edition"(__context__::MacroContext)
-    __context__.macrocall.context.edition
+    @ast __context__ __context__.macrocall __context__.macrocall.context.edition::value
 end
 macro edition()
     JL_OLD_EDITION

@@ -22,7 +22,7 @@ macro strmac_str(ex, suff=nothing)
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
-    s
+    JuliaLowering.@legacy_quote_to_syntax :($s)
 end
 
 macro cmdmac_cmd(ex, suff=nothing)
@@ -30,7 +30,7 @@ macro cmdmac_cmd(ex, suff=nothing)
     if !isnothing(suff)
         s = "$s with suffix $(suff.value)"
     end
-    s
+    JuliaLowering.@legacy_quote_to_syntax :($s)
 end
 
 #*******************************************************************************

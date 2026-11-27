@@ -590,15 +590,15 @@ module M
 
     # Introspection
     macro __MODULE__()
-        syntax_module(__context__.macrocall)
+        @legacy_quote_to_syntax :($(syntax_module(__context__.macrocall)))
     end
 
     macro __FILE__()
-        JuliaLowering.filename(__context__.macrocall) |> string
+        @legacy_quote_to_syntax :($(JuliaLowering.filename(__context__.macrocall) |> string))
     end
 
     macro __LINE__()
-        JuliaLowering.source_location(__context__.macrocall)[1]
+        @legacy_quote_to_syntax :($(JuliaLowering.source_location(__context__.macrocall)[1]))
     end
 
     someglobal = "global in module M"
@@ -731,13 +731,13 @@ end
 # World age support for macro expansion
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    1
+    @legacy_quote_to_syntax :(1)
 end
 """)
 world1 = Base.get_world_counter()
 JuliaLowering.include_string(test_mod, raw"""
 macro world_age_test()
-    2
+    @legacy_quote_to_syntax :(2)
 end
 """)
 world2 = Base.get_world_counter()

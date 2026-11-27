@@ -229,13 +229,8 @@ function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
         catch exc
             rethrow(MacroExpansionError(mctx, st, "Error expanding macro", exc))
         end
-        st_out = if expanded isa SyntaxTree
-            expanded
-        else
-            (expanded isa Expr || expanded isa Symbol) && throw(LoweringError(
-                st, "implicit expr->syntaxtree: may later be allowed, but is probably a mistake today"))
-            expr_to_est(expanded, st)
-        end
+        st_out = expanded isa SyntaxTree ? expanded :
+            throw(LoweringError(st, """expected `Syntax` from macro defined with edition >1.14. Either change this macro to return `Syntax`, or ensure its definition uses an older edition."""))
     else
         macro_lnn = first_linenode(st)
         macro_args = Any[macro_lnn, base_layer(ctx.syntax_context).mod]

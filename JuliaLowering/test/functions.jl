@@ -1907,6 +1907,35 @@ end
         """; edition) == GlobalRef(Core, :nothing)
     end
 
+    @testset "explicit `return` from the generator" begin
+        for (name, ret, expected) in [("expr", ":(x.a + 1)", 2),
+                                      ("sym", ":x", (a=1,)),
+                                      ("lit", "1", 1)]
+            code = """begin
+                @generated function f_gen_return_$name(x)
+                    return $ret
+                end
+                f_gen_return_$name((a=1,))
+            end
+            """
+            if edition == JL_OLD_EDITION
+                @test jl_eval(test_mod, code; edition) == expected
+            else
+                @test_throws "expected `Syntax` from generated function" jl_eval(
+                    test_mod, code; edition)
+            end
+        end
+
+        @test jl_eval(test_mod, raw"""
+        begin
+            @generated function f_gen_return_syntax(x)
+                return @legacy_quote_to_syntax :(x.a + $(fieldcount(x)))
+            end
+            f_gen_return_syntax((a=1,))
+        end
+        """; edition) == 2
+    end
+
     @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_trivial(x)
@@ -2072,10 +2101,10 @@ end
     end
     """; edition) == (NTuple{5,Int}, 5, Int)
 
-    @test jl_eval(test_mod, """
+    @test jl_eval(test_mod, raw"""
     begin
         @generated function f_gen_unnamed_args(::Type{T}, y, ::Type{U}) where {T, U}
-            return (T, y, U)
+            return @legacy_quote_to_syntax :($((T, y, U)))
         end
 
         f_gen_unnamed_args(Int, UInt8(3), Float64)
@@ -2117,9 +2146,9 @@ end
     @test jl_eval(test_mod, raw"""begin
         @generated function calls_versioned_macro(::Type{T}, ::Val{i}) where {T, i}
             i isa Integer || @goto err
-            return i
+            return @legacy_quote_to_syntax :($i)
             @label err
-            return 0
+            return @legacy_quote_to_syntax :(0)
         end
 
         calls_versioned_macro(Tuple{Int}, Val(1))
@@ -2230,13 +2259,13 @@ end
             @generated function find_first_eq(x, itr::I) where {
                     N, I <: Tuple{Vararg{Any, N}}
                 }
-                return :(Base.Cartesian.@nif $(N + 1) d -> (x == getfield(itr, d)) d -> (d) d -> (nothing))
+                return @legacy_quote_to_syntax :(Base.Cartesian.@nif $(N + 1) d -> (x == getfield(itr, d)) d -> (d) d -> (nothing))
             end
             (find_first_eq(20, (10, 20, 30)), find_first_eq(99, (10, 20, 30)))
         end"""; edition) === (2, nothing)
         @test jl_eval(test_mod, raw"""begin
             @generated function nif_uses_sparam(x, ::Type{T}) where {T}
-                return :(Base.Cartesian.@nif 2 d -> (x isa T) d -> (T) d -> (nothing))
+                return @legacy_quote_to_syntax :(Base.Cartesian.@nif 2 d -> (x isa T) d -> (T) d -> (nothing))
             end
             nif_uses_sparam(1, Int)
         end"""; edition) === Int
@@ -2258,11 +2287,12 @@ end
         # in the world it is generated for (like flisp, which uses the latest)
         m = Module()
         jl_eval(m, """
+        using JuliaLowering: @legacy_quote_to_syntax
         @generated gen_later_macro(x) = :(@later_macro)
-        macro later_macro() 1 end
-        macro redefined_macro() 1 end
+        macro later_macro() @legacy_quote_to_syntax :(1) end
+        macro redefined_macro() @legacy_quote_to_syntax :(1) end
         @generated gen_redefined_macro(x) = :(@redefined_macro)
-        macro redefined_macro() 2 end
+        macro redefined_macro() @legacy_quote_to_syntax :(2) end
         """; edition)
         @test jl_eval(m, "gen_later_macro(0)"; edition) === 1
         @test jl_eval(m, "gen_redefined_macro(0)"; edition) === 2
