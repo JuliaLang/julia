@@ -445,10 +445,9 @@ static jl_code_instance_t *jl_method_inferred_with_abi(jl_method_instance_t *mi 
 // if successful, also updates the mi argument to describe the validity of this src
 // if inference doesn't occur (or can't finish), returns NULL instead
 //
-// With SOURCE_MODE_GET_SOURCE, also returns the optimized source of that
-// CodeInstance in `*psrc`, for a caller that compiles it itself, or NULL if
-// there is none.
-static jl_code_instance_t *jl_type_infer_(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode, jl_code_info_t **psrc) JL_CANSAFEPOINT
+// With SOURCE_MODE_RUNTIME_FREE, what is returned is not a CodeInstance, but
+// the code of a runtime-free callback (see jl_type_infer_runtime_free).
+static jl_value_t *jl_type_infer_(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode) JL_CANSAFEPOINT
 {
     if (jl_typeinf_func == NULL)
         return NULL;
@@ -462,9 +461,8 @@ static jl_code_instance_t *jl_type_infer_(jl_method_instance_t *mi, size_t world
     if ((ct->reentrant_timing & 0b1111) >= 0b110)
         return NULL;
 
-    jl_code_instance_t *ci = NULL;
+    jl_value_t *ci = NULL;
 #ifdef ENABLE_INFERENCE
-    jl_code_info_t *src = NULL;
     if (jl_engine_hasreserved(mi, jl_nothing)) // don't recur on a thread on the same MethodInstance--force it to interpret it until the inference has finished
         return NULL;
     JL_TIMING(INFERENCE, INFERENCE);
@@ -506,7 +504,7 @@ static jl_code_instance_t *jl_type_infer_(jl_method_instance_t *mi, size_t world
     // abandonment) until inference has finished.
     JL_SIGATOMIC_BEGIN();
     JL_TRY {
-        ci = (jl_code_instance_t*)jl_apply(fargs, 5);
+        ci = jl_apply(fargs, 5);
     }
     JL_CATCH {
         jl_value_t *e = jl_current_exception(ct);
@@ -537,34 +535,25 @@ static jl_code_instance_t *jl_type_infer_(jl_method_instance_t *mi, size_t world
     errno = last_errno;
     jl_fpctrl_restore(last_fpctrl);
 
-    if (ci && source_mode == SOURCE_MODE_GET_SOURCE) {
-        // an svec of the CodeInstance and its source
-        jl_value_t *result = (jl_value_t*)ci;
-        ci = NULL;
-        if (jl_is_svec(result) && jl_svec_len(result) == 2 && jl_is_code_info(jl_svecref(result, 1))) {
-            fargs[1] = result; // keep the source rooted
-            ci = (jl_code_instance_t*)jl_svecref(result, 0);
-            src = (jl_code_info_t*)jl_svecref(result, 1);
-        }
+    if (source_mode == SOURCE_MODE_RUNTIME_FREE) {
+        if (ci && !jl_typetagis(ci, jl_array_any_type))
+            ci = NULL;
     }
-    if (ci && !jl_is_code_instance(ci)) {
+    else if (ci && !jl_is_code_instance(ci)) {
         ci = NULL;
-        src = NULL;
     }
 
     // Record inference entrance backtrace if enabled
-    if (ci) {
+    if (ci && jl_is_code_instance(ci)) {
         JL_GC_PUSH1(&ci);
-        jl_push_inference_entrance_backtraces((jl_value_t*)ci);
+        jl_push_inference_entrance_backtraces(ci);
         JL_GC_POP();
     }
 
     // end the deferral region, now that the compiler state is consistent
     // again; keep `ci` rooted across the safepoint
-    fargs[0] = (jl_value_t*)ci;
+    fargs[0] = ci;
     JL_SIGATOMIC_END();
-    if (psrc)
-        *psrc = src;
     JL_GC_POP();
 #endif
 
@@ -573,18 +562,18 @@ static jl_code_instance_t *jl_type_infer_(jl_method_instance_t *mi, size_t world
 
 jl_code_instance_t *jl_type_infer(jl_method_instance_t *mi, size_t world, uint8_t source_mode, uint8_t trim_mode)
 {
-    assert(source_mode != SOURCE_MODE_GET_SOURCE);
-    return jl_type_infer_(mi, world, source_mode, trim_mode, NULL);
+    assert(source_mode != SOURCE_MODE_RUNTIME_FREE);
+    return (jl_code_instance_t*)jl_type_infer_(mi, world, source_mode, trim_mode);
 }
 
-// The CodeInstance for `mi` in `world`, as jl_type_infer returns, with its
-// optimized source in `*psrc`, for a caller that compiles that itself. NULL if
-// there is no such source. The CodeInstance is rooted by `mi`, and the caller
-// must root `*psrc`.
-jl_code_instance_t *jl_type_infer_source(jl_method_instance_t *mi, size_t world, jl_code_info_t **psrc)
+// All the code that a runtime-free callback of `mi` runs in `world`
+// (`Compiler.typeinf_ext_runtime_free`): the CodeInstances of `mi` and of
+// what it calls, which have the owner `jl_runtime_free_sym`, each followed by
+// its source, with that of `mi` first. NULL if it could not be inferred. The
+// caller must root the result.
+jl_array_t *jl_type_infer_runtime_free(jl_method_instance_t *mi, size_t world)
 {
-    *psrc = NULL;
-    return jl_type_infer_(mi, world, SOURCE_MODE_GET_SOURCE, 0, psrc);
+    return (jl_array_t*)jl_type_infer_(mi, world, SOURCE_MODE_RUNTIME_FREE, 0);
 }
 
 // Attempt to run `Core.Compiler.code_typed` on the lambda "mi"

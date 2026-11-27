@@ -7625,7 +7625,7 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaidx_
         jl_cgval_t fexpr_val = emit_expr(ctx, args[1]);
         // the calling convention: `ccall`, or `runtime_free` (see `@cfunction`)
         bool runtime_free = jl_is_quotenode(args[4]) &&
-            jl_quotenode_value(args[4]) == (jl_value_t*)jl_symbol("runtime_free");
+            jl_quotenode_value(args[4]) == (jl_value_t*)jl_runtime_free_sym;
         return emit_cfunction(ctx, args[0], fexpr_val, args[2], (jl_svec_t*)args[3], runtime_free);
     }
     else if (head == jl_assign_sym) {
@@ -9196,15 +9196,56 @@ const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval,
 // otherwise emits, which finds or creates the task, enters the GC-unsafe
 // state, sets the world age and looks up the code to call in that world.
 // Instead, it is the code of the method that is called in the world in which
-// the `cfunction` expression is evaluated, compiled here for this purpose: on
-// its own, without a safepoint on entry or instrumentation, and without the
-// task for an argument. It is the callback if nothing in it needs the runtime
-// (jl_verify_runtime_free), and refused otherwise.
+// the `cfunction` expression is evaluated, with all the code that this can
+// call, compiled here for this purpose: without a safepoint on entry or
+// instrumentation, and without the task for an argument. It is the callback
+// if nothing in any of it needs the runtime (jl_verify_runtime_free), and
+// refused otherwise.
+//
+// The code is that of a closed set of CodeInstances: one for the method, and
+// those that its `invoke`s name, and so on, as inference collects them the
+// way it does for `--trim` (`Compiler.typeinf_ext_runtime_free`). They have
+// an owner of their own (`jl_runtime_free_sym`), so that none of them is a
+// CodeInstance of the code that is ordinarily called, which is compiled
+// differently: the two can be compiled into the same module, and neither can
+// call the other. The functions that are emitted for them here are not what
+// these CodeInstances `invoke` (nothing is): they are private to the module,
+// so that every call between them is one that can be seen, and checked, here.
+
+// Compile for a runtime-free callback while this is alive. The code that is
+// emitted for the CodeInstances of such callbacks is only called by other
+// such code, so their prototypes are all made with these parameters.
+namespace {
+struct runtime_free_params_t {
+    jl_codegen_output_t &out;
+    const jl_cgparams_t *params;
+    bool safepoint_on_entry;
+    jl_cgparams_t runtime_free_params;
+    runtime_free_params_t(jl_codegen_output_t &out) JL_NOTSAFEPOINT
+      : out(out), params(out.params), safepoint_on_entry(out.safepoint_on_entry), runtime_free_params(*out.params)
+    {
+        runtime_free_params.gcstack_arg = 0;         // it has no task
+        runtime_free_params.safepoint_on_entry = 0;
+        runtime_free_params.track_allocations = 0;   // these call the runtime
+        runtime_free_params.code_coverage = 0;
+        runtime_free_params.prefer_specsig = 1;
+        out.params = &runtime_free_params;
+        out.safepoint_on_entry = false;
+    }
+    ~runtime_free_params_t() JL_NOTSAFEPOINT
+    {
+        out.params = params;
+        out.safepoint_on_entry = safepoint_on_entry;
+    }
+};
+} // namespace
 
 // What statement of its source keeps a function from being runtime-free, for
 // those that would have codegen record something in `out` for later (another
-// function to link or to emit, a library to open), or "".
-static std::string runtime_free_unsupported_stmt(jl_value_t *stmt) JL_CANSAFEPOINT
+// function to emit, a library to open), or "". The code that it calls
+// otherwise is added to `callees`.
+static std::string runtime_free_unsupported_stmt(jl_value_t *stmt, jl_method_instance_t *caller,
+                                                 SmallVectorImpl<jl_code_instance_t*> &callees) JL_CANSAFEPOINT
 {
     if (jl_is_enternode(stmt))
         return "it has a `try` block";
@@ -9214,20 +9255,33 @@ static std::string runtime_free_unsupported_stmt(jl_value_t *stmt) JL_CANSAFEPOI
     jl_sym_t *head = e->head;
     size_t nargs = jl_expr_nargs(e);
     if (head == jl_assign_sym && nargs == 2)
-        return runtime_free_unsupported_stmt(jl_exprarg(e, 1));
-    if (head == jl_invoke_sym || head == jl_invoke_modify_sym) {
+        return runtime_free_unsupported_stmt(jl_exprarg(e, 1), caller, callees);
+    if (head == jl_invoke_sym) {
+        // The code to call is a CodeInstance for these callbacks, which is
+        // compiled with this one (or this function itself). Anything else is
+        // a call that the runtime resolves.
         jl_value_t *callee = nargs > 0 ? jl_exprarg(e, 0) : NULL;
         jl_method_instance_t *mi = NULL;
-        if (callee && jl_is_code_instance(callee))
-            mi = jl_get_ci_mi((jl_code_instance_t*)callee);
-        else if (callee && jl_is_method_instance(callee))
+        if (callee && jl_is_code_instance(callee)) {
+            jl_code_instance_t *codeinst = (jl_code_instance_t*)callee;
+            mi = jl_get_ci_mi(codeinst);
+            if (codeinst->owner == (jl_value_t*)jl_runtime_free_sym) {
+                if (mi != caller)
+                    callees.push_back(codeinst);
+                return "";
+            }
+        }
+        else if (callee && jl_is_method_instance(callee)) {
             mi = (jl_method_instance_t*)callee;
+        }
+        if (mi == caller)
+            return "";
         std::string msg = "it calls ";
         if (mi)
             msg += std::string("`") + name_from_method_instance(mi) + "`";
         else
             msg += "a function";
-        return msg + ", which is not inlined";
+        return msg + ", with code that is not resolved statically";
     }
     if (head == jl_call_sym) {
         // `llvmcall` brings its own module
@@ -9275,148 +9329,217 @@ static void runtime_free_cleanup(Function &F) JL_NOTSAFEPOINT
 }
 
 Function *emit_runtime_free_cfunction(jl_codegen_output_t &out, jl_value_t *declrt, jl_value_t *sigt,
-                                      jl_method_instance_t *mi, jl_code_info_t *src, std::string &err)
+                                      jl_code_instance_t *codeinst,
+                                      function_ref<jl_code_info_t *(jl_code_instance_t *)> get_src,
+                                      std::string &err)
 {
+    using call_target_t = std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>;
     jl_datatype_t *ft = (jl_datatype_t*)jl_tparam0(sigt);
     jl_value_t *ff = jl_is_datatype(ft) ? ft->instance : NULL;
     if (!ff) {
         err = "the function is a closure";
         return nullptr;
     }
-    if (!jl_egal(mi->specTypes, sigt)) {
+    assert(codeinst->owner == (jl_value_t*)jl_runtime_free_sym);
+    jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+    if (!jl_egal(mi->specTypes, sigt) || !jl_egal(get_ci_abi(codeinst), sigt)) {
         err = "the method is not specialized for these argument types";
         return nullptr;
     }
-    jl_value_t *rettype = src->rettype;
+    jl_value_t *rettype = codeinst->rettype;
     if (!jl_egal(rettype, declrt)) {
         // an ordinary `cfunction` checks the type of what it returns, and throws
         err = "it is not inferred to return a value of the declared return type";
         return nullptr;
     }
-    bool specsig, needsparams;
-    std::tie(specsig, needsparams) = uses_specsig(mi->specTypes, mi, rettype, true);
-    if (!specsig) {
-        err = "the method is not specialized for these argument types";
-        return nullptr;
-    }
-    for (size_t i = 0, n = jl_array_nrows(src->code); i < n; i++) {
-        err = runtime_free_unsupported_stmt(jl_array_ptr_ref(src->code, i));
-        if (!err.empty())
-            return nullptr;
-    }
     const char *name = jl_symbol_name(ft->name->singletonname);
     Module *M = &out.get_module();
 
-    // Everything that this code refers to must be in the code itself. So see
-    // that emitting it does not add to what `out` has yet to link or to emit:
-    // with the statements above ruled out, nothing should.
-    DenseSet<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>> call_targets;
+    // Everything that this code refers to must be in the code that is emitted
+    // here, or was for another callback. So remember what `out` has yet to
+    // link or to emit, to see that this adds nothing to it but that.
+    DenseSet<call_target_t> call_targets;
     for (auto &[call, target] : out.call_targets)
         call_targets.insert(call);
     size_t ncfuncs = out.cfuncs.size();
     size_t nllvmcall = out.llvmcall_modules.size();
     size_t nexternal = out.external_fns.size();
 
-    // The function, compiled for this purpose
-    jl_cgparams_t params = *out.params;
-    params.gcstack_arg = 0;         // it has no task
-    params.safepoint_on_entry = 0;
-    params.track_allocations = 0;   // these call the runtime
-    params.code_coverage = 0;
-    params.prefer_specsig = 1;
-    const jl_cgparams_t *out_params = out.params;
-    bool safepoint_on_entry = out.safepoint_on_entry;
-    out.params = &params;
-    out.safepoint_on_entry = false;
-    Function *target = nullptr;
+    // The functions: that of the CodeInstance, and of every one that it
+    // calls, and so on. One that another callback has in this module already
+    // is that code, which was accepted with all that it calls.
+    SmallVector<std::pair<Function*, jl_code_instance_t*>, 8> emitted;
     Function *cw = nullptr;
-    auto decls = jl_emit_code(out, mi, src, mi->specTypes, rettype);
-    if (!decls || decls->invoke_api != JL_INVOKE_SPECSIG || !decls->specptr) {
-        err = "it could not be compiled";
-        if (decls && decls->specptr)
-            decls->specptr->eraseFromParent();
-    }
-    else {
-        target = decls->specptr;
-        // the entry point for Julia's calling convention is of no use here
-        if (decls->invoke)
-            decls->invoke->eraseFromParent();
-        target->setLinkage(GlobalValue::InternalLinkage);
-        // The entry point for C
-        jl_value_t *crt = declrt;
-        bool toboxed;
-        Type *lcrt = _julia_struct_to_llvm(&out, out.get_context(), crt, &toboxed);
-        size_t nargs = jl_nparams(sigt) - 1;
-        jl_svec_t *argtypes = NULL;
-        JL_GC_PUSH1(&argtypes);
-        argtypes = jl_alloc_svec(nargs);
-        for (size_t i = 0; i < nargs; i++)
-            jl_svecset(argtypes, i, jl_tparam(sigt, i + 1));
-        { // scope block for sig
-            function_sig_t sig("cfunction", lcrt, crt, toboxed, false,
-                               argtypes, NULL, false, CallingConv::C, false, &out);
-            if (toboxed || !sig.err_msg.empty()) {
-                err = toboxed ? "it does not return a value of an `isbits` type" : sig.err_msg;
+    { // scope block for params
+        runtime_free_params_t params(out);
+        SmallVector<jl_code_instance_t*, 8> queue{codeinst};
+        SmallPtrSet<jl_code_instance_t*, 8> queued;
+        queued.insert(codeinst);
+        SmallVector<jl_code_instance_t*, 8> callees;
+        while (!queue.empty() && err.empty()) {
+            jl_code_instance_t *ci = queue.pop_back_val();
+            JL_GC_PROMISE_ROOTED(ci); // by the source that names it, or the caller
+            call_target_t call{ci, JL_INVOKE_SPECSIG};
+            auto it = out.call_targets.find(call);
+            if (it != out.call_targets.end() && it->second.decl->hasFnAttribute("julia.runtime_free"))
+                continue;
+            jl_method_instance_t *ci_mi = jl_get_ci_mi(ci);
+            // what is wrong with a function that it calls is what is wrong with it
+            auto fails = [&](const Twine &why) JL_NOTSAFEPOINT {
+                if (ci == codeinst)
+                    err = why.str();
+                else
+                    err = (Twine("`") + name_from_method_instance(ci_mi) + "`, which it calls: " + why).str();
+            };
+            jl_code_info_t *src = get_src(ci);
+            if (src == nullptr) {
+                fails("its code is not available");
+                break;
             }
-            else {
-                jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", mi->specTypes, rettype, false);
-                cw = gen_cfun_wrapper(M, out, sig, ff, name, declrt, sigt, NULL, NULL, NULL, &targetspec);
+            JL_GC_PROMISE_ROOTED(src); // by the caller
+            bool specsig, needsparams;
+            std::tie(specsig, needsparams) = uses_specsig(get_ci_abi(ci), ci_mi, ci->rettype, true);
+            if (!specsig) {
+                fails("the method is not specialized for its argument types");
+                break;
             }
-        }
-        JL_GC_POP();
-    }
-    out.params = out_params;
-    out.safepoint_on_entry = safepoint_on_entry;
-
-    if (cw) {
-        // The verdict, for the two functions together
-        static const char *const candidate = "julia.runtime_free.candidate";
-        target->addFnAttr(candidate);
-        cw->addFnAttr(candidate);
-        for (Function *F : {target, cw}) {
-            runtime_free_cleanup(*F);
-            err = jl_verify_runtime_free(*F, candidate);
+            callees.clear();
+            for (size_t i = 0, n = jl_array_nrows(src->code); i < n; i++) {
+                std::string why = runtime_free_unsupported_stmt(jl_array_ptr_ref(src->code, i), ci_mi, callees);
+                if (!why.empty()) {
+                    fails(why);
+                    break;
+                }
+            }
             if (!err.empty())
                 break;
+            auto decls = jl_emit_code(out, ci_mi, src, get_ci_abi(ci), ci->rettype);
+            if (!decls || decls->invoke_api != JL_INVOKE_SPECSIG || !decls->specptr) {
+                if (decls && decls->invoke)
+                    decls->invoke->eraseFromParent();
+                if (decls && decls->specptr)
+                    decls->specptr->eraseFromParent();
+                fails("it could not be compiled");
+                break;
+            }
+            // the entry point for Julia's calling convention is of no use here
+            if (decls->invoke)
+                decls->invoke->eraseFromParent();
+            Function *F = decls->specptr;
+            F->setLinkage(GlobalValue::InternalLinkage);
+            emitted.push_back({F, ci});
+            // this is what its callers call (n.b. emitting it may have added to the call targets)
+            it = out.call_targets.find(call);
+            if (it != out.call_targets.end()) {
+                Function *decl = it->second.decl;
+                decl->replaceAllUsesWith(F);
+                decl->eraseFromParent();
+                it->second.decl = F;
+            }
+            else {
+                out.call_targets[call] = {F, false, true};
+            }
+            for (jl_code_instance_t *callee : callees)
+                if (queued.insert(callee).second)
+                    queue.push_back(callee);
         }
-        if (err.empty() && (out.call_targets.size() != call_targets.size() || out.cfuncs.size() != ncfuncs ||
-                            out.llvmcall_modules.size() != nllvmcall || out.external_fns.size() != nexternal))
+        if (err.empty()) {
+            // The entry point for C
+            Function *target = out.call_targets[{codeinst, JL_INVOKE_SPECSIG}].decl;
+            jl_value_t *crt = declrt;
+            bool toboxed;
+            Type *lcrt = _julia_struct_to_llvm(&out, out.get_context(), crt, &toboxed);
+            size_t nargs = jl_nparams(sigt) - 1;
+            jl_svec_t *argtypes = NULL;
+            JL_GC_PUSH1(&argtypes);
+            argtypes = jl_alloc_svec(nargs);
+            for (size_t i = 0; i < nargs; i++)
+                jl_svecset(argtypes, i, jl_tparam(sigt, i + 1));
+            { // scope block for sig
+                function_sig_t sig("cfunction", lcrt, crt, toboxed, false,
+                                   argtypes, NULL, false, CallingConv::C, false, &out);
+                if (toboxed || !sig.err_msg.empty()) {
+                    err = toboxed ? "it does not return a value of an `isbits` type" : sig.err_msg;
+                }
+                else {
+                    jl_returninfo_t targetspec = get_specsig_function(out, M, target, "", sigt, rettype, false);
+                    cw = gen_cfun_wrapper(M, out, sig, ff, name, declrt, sigt, NULL, NULL, NULL, &targetspec);
+                }
+            }
+            JL_GC_POP();
+        }
+    }
+
+    if (cw) {
+        // The verdict, for all of these functions together: what they call is
+        // each other, or a function that was accepted before
+        static const char *const candidate = "julia.runtime_free.candidate";
+        for (auto &[F, ci] : emitted)
+            F->addFnAttr(candidate);
+        cw->addFnAttr(candidate);
+        for (auto &[F, ci] : emitted) {
+            runtime_free_cleanup(*F);
+            std::string why = jl_verify_runtime_free(*F, candidate);
+            if (!why.empty()) {
+                if (ci == codeinst)
+                    err = why;
+                else
+                    err = (Twine("`") + name_from_method_instance(jl_get_ci_mi(ci)) + "`, which it calls: " + why).str();
+                break;
+            }
+        }
+        if (err.empty()) {
+            runtime_free_cleanup(*cw);
+            err = jl_verify_runtime_free(*cw, candidate);
+        }
+        // and nothing else: a call target that is new is one of these functions
+        if (err.empty() && (out.cfuncs.size() != ncfuncs || out.llvmcall_modules.size() != nllvmcall ||
+                            out.external_fns.size() != nexternal))
             err = "it refers to other code";
         if (err.empty()) {
-            target->removeFnAttr(candidate);
-            cw->removeFnAttr(candidate);
-            // VerifyRuntimeFreePass checks these again once they are lowered
-            target->addFnAttr("julia.runtime_free");
-            cw->addFnAttr("julia.runtime_free");
-            // Make one function of the two, so that the call between them can
-            // never be one through a slot of the image that is filled in when
-            // it is loaded (as it would be if only one of them had a clone for
-            // a CPU target), which that pass would have to refuse.
-            target->removeFnAttr(Attribute::NoInline);
-            target->addFnAttr(Attribute::AlwaysInline);
-            // And keep LLVM from making calls of `libc` functions of its loops
-            // (`strlen`, `memset`), so that the code is all there is to it.
-            target->addFnAttr("no-builtins");
-            cw->addFnAttr("no-builtins");
+            for (auto &[call, target] : out.call_targets) {
+                if (!call_targets.contains(call) && target.decl->isDeclaration()) {
+                    err = "it refers to other code";
+                    break;
+                }
+            }
+        }
+        if (err.empty()) {
+            emitted.push_back({cw, nullptr});
+            for (auto &[F, ci] : emitted) {
+                F->removeFnAttr(candidate);
+                // VerifyRuntimeFreePass checks these again once they are lowered
+                F->addFnAttr("julia.runtime_free");
+                // And keep LLVM from making calls of `libc` functions of its loops
+                // (`strlen`, `memset`), so that the code is all there is to it.
+                F->addFnAttr("no-builtins");
+            }
             return cw;
         }
     }
 
-    // Refused: remove the code, and what it had `out` record
+    // Refused: remove the code, and what it had `out` record. The functions
+    // only call each other and what was there before, which does not call them.
     if (cw)
         cw->eraseFromParent();
-    if (target)
-        target->eraseFromParent();
-    SmallVector<std::pair<jl_code_instance_t *, std::underlying_type_t<jl_invoke_api_t>>, 0> added;
-    for (auto &[call, _] : out.call_targets)
-        if (!call_targets.contains(call))
+    SmallVector<call_target_t, 0> added;
+    SmallVector<Function*, 0> prototypes;
+    for (auto &[call, target] : out.call_targets) {
+        if (!call_targets.contains(call)) {
             added.push_back(call);
-    for (auto &call : added) {
-        Function *decl = out.call_targets[call].decl;
-        out.call_targets.erase(call);
-        if (decl && decl->use_empty())
-            decl->eraseFromParent();
+            if (target.decl->isDeclaration())
+                prototypes.push_back(target.decl);
+        }
     }
+    for (auto &call : added)
+        out.call_targets.erase(call);
+    for (auto &[F, ci] : emitted)
+        F->deleteBody();
+    for (auto &[F, ci] : emitted)
+        F->eraseFromParent();
+    for (Function *F : prototypes)
+        if (F->use_empty())
+            F->eraseFromParent();
     while (out.cfuncs.size() > ncfuncs)
         out.cfuncs.pop_back();
     while (out.llvmcall_modules.size() > nllvmcall)

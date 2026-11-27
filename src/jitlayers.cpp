@@ -392,14 +392,23 @@ void *jl_jit_abi_converter_impl(jl_task_t *ct, jl_abi_t from_abi,
 }
 
 // Return a C-callable function for `sigt` that returns `declrt`, runs the code
-// `src` of `mi`, and does not need the runtime (see `@cfunction`'s
-// `runtime_free`). If that code cannot be compiled that way, return NULL and
-// set `*err` to a String that says why.
+// of `codeinst`, and does not need the runtime (see `@cfunction`'s
+// `runtime_free`). `codeinfos` has the CodeInstances of all the code that this
+// runs, each followed by its source (see jl_type_infer_runtime_free). If that
+// code cannot be compiled that way, return NULL and set `*err` to a String that
+// says why.
 extern "C" JL_DLLEXPORT_CODEGEN
 void *jl_jit_runtime_free_cfunction_impl(jl_value_t *declrt, jl_value_t *sigt,
-                                         jl_method_instance_t *mi, jl_code_info_t *src,
+                                         jl_code_instance_t *codeinst, jl_array_t *codeinfos,
                                          jl_value_t **err)
 {
+    DenseMap<jl_code_instance_t *, jl_code_info_t *> srcs;
+    for (size_t i = 0, l = jl_array_nrows(codeinfos); i + 1 < l; i++) {
+        jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+        jl_value_t *src = jl_array_ptr_ref(codeinfos, i + 1);
+        if (jl_is_code_instance(item) && jl_is_code_info(src))
+            srcs[(jl_code_instance_t*)item] = (jl_code_info_t*)src;
+    }
     auto ctx = std::make_unique<LLVMContext>();
     auto mod = jl_create_llvm_module("cfunction", *ctx, jl_ExecutionEngine->getDataLayout(),
                                      jl_ExecutionEngine->getTargetTriple());
@@ -410,13 +419,18 @@ void *jl_jit_runtime_free_cfunction_impl(jl_value_t *declrt, jl_value_t *sigt,
     out.imaging_mode = 0;
     std::string why;
     std::string name;
-    Function *F = emit_runtime_free_cfunction(out, declrt, sigt, mi, src, why);
+    Function *F = emit_runtime_free_cfunction(out, declrt, sigt, codeinst,
+            [&srcs](jl_code_instance_t *ci) JL_NOTSAFEPOINT { return srcs.lookup(ci); }, why);
     if (F != nullptr) {
         // this is looked up by name below, so it needs one that is its own
         name = make_name_unique(F->getName(), "_");
         F->setName(name);
         F->setLinkage(GlobalValue::ExternalLinkage);
-        jl_promote_method_roots(out, mi);
+        // The functions of the CodeInstances are part of this module, where
+        // they call each other, and there is nothing for the JIT to link: it
+        // does not come to know these CodeInstances.
+        out.call_targets.clear();
+        jl_promote_method_roots(out, jl_get_ci_mi(codeinst));
     }
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();

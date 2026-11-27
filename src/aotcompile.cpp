@@ -170,6 +170,10 @@ typedef struct {
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
     SmallVector<jl_code_instance_t*, 0> jl_ci_order;
+    // the CodeInstances of the runtime-free callbacks of this image (those of
+    // the functions that its `cfunction` expressions name), which have no
+    // function in it that is theirs (see emit_runtime_free_cfunction)
+    SmallVector<jl_code_instance_t*, 0> jl_runtime_free_cis;
     // coverage counters emitted into the image: (file, line, flags, symbol),
     // serialized as the `jl_image_coverage` table
     SmallVector<std::tuple<std::string, int32_t, uint32_t, std::string>, 0> jl_coverage_entries;
@@ -194,16 +198,24 @@ jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t
 {
     jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
     auto &map = desc->jl_fvar_map;
+    // A trimmed image only keeps the methods of these, and a `cfunction`
+    // expression looks up the method of its function when it is evaluated: so
+    // that of a runtime-free callback counts, although its CodeInstance has
+    // no function of the image for itself.
+    size_t nruntime_free = jl_options.trim ? desc->jl_runtime_free_cis.size() : 0;
 
     if (data == NULL) {
-        *num_elements = map.size();
+        *num_elements = map.size() + nruntime_free;
         return;
     }
 
-    assert(*num_elements == map.size());
+    assert(*num_elements == map.size() + nruntime_free);
     size_t i = 0;
     for (auto &ci : map) {
         data[i++] = ci.first;
+    }
+    for (size_t j = 0; j < nruntime_free; j++) {
+        data[i++] = desc->jl_runtime_free_cis[j];
     }
 }
 
@@ -565,9 +577,15 @@ static Function *aot_abi_converter(jl_codegen_output_t &out, jl_abi_t from_abi, 
     return F;
 }
 
-// `get_src` gives the source that a CodeInstance of `out` was compiled from, if it has it
+// For the runtime-free callbacks of `out`: `runtime_free` has the CodeInstance
+// that such a callback of a MethodInstance is compiled from, if there is one to
+// compile with `out`, and `get_src` gives the source of it and of the
+// CodeInstances that it calls. Those that there are callbacks for are added to
+// `runtime_free_roots`.
 static void generate_cfunc_thunks(jl_codegen_output_t &out,
-                                  function_ref<jl_code_info_t *(jl_code_instance_t *)> get_src) JL_CANSAFEPOINT
+                                  const DenseMap<jl_method_instance_t*, jl_code_instance_t*> &runtime_free,
+                                  function_ref<jl_code_info_t *(jl_code_instance_t *)> get_src,
+                                  SmallVectorImpl<jl_code_instance_t*> *runtime_free_roots = nullptr) JL_CANSAFEPOINT
 {
     DenseMap<jl_method_instance_t*, jl_code_instance_t*> compiled_mi;
     for (auto &[ci, _] : out.ci_funcs) {
@@ -578,7 +596,7 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out,
     }
     size_t latestworld = jl_atomic_load_acquire(&jl_world_counter);
     // the runtime-free callbacks of each CodeInstance, which several `cfunction`s may be for
-    DenseMap<jl_code_instance_t*, SmallVector<std::pair<jl_value_t*, Function*>, 1>> runtime_free;
+    DenseMap<jl_code_instance_t*, SmallVector<std::pair<jl_value_t*, Function*>, 1>> runtime_free_thunks;
     for (size_t i = 0; i < out.cfuncs.size(); i++) {
         cfunc_decl_t cfunc = out.cfuncs[i];
         jl_value_t *sigt = cfunc.abi.sigt;
@@ -587,36 +605,42 @@ static void generate_cfunc_thunks(jl_codegen_output_t &out,
         JL_GC_PROMISE_ROOTED(declrt);
         if (cfunc.runtime_free) {
             // A callback that does not need the runtime is compiled from the
-            // source of its method, on its own (emit_runtime_free_cfunction).
-            // Do that here if that method is compiled here, so that the
-            // runtime only has to see that this is the code to call
-            // (jl_get_runtime_free_cfunction). Otherwise, and if that code
+            // CodeInstance that inference has for that, with all the code
+            // that it calls (emit_runtime_free_cfunction). Do that here if
+            // that code is to be compiled here, so that the runtime only has
+            // to see that this is still the code to call
+            // (jl_get_runtime_free_cfunction). Otherwise, and if the code
             // cannot be such a callback, leave it to the runtime, which then
             // says why.
             jl_method_instance_t *mi = (jl_method_instance_t*)jl_get_specialization1((jl_tupletype_t*)sigt, latestworld);
             if ((jl_value_t*)mi == jl_nothing)
                 continue;
-            auto it = compiled_mi.find(mi);
-            if (it == compiled_mi.end())
+            jl_code_instance_t *codeinst = runtime_free.lookup(mi);
+            if (codeinst == nullptr)
                 continue;
-            jl_code_instance_t *codeinst = it->second;
             JL_GC_PROMISE_ROOTED(codeinst);
-            jl_code_info_t *src = get_src(codeinst);
-            if (src == nullptr)
-                continue;
-            JL_GC_PROMISE_ROOTED(src);
+            if (runtime_free_roots && !runtime_free_thunks.count(codeinst))
+                runtime_free_roots->push_back(codeinst);
+            auto &thunks = runtime_free_thunks[codeinst];
             Function *f = nullptr;
-            auto &known = runtime_free[codeinst];
-            for (auto &[rt, known_f] : known)
-                if (jl_egal(rt, declrt))
+            bool known = false;
+            for (auto &[rt, known_f] : thunks) {
+                if (jl_egal(rt, declrt)) {
                     f = known_f;
-            if (f == nullptr) {
-                std::string err;
-                f = emit_runtime_free_cfunction(out, declrt, sigt, mi, src, err);
-                if (f == nullptr)
-                    continue;
-                runtime_free[codeinst].push_back({declrt, f});
+                    known = true;
+                }
             }
+            if (!known) {
+                std::string err;
+                f = emit_runtime_free_cfunction(out, declrt, sigt, codeinst, get_src, err);
+                // (an image without a compiler cannot say so later)
+                if (f == nullptr && jl_options.trim != JL_TRIM_NO)
+                    jl_printf(JL_STDERR, "WARNING: cfunction: `%s` cannot be a runtime-free callback: %s\n",
+                              name_from_method_instance(mi), err.c_str());
+                thunks.push_back({declrt, f});
+            }
+            if (f == nullptr)
+                continue;
             ConstantArray *init = cast<ConstantArray>(cfunc.cfuncdata->getInitializer());
             SmallVector<Constant*,8> initvals;
             for (unsigned j = 0; j < init->getNumOperands(); ++j)
@@ -1028,6 +1052,8 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     }
     // compile all methods for the current world and type-inference world
     DenseMap<jl_code_instance_t *, jl_code_info_t *> ci_infos;
+    // the code of the runtime-free callbacks, which is compiled for those (see generate_cfunc_thunks)
+    DenseMap<jl_method_instance_t *, jl_code_instance_t *> runtime_free;
     egal_set method_roots;
     out.params = &target_cgparams;
     assert(out.imaging_mode); // `_imaging_mode` controls if broken features like code-coverage are disabled
@@ -1043,6 +1069,21 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
         if (jl_is_code_instance(item)) {
             // now add it to our compilation results
             jl_code_instance_t *codeinst = (jl_code_instance_t*)item;
+
+            if (codeinst->owner == (jl_value_t*)jl_runtime_free_sym) {
+                // This is not code to call for its MethodInstance, but code
+                // that a runtime-free callback runs. It is compiled for the
+                // callbacks that do, as part of them, whichever image it
+                // comes from: such code is not linked to.
+                jl_code_info_t *src = (jl_code_info_t*)jl_array_ptr_ref(codeinfos, ++i);
+                assert(jl_is_code_info(src));
+                ci_infos[codeinst] = src;
+                jl_method_instance_t *mi = jl_get_ci_mi(codeinst);
+                if (jl_atomic_load_relaxed(&codeinst->max_world) == ~(size_t)0 && codeinst->def == (jl_value_t*)mi)
+                    runtime_free.insert({mi, codeinst});
+                record_method_roots(method_roots, mi);
+                continue;
+            }
 
             if (external_linkage &&
                 (jl_atomic_load_relaxed(&codeinst->flags) & JL_CI_FLAGS_FROM_IMAGE)) {
@@ -1081,8 +1122,9 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     // finally, make sure all referenced methods get fixed up, particularly if the user declined to compile them
     aot_link_output(out);
     // including generating cfunction thunks
-    generate_cfunc_thunks(out,
-                          [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); });
+    generate_cfunc_thunks(out, runtime_free,
+                          [&ci_infos](jl_code_instance_t *ci) { return ci_infos.lookup(ci); },
+                          &data->jl_runtime_free_cis);
     aot_optimize_roots(out, method_roots);
     out.temporary_roots = nullptr;
     out.temporary_roots_set.clear();
@@ -2844,7 +2886,8 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t *dump, jl_method_instance_t *mi, jl_
                     continue;
                 jl_emit_codedecls(output, codeinst);
             }
-            generate_cfunc_thunks(output, jl_get_method_ir);
+            // (the code of runtime-free callbacks is not known here)
+            generate_cfunc_thunks(output, DenseMap<jl_method_instance_t*, jl_code_instance_t*>(), jl_get_method_ir);
             output.temporary_roots_set.clear();
             output.temporary_roots = nullptr;
             JL_GC_POP(); // GC the global_targets array contents now since reflection doesn't need it

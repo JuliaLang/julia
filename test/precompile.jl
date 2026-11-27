@@ -3041,6 +3041,58 @@ precompile_test_harness("llvmcall validation") do load_path
     end
 end
 
+precompile_test_harness("runtime-free callbacks") do load_path
+    # The code of a runtime-free callback (`@cfunction`) is compiled with the image: that of
+    # the method and of all that it calls, here also in another package.
+    write(joinpath(load_path, "RuntimeFreeCallee.jl"),
+        """
+        module RuntimeFreeCallee
+            @noinline step(x::Cint) = x + Cint(1)
+        end
+        """)
+    write(joinpath(load_path, "RuntimeFreeCallback.jl"),
+        """
+        module RuntimeFreeCallback
+            using RuntimeFreeCallee
+            @noinline fact(n::Cint) = n <= Cint(1) ? Cint(1) : n * fact(n - Cint(1))
+            callback(x::Cint) = fact(x) + RuntimeFreeCallee.step(x)
+            get_callback() = @cfunction(callback, Cint, (Cint,), runtime_free=true)
+            precompile(get_callback, ())
+        end
+        """)
+    cachefile, ocachefile = Base.compilecache(Base.PkgId("RuntimeFreeCallback"))
+    @eval using RuntimeFreeCallee, RuntimeFreeCallback
+    invokelatest() do
+        # (a call that is not inlined, so that it is the `@cfunction` expression of the image)
+        callback = invokelatest(RuntimeFreeCallback.get_callback)
+        @test ccall(callback, Cint, (Cint,), 4) === Cint(29)
+        if ocachefile !== nothing && !Sys.iswindows()
+            # it is the code of the image
+            info = Ref{NTuple{4,Ptr{Cvoid}}}() # a `Dl_info`
+            @test ccall(:dladdr, Cint, (Ptr{Cvoid}, Ptr{NTuple{4,Ptr{Cvoid}}}), callback, info) != 0
+            @test samefile(unsafe_string(Ptr{UInt8}(info[][1])), ocachefile)
+        end
+        # The CodeInstances that it is compiled from have an owner of their own
+        function runtime_free_code(f)
+            local ci = Base.method_instance(f, (Cint,); world=Base.get_world_counter()).cache
+            while ci.owner !== :runtime_free
+                ci = ci.next
+            end
+            return ci
+        end
+        codeinst = runtime_free_code(RuntimeFreeCallback.callback)
+        @test runtime_free_code(RuntimeFreeCallee.step) in codeinst.edges
+        @test codeinst.max_world == typemax(UInt)
+        # and they say for how long it is the callback: until what it calls changes
+        @eval RuntimeFreeCallee @noinline step(x::Cint) = x + Cint(2)
+        @test codeinst.max_world < Base.get_world_counter()
+        new_callback = invokelatest(RuntimeFreeCallback.get_callback)
+        @test new_callback != callback
+        @test ccall(new_callback, Cint, (Cint,), 4) === Cint(30)
+        @test ccall(callback, Cint, (Cint,), 4) === Cint(29)
+    end
+end
+
 precompile_test_harness("inlined frames of code compiled after loading") do load_path
     write(joinpath(load_path, "InlinedFrames.jl"),
         """

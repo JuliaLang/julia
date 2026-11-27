@@ -478,14 +478,27 @@ void *jl_get_abi_converter(jl_task_t *ct, void *data)
     return f;
 }
 
+// The runtime-free callbacks that there are, by the CodeInstance that each is
+// the code of. That determines the callback: it takes the arguments of the
+// CodeInstance's MethodInstance, and returns what the CodeInstance does. So
+// every `cfunction` expression that is for this code evaluates to this one
+// function. (protected by the cfun_lock; a CodeInstance here is never freed)
+static htable_t runtime_free_cfunctions;
+
 // The C function of a `cfunction` expression that is `runtime_free`: one that
 // does not need the runtime, so that C may call it anywhere. That is the code
-// of the method that the function calls in the latest world, compiled for
-// this purpose (see emit_runtime_free_cfunction), which this does when the
-// expression is evaluated: once for as long as that stays the code to call
-// (either here, with the JIT, or already with an image), and again when it
-// changes. A callback that was returned before then keeps calling the code
-// that it was compiled from.
+// of the method that the function calls in the latest world, with all the
+// code that this can call, compiled for this purpose
+// (see emit_runtime_free_cfunction). This does that when the expression is
+// evaluated: once for as long as that stays the code to call (either here,
+// with the JIT, or already with an image), and again when it changes. A
+// callback that was returned before then keeps calling the code that it was
+// compiled from.
+//
+// The code is that of a CodeInstance that inference keeps for this, under the
+// owner `jl_runtime_free_sym`, with those of what it calls as its edges. So
+// it stops being the code to call when any of that is invalidated, as for any
+// other CodeInstance.
 //
 // Throws if that code cannot be compiled so that it does not need the runtime.
 //
@@ -502,11 +515,11 @@ void *jl_get_runtime_free_cfunction(void *data)
     JL_GC_PROMISE_ROOTED(declrt);
     jl_value_t *mi = NULL;
     jl_code_instance_t *codeinst = NULL;
-    jl_code_info_t *src = NULL;
+    jl_array_t *codeinfos = NULL;
     jl_value_t *err = NULL;
     size_t world;
     void *f;
-    JL_GC_PUSH4(&mi, &codeinst, &src, &err);
+    JL_GC_PUSH4(&mi, &codeinst, &codeinfos, &err);
     JL_LOCK(&cfun_lock);
     do {
         size_t last_world_v = jl_atomic_load_relaxed(&cfuncdata->last_world);
@@ -522,18 +535,60 @@ void *jl_get_runtime_free_cfunction(void *data)
         mi = jl_get_specialization1((jl_tupletype_t*)sigt, world);
         if (f != NULL && last_ci != NULL && (jl_value_t*)jl_get_ci_mi(last_ci) == mi &&
             jl_atomic_load_relaxed(&last_ci->max_world) >= world) { // same dispatch and source
+            // (this may be the callback of an image, which is not known yet,
+            // or which another expression has compiled in the meantime)
+            void **known = ptrhash_bp(&runtime_free_cfunctions, last_ci);
+            if (*known == HT_NOTFOUND)
+                *known = f;
+            else if (*known != f)
+                jl_atomic_store_release(&cfuncdata->fptr, (f = *known));
+            jl_atomic_store_release(&cfuncdata->last_world, world);
+            JL_UNLOCK(&cfun_lock);
+            JL_GC_POP();
+            return f;
+        }
+        // or the callback of another `cfunction` expression for this code
+        codeinst = NULL;
+        f = NULL;
+        if (mi != jl_nothing && jl_egal(((jl_method_instance_t*)mi)->specTypes, sigt)) {
+            jl_code_instance_t *ci = jl_atomic_load_relaxed(&((jl_method_instance_t*)mi)->cache);
+            for (; ci != NULL && f == NULL; ci = jl_atomic_load_relaxed(&ci->next)) {
+                if (ci->owner == (jl_value_t*)jl_runtime_free_sym &&
+                    jl_atomic_load_relaxed(&ci->min_world) <= world &&
+                    jl_atomic_load_relaxed(&ci->max_world) >= world &&
+                    jl_egal(ci->rettype, declrt)) {
+                    f = ptrhash_get(&runtime_free_cfunctions, ci);
+                    if (f == HT_NOTFOUND)
+                        f = NULL;
+                    else
+                        codeinst = ci;
+                }
+            }
+        }
+        if (f != NULL) {
+            cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
+            cfuncdata->last_codeinst = codeinst;
+            jl_atomic_store_release(&cfuncdata->fptr, f);
             jl_atomic_store_release(&cfuncdata->last_world, world);
             JL_UNLOCK(&cfun_lock);
             JL_GC_POP();
             return f;
         }
         JL_UNLOCK(&cfun_lock);
-        // next, get the code to compile (outside of the lock since this is very slow):
-        // a CodeInstance, for how long it is the code to call, and its optimized source
+        // next, get the code to compile (outside of the lock since this is very slow)
         codeinst = NULL;
-        src = NULL;
+        codeinfos = NULL;
         if (mi != jl_nothing)
-            codeinst = jl_type_infer_source((jl_method_instance_t*)mi, world, &src);
+            codeinfos = jl_type_infer_runtime_free((jl_method_instance_t*)mi, world);
+        if (codeinfos != NULL) {
+            // the CodeInstance of the function itself
+            size_t i, l = jl_array_nrows(codeinfos);
+            for (i = 0; i < l && codeinst == NULL; i++) {
+                jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+                if (jl_is_code_instance(item) && (jl_value_t*)jl_get_ci_mi((jl_code_instance_t*)item) == mi)
+                    codeinst = (jl_code_instance_t*)item;
+            }
+        }
         // relock for the remainder of the function
         JL_LOCK(&cfun_lock);
     } while (jl_atomic_load_acquire(&jl_world_counter) != world); // restart entirely, since jl_world_counter changed thus jl_get_specialization1 might have changed
@@ -545,12 +600,21 @@ void *jl_get_runtime_free_cfunction(void *data)
         return f; // another thread fixed this up while we were away
     }
     f = NULL;
-    if (mi == jl_nothing)
+    if (mi == jl_nothing) {
         err = jl_cstr_to_string("no unique matching method found for the specified argument types");
-    else if (codeinst == NULL || src == NULL)
-        err = jl_cstr_to_string("its code could not be inferred");
-    else
-        f = jl_jit_runtime_free_cfunction(declrt, sigt, (jl_method_instance_t*)mi, src, &err);
+    }
+    else if (codeinst == NULL) {
+        err = jl_cstr_to_string(jl_typeinf_func != NULL ? "its code could not be inferred" :
+                                "it was not compiled with the image, and there is no compiler to do that now");
+    }
+    else if (jl_egal(codeinst->rettype, declrt) && jl_egal(((jl_method_instance_t*)mi)->specTypes, sigt)) {
+        // this code may be compiled already, for another `cfunction` expression
+        f = ptrhash_get(&runtime_free_cfunctions, codeinst);
+        if (f == HT_NOTFOUND)
+            f = NULL;
+    }
+    if (f == NULL && err == NULL)
+        f = jl_jit_runtime_free_cfunction(declrt, sigt, codeinst, codeinfos, &err);
     if (f == NULL) {
         JL_UNLOCK(&cfun_lock);
         jl_value_t *ft = jl_tparam0(sigt);
@@ -561,6 +625,7 @@ void *jl_get_runtime_free_cfunction(void *data)
     // the CodeInstance is kept by its MethodInstance, if that has it
     if (!jl_mi_cache_has_ci((jl_method_instance_t*)mi, codeinst))
         jl_as_global_root((jl_value_t*)codeinst, 1);
+    ptrhash_put(&runtime_free_cfunctions, codeinst, f);
     cfuncdata->plast_codeinst = &cfuncdata->last_codeinst;
     cfuncdata->last_codeinst = codeinst;
     jl_atomic_store_release(&cfuncdata->fptr, f);
@@ -574,5 +639,6 @@ void jl_init_runtime_ccall(void)
 {
     JL_MUTEX_INIT(&libmap_lock, "libmap_lock");
     strhash_new(&libMap, 16);
+    htable_new(&runtime_free_cfunctions, 0);
     uv_mutex_init(&trampoline_lock);
 }

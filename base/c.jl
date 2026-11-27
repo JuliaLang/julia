@@ -48,19 +48,24 @@ handler, or in the parts of the runtime that must not reach a safepoint.
 
 With `runtime_free=true`, the function pointer is instead for code that does not use the
 Julia runtime at all, so that C may call it at any time, on any thread. That code is
-`callable`'s method, as compiled when `@cfunction` is evaluated: a later definition of a
-method does not change what an existing pointer calls, but only what evaluating
-`@cfunction` again returns. An error is thrown (when `@cfunction` is evaluated) unless
-all of this holds for that code:
+`callable`'s method and everything that it calls, as compiled when `@cfunction` is
+evaluated: a later definition of a method does not change what an existing pointer calls,
+but only what evaluating `@cfunction` again returns. An error that says what needs the
+runtime is thrown (when `@cfunction` is evaluated) unless all of this holds:
 
 * The argument types and the return type are `isbits` types, `callable` is not a closure,
   and it is inferred to return a value of exactly `ReturnType`.
-* It does not allocate, and cannot throw: there is no caller that could catch an
+* The code does not allocate, and cannot throw: there is no caller that could catch an
   exception. Use `@inbounds` and unchecked arithmetic where the compiler cannot prove an
   error impossible. (With `--check-bounds=yes`, an index is always checked, so only code
   that has none can be compiled.)
-* Everything that it calls is inlined into it, and it has no `ccall`, `try` or task-local
-  state: it consists of arithmetic, control flow and loads and stores of memory.
+* Every call in it is resolved statically, without dynamic dispatch, and it has no `ccall`,
+  `try` or task-local state: it consists of arithmetic, control flow and loads and stores
+  of memory.
+
+That goes for the functions that `callable` calls as it does for `callable`. They do not
+have to be inlined: all of that code is compiled for the callback, as one closed set, apart
+from the code that Julia otherwise runs for these functions.
 
 It is then up to that code to only use memory that stays valid without the garbage
 collector's cooperation: what its arguments point to, and constants, such as a `const`

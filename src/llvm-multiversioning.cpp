@@ -285,6 +285,15 @@ static void annotate_module_clones(Module &M) {
             continue;
         orig_funcs.push_back(&F);
     }
+    // The functions of a runtime-free callback (see llvm-runtime-free.cpp)
+    // call each other, and nothing else does. They are only cloned all
+    // together, for the targets that everything is cloned for, so that each
+    // of them calls the others directly: if one had a clone that a function
+    // which calls it does not, that call would have to go through a slot that
+    // is filled in when the image is loaded.
+    auto clone_with_all_only = [](Function *F) {
+        return F->hasFnAttribute("julia.runtime_free");
+    };
     bool has_veccall = false;
     SmallVector<TargetSpec, 0> specs;
     if (auto maybe_specs = get_target_specs(M)) {
@@ -322,6 +331,9 @@ static void annotate_module_clones(Module &M) {
                 if (!(func_infos[j] & flag)) {
                     continue;
                 }
+                if (clone_with_all_only(orig_funcs[j])) {
+                    continue;
+                }
                 sets[0].insert(orig_funcs[j]);
             }
             std::set<Function*> all_origs(sets[0]);
@@ -340,6 +352,8 @@ static void annotate_module_clones(Module &M) {
                             continue;
                         // Already cloned
                         if (all_origs.count(orig_child_f))
+                            continue;
+                        if (clone_with_all_only(orig_child_f))
                             continue;
                         bool calling_clone = false;
                         for (const auto &I2: *child_node) {

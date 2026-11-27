@@ -2,10 +2,12 @@
 
 // Verification of runtime-free functions.
 //
-// A runtime-free function (`@cfunction(f, rt, at, runtime_free=true)`) is one
-// that C may call from any context: on a thread the runtime does not know,
-// while the GC is running, from `JL_NOTSAFEPOINT` code, from an error path.
-// So its code must not interact with the runtime at all. It must not
+// A runtime-free callback (`@cfunction(f, rt, at, runtime_free=true)`) is a
+// function that C may call from any context: on a thread the runtime does not
+// know, while the GC is running, from `JL_NOTSAFEPOINT` code, from an error
+// path. It is made of runtime-free functions: its entry point, and the code of
+// `f` and of all that this calls. The code of such a function must not
+// interact with the runtime at all. It must not
 //
 //   - find the current task (pgcstack), and so not push a GC frame, read or
 //     set the world age, change the GC state or reach a safepoint;
@@ -128,7 +130,7 @@ static const char *describeRuntimeCall(StringRef name) JL_NOTSAFEPOINT
         name.starts_with("jl_box_") || name.starts_with("jl_alloc_") ||
         name.starts_with("jl_new_") || name == "jl_copy_ast" || name.contains("genericmemory"))
         return "it allocates";
-    if (name.contains("throw") || name.contains("error") || name == "jl_typeassert")
+    if (name.contains("throw") || name.contains("error") || name.contains("_checked") || name == "jl_typeassert")
         return "it can throw";
     if (name.starts_with("julia.call") || name == "jl_apply_generic" || name.starts_with("jl_invoke") ||
         name.starts_with("jl_f_"))

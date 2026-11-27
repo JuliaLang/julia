@@ -3313,10 +3313,14 @@ function abstract_eval_cfunction(interp::AbstractInterpreter, e::Expr, sstate::S
         atᵢ = at[i + 1] = sp_type_rewrap(atv[i], frame_instance(sv), false)
         atᵢ === Bottom && return RTEffects(Union{}, Any, EFFECTS_UNKNOWN)
     end
-    # this may be the wrong world for the call,
-    # but some of the result is likely to be valid anyways
-    # and that may help generate better codegen
-    abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sstate.vtypes, sv)::Future
+    if !(length(e.args) == 5 && e.args[5] === QuoteNode(:runtime_free))
+        # this may be the wrong world for the call,
+        # but some of the result is likely to be valid anyways
+        # and that may help generate better codegen
+        abstract_call(interp, ArgInfo(nothing, at), StmtInfo(false, false), sstate.vtypes, sv)::Future
+    end
+    # (a runtime-free callback does not make that call: it is code of its own, which is
+    # inferred for it when it is compiled, see `typeinf_ext_runtime_free`)
     rt = e.args[1]
     isconcretetype(rt) || (rt = Any)
     return RTEffects(rt, Any, EFFECTS_UNKNOWN)

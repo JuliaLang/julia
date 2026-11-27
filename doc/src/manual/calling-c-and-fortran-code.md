@@ -1088,23 +1088,26 @@ callback = @cfunction(count_errors, Cvoid, (Ptr{Int}, Cint), runtime_free=true)
 ```
 
 The compiler checks that the code can be that, and otherwise throws an error when the
-`@cfunction` expression is evaluated. For that, the callback must consist of arithmetic, control
-flow and reads and writes of memory only:
+`@cfunction` expression is evaluated, which says what in the code needs the runtime, and where.
+For that, the callback and everything that it calls must consist of arithmetic, control flow and
+reads and writes of memory only:
 
-  * The argument and return types are `isbits` types, and the function is inferred to return a
-    value of the declared return type.
+  * The argument and return types of the callback are `isbits` types, and it is inferred to
+    return a value of the declared return type.
   * It does not allocate and cannot throw. A check that can fail, such as that of an array index
     or of a division, has to be avoided (for example with `@inbounds`, which has no effect with
-    `--check-bounds=yes`, however).
-  * All functions that it calls are inlined into it, and it has no `ccall`, `try` block or use of
-    the current task.
+    `--check-bounds=yes`, however, nor in a function that is called without being inlined).
+  * It has no `ccall`, `try` block or use of the current task.
+  * Every call in it is resolved statically, to code that these rules hold for as well. The
+    functions that the callback calls do not have to be inlined into it: they are compiled a
+    second time with it, as part of it, apart from the code that Julia otherwise calls for them.
 
 The callback may only use memory that stays valid without the help of the garbage collector:
 what its arguments point to, and constants (a `const` tuple of numbers is part of its code).
 
-Unlike an ordinary `@cfunction`, a runtime-free one keeps calling the code of the method that
-was current when the `@cfunction` expression was evaluated. If that method is redefined,
-evaluating the expression again returns a pointer to the new code.
+Unlike an ordinary `@cfunction`, a runtime-free one keeps calling the code that the methods of
+the function and of what it calls had when the `@cfunction` expression was evaluated. If one of
+those methods is redefined, evaluating the expression again returns a pointer to the new code.
 
 
 ## Closing a Library

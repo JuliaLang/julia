@@ -360,12 +360,10 @@ JuliaLowering.include_string(test_mod, """
 f_runtime_free(x::Int, y::Int) = x + y * 10
 f_needs_runtime(x::Int, y::Int) = div(x, y)
 """)
-if Base.JLOptions().can_inline != 0 # (which such a callback needs)
-    cf_runtime_free = JuliaLowering.include_string(test_mod, """
-    @cfunction(f_runtime_free, Int, (Int,Int), runtime_free=true)
-    """)
-    @test @ccall($cf_runtime_free(2::Int, 3::Int)::Int) == 32
-end
+cf_runtime_free = JuliaLowering.include_string(test_mod, """
+@cfunction(f_runtime_free, Int, (Int,Int), runtime_free=true)
+""")
+@test @ccall($cf_runtime_free(2::Int, 3::Int)::Int) == 32
 @test_throws "cannot be a runtime-free callback" JuliaLowering.include_string(test_mod, """
 @cfunction(f_needs_runtime, Int, (Int,Int), runtime_free=true)
 """)

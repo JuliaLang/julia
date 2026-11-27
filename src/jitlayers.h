@@ -470,11 +470,13 @@ public:
 const char *jl_generate_ccallable(jl_codegen_output_t &out, jl_value_t *nameval, jl_value_t *declrt, jl_value_t *sigt) JL_CANSAFEPOINT;
 
 // Emit a C-callable function for `sigt` that returns `declrt` and does not
-// need the runtime (see `@cfunction`'s `runtime_free`), from the optimized
-// source `src` of `mi`. Returns NULL, with the reason in `err`, if this code
-// cannot be compiled that way.
+// need the runtime (see `@cfunction`'s `runtime_free`): the code of `codeinst`
+// with that of all the CodeInstances that it calls, which have the owner
+// `jl_runtime_free_sym`, and whose optimized source `get_src` gives. Returns
+// NULL, with the reason in `err`, if this code cannot be compiled that way.
 Function *emit_runtime_free_cfunction(jl_codegen_output_t &out, jl_value_t *declrt, jl_value_t *sigt,
-                                      jl_method_instance_t *mi, jl_code_info_t *src,
+                                      jl_code_instance_t *codeinst,
+                                      function_ref<jl_code_info_t *(jl_code_instance_t *)> get_src,
                                       std::string &err) JL_CANSAFEPOINT;
 
 std::optional<jl_llvm_functions_t> jl_emit_code(
