@@ -65,26 +65,6 @@ static bt_context_t *jl_to_bt_context(void *sigctx) JL_NOTSAFEPOINT
 #endif
 }
 
-static int thread0_exit_count = 0;
-static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
-static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val);
-
-#if !defined(_OS_DARWIN_)
-extern void jl_fake_signal_return(void);
-// A trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
-// The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
-// state to the stack (to build a real sigreturn frame).
-#if ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)) || \
-    ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && (defined(_CPU_X86_) || defined(_CPU_AARCH64_)))
-// Defined in arch/<arch>/unix_signal_call_trampoline.S
-#else
-extern void JL_NORETURN jl_fake_signal_return(void)
-{
-    CFI_NORETURN
-    abort();
-}
-#endif
-
 static inline uintptr_t jl_get_rsp_from_ctx(const void *_ctx)
 {
 #if defined(_OS_LINUX_) && defined(_CPU_X86_64_)
@@ -124,6 +104,41 @@ static int is_addr_on_sigstack(jl_ptls_t ptls, void *ptr) JL_NOTSAFEPOINT
            ((char*)ptr >= (char*)ptls->signal_stack - jl_page_size &&
             (char*)ptr <= (char*)ptls->signal_stack + (ptls->signal_stack_size ? ptls->signal_stack_size : sig_stack_size));
 }
+
+// Whether the interrupted context blocks SIGSEGV or SIGBUS, as a fault handler
+// does (segv_handler leaves SIGUSR2 unblocked). Redirecting such a context
+// would leave the thread running with those faults blocked.
+static int jl_ctx_blocks_segv(const void *_ctx) JL_NOTSAFEPOINT
+{
+#if defined(_OS_OPENBSD_)
+    const struct sigcontext *ctx = (const struct sigcontext *)_ctx;
+    return (ctx->sc_mask & (sigmask(SIGSEGV) | sigmask(SIGBUS))) != 0;
+#else
+    const ucontext_t *ctx = (const ucontext_t*)_ctx;
+    return sigismember(&ctx->uc_sigmask, SIGSEGV) == 1 ||
+           sigismember(&ctx->uc_sigmask, SIGBUS) == 1;
+#endif
+}
+
+static int thread0_exit_count = 0;
+static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size);
+static void jl_longjmp_in_ctx(int sig, void *_ctx, jl_jmp_buf jmpbuf, int val);
+
+#if !defined(_OS_DARWIN_)
+extern void jl_fake_signal_return(void);
+// A trampoline function that does the stack manipulations for jl_call_in_ctx/jl_call_in_state
+// The callee-saved registers still may get smashed (by the cdecl fptr), since we didn't explicitly copy all of the
+// state to the stack (to build a real sigreturn frame).
+#if ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_) || defined(_OS_OPENBSD_)) && defined(_CPU_X86_64_)) || \
+    ((defined(_OS_LINUX_) || defined(_OS_FREEBSD_)) && (defined(_CPU_X86_) || defined(_CPU_AARCH64_)))
+// Defined in arch/<arch>/unix_signal_call_trampoline.S
+#else
+extern void JL_NORETURN jl_fake_signal_return(void)
+{
+    CFI_NORETURN
+    abort();
+}
+#endif
 
 // Modify signal context `_ctx` so that `fptr` will execute when the signal returns
 // The function `fptr` itself must not return.
@@ -760,6 +775,10 @@ static void jl_exit_thread0(int signo, jl_bt_element_t *bt_data, size_t bt_size)
     }
 }
 
+#endif // HAVE_MACH
+
+// SIGUSR2 delivers requests to a thread on every Unix system, macOS included.
+
 // request:
 // -1: processing
 //  0: nothing [not from here]
@@ -832,7 +851,9 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             // code (gc_state == 0): a thread inside a GC-safe region (e.g.
             // a foreign call reached through a reset-safe callee) may be
             // raced by a concurrent stop-the-world, and a longjmp back into
-            // Julia code would break that protocol.
+            // Julia code would break that protocol. Nor while it waits at a
+            // safepoint (fault_handling): the wait holds sleep_lock and owes
+            // the count its decrement.
             // A deliverable cancellation takes precedence over a
             // coincident preemption (the preempt request byte stays set and
             // is consumed at the reset point's own check).
@@ -841,7 +862,8 @@ static void usr2_deliver_reset(jl_task_t *ct, jl_ptls_t ptls, uint8_t reqflags,
             jl_reset_ctx_t *reset_ctx = jl_atomic_load_acquire(&ct->reset_ctx);
             if (reset_ctx != NULL && reset_ctx->sp != 0 &&
                 ((reqflags & JL_SIGNAL_REQ_PREEMPT) || bound_cancelled) &&
-                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE) {
+                jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_STATE_UNSAFE &&
+                jl_atomic_load_relaxed(&ptls->fault_handling) == 0) {
                 // Abandon the interrupted register state and longjmp to the
                 // reset point, whose re-executed check observes the
                 // cancellation and throws. Clear reset_ctx before the
@@ -875,9 +897,10 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     // are consumed wholesale, first: any of the value-slot paths below may
     // never return (an exit callback), and with the bits
     // consumed here no request can be stranded without a signal to carry
-    // it. An abandonment commit does not return; the cancel/preempt bits
-    // die with the abandoned task, which is their level-triggered
-    // delivery semantics anyway.
+    // it. An abandonment commit unpublishes the task's interruptible
+    // regions, so cancel/preempt bits delivered with it die with the
+    // abandoned task, which is their level-triggered delivery semantics
+    // anyway.
     uint8_t reqflags = jl_atomic_exchange(&ptls->signal_request_flags, 0);
     if (reqflags & JL_SIGNAL_REQ_ABANDON) {
         // Task abandonment: validate the pending request against this
@@ -886,13 +909,20 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
         // redirect into the abandon callback (which must not return) to
         // switch to ptls->abandon_to. On refusal the requester observes the
         // verdict and withdraws; the current task continues untouched.
-        if (jl_abandon_try_commit(ptls)) {
+        // Also refuse if the signal interrupted a fault handler, or a stack
+        // walk whose safe_restore buffer lies in the frames being discarded.
+        // Only this thread can see either.
+        int refuse = jl_ctx_blocks_segv(ctx) || jl_get_safe_restore() != NULL;
+        if (jl_abandon_try_commit(ptls, refuse)) {
             jl_call_in_ctx(ptls, jl_abandon_task_cb, sig, ctx);
         }
     }
     if (reqflags & (JL_SIGNAL_REQ_CANCEL | JL_SIGNAL_REQ_PREEMPT)) {
         usr2_deliver_reset(ct, ptls, reqflags, sig, ctx);
     }
+#if !defined(HAVE_MACH)
+    // The suspend handshake, which Mach does not need: it suspends threads
+    // directly.
     sig_atomic_t request = jl_atomic_load(&ptls->signal_request);
     if (request == 0) {
         errno = errno_save;
@@ -935,9 +965,11 @@ void usr2_handler(int sig, siginfo_t *info, void *ctx) JL_CANSAFEPOINT
     if (request == 3) {
         jl_call_in_ctx(ct->ptls, jl_exit_thread0_cb, sig, ctx);
     }
+#endif
     errno = errno_save;
 }
 
+#if !defined(HAVE_MACH)
 // Because SIGUSR1 is dual-purpose, and the timer can have trailing signals after being deleted,
 // a 2-second grace period is imposed to ignore any trailing timer-created signals so they don't get
 // confused for user triggers
@@ -1284,9 +1316,7 @@ JL_DLLEXPORT int jl_signal_is_reserved(int sig)
     case SIGCHLD: // libuv uses it to reap child processes
     case SIGKILL:
     case SIGSTOP:
-#if !defined(HAVE_MACH)
-    case SIGUSR2: // thread suspension
-#endif
+    case SIGUSR2: // thread suspension and task abandonment
         return 1;
     default:
 #ifdef SIGRTMIN
@@ -1723,16 +1753,21 @@ void jl_install_default_signal_handlers(void)
 
 #if defined(HAVE_MACH)
     allocate_mach_handler();
-#else
+#endif
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = usr2_handler; // NOLINT(julia-first-decl-annotations)
     act.sa_flags = SA_SIGINFO | SA_RESTART;
+#if defined(HAVE_MACH)
+    // On the signal stack, so that the frame can be pushed near a stack
+    // overflow, and so that the suspending sender (jl_send_reset_signal)
+    // can tell that a thread is running the handler.
+    act.sa_flags |= SA_ONSTACK;
+#endif
     if (sigaction(SIGUSR2, &act, NULL) < 0) {
         jl_errorf("fatal error: sigaction: %s", strerror(errno));
     }
-#endif
 
     allocate_segv_handler();
 
