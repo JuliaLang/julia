@@ -2511,7 +2511,13 @@ let tuple_tfunc(@nospecialize xs...) =
     @test tuple_tfunc(Union{Type{Int32},Type{Int64}}) === Tuple{Type}
     @test tuple_tfunc(DataType) === Tuple{DataType}
     @test tuple_tfunc(UnionAll) === Tuple{UnionAll}
+    # the element type of a trailing `Vararg` gets the same rewrite
+    @test tuple_tfunc(Vararg{Type{Int}}) === Tuple{Vararg{Type}}
+    @test tuple_tfunc(Vararg{Core.TypeEgal{Int}}) === Tuple{Vararg{DataType}}
+    @test tuple_tfunc(Int, Vararg{Union{Int,Type{Int}}, 2}) === Tuple{Int, Vararg{Union{Int,Type}, 2}}
 end
+tuple_splat_isa(v::Vector{Type{Int}}) = tuple(v...) isa Tuple{Vararg{Type{Int}}}
+@test !tuple_splat_isa(Type{Int}[Int, Int])
 
 function f23024(::Type{T}, ::Int) where T
     1 + 1

@@ -2334,32 +2334,41 @@ function tuple_tfunc(𝕃::AbstractLattice, argtypes::Vector{Any})
         if isa(x, Const)
             params[i] = typeof(x.val)
         else
-            x = isvarargtype(x) ? x : widenconst_split(x)
+            va = isvarargtype(x) ? x : nothing
+            x = va === nothing ? widenconst_split(x) : unwrapva(va)
             # since there don't exist any values whose runtime type are `Tuple{Type{...}}`,
             # here we should turn such `Type{...}`-parameters to valid parameters, e.g.
             # (::Type{Int},) -> Tuple{DataType} (or PartialStruct for more accuracy)
             # (::Union{Type{Int32},Type{Int64}}) -> Tuple{Type}
+            # and the same for the element type of a trailing `Vararg`
             if isTypeEgal(x)
-                anyinfo = true
-                params[i] = typeof(type_parameter(x))
+                anyinfo |= va === nothing
+                param = typeof(type_parameter(x))
             elseif isTypeEq(x)
-                anyinfo = true
+                anyinfo |= va === nothing
                 xparam = type_parameter(x)
                 # an `==`-only type value has no pinned `typeof` (#61323), except
                 # `Type{Union{}}` whose only value is `Union{}`
                 if xparam === Bottom
-                    params[i] = typeof(xparam)
+                    param = typeof(xparam)
                 else
-                    params[i] = Type
+                    param = Type
                 end
             elseif iskindtype(x)
-                params[i] = x
-            elseif !isvarargtype(x) && hasintersect(x, Type)
-                params[i] = Union{x, Type}
+                param = x
+            elseif hasintersect(x, Type)
+                param = Union{x, Type}
             elseif x === Union{}
                 return Bottom # argtypes is malformed, but try not to crash
             else
-                params[i] = x
+                param = x
+            end
+            if va === nothing
+                params[i] = param
+            elseif isdefined(va, :N)
+                params[i] = Vararg{param, va.N}
+            else
+                params[i] = Vararg{param}
             end
         end
     end
