@@ -2644,4 +2644,15 @@ let src = code_typed1((Base.RefValue{Any},)) do r
     @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
+# a callee costing more than the largest encoded finite cost, under a raised threshold
+@newinterp HighInlineThreshold
+Compiler.OptimizationParams(::HighInlineThreshold) =
+    Compiler.OptimizationParams(; inline_cost_threshold=Int(Compiler.MAX_INLINE_COST))
+five_dynamic_calls(r) = (r[](1); r[](1); r[](1); r[](1); r[](1); nothing)
+let src = code_typed1((Base.RefValue{Any},); interp=HighInlineThreshold()) do r
+        five_dynamic_calls(r)
+    end
+    @test count(isinvoke(:five_dynamic_calls), src.code) == 0
+end
+
 end # module inline_tests
