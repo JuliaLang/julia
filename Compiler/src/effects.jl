@@ -358,7 +358,7 @@ is_finalizer_inlineable(effects::Effects) =
 is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
 is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 
-is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
+is_effect_free_if_inaccessiblememonly(effects::Effects) = effects.effect_free === EFFECT_FREE_IF_INACCESSIBLEMEMONLY
 
 is_reset_safe_if_inaccessiblememonly(effects::Effects) = !iszero(effects.reset_safe & RESET_SAFE_IF_INACCESSIBLEMEMONLY)
 

@@ -1840,3 +1840,9 @@ let c(v) = Compiler.Effects(Compiler.EFFECTS_TOTAL; consistent=v)
     @test Compiler.is_better_effects(c(NR), c(NR | IM))
     @test Compiler.is_better_effects(c(AF), Compiler.Effects(c(AF); nothrow=false))
 end
+
+# `GC.@preserve` markers are effect-free globally, not effect-free if inaccessiblememonly
+let src = code_typed1(x -> GC.@preserve(x, 1), (Vector{Int},); optimize=false)
+    i = findfirst(x -> isexpr(x, :gc_preserve_begin), src.code)::Int
+    @test iszero(src.ssaflags[i] & Compiler.IR_FLAG_EFIIMO)
+end
