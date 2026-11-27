@@ -521,6 +521,25 @@ let RU = Compiler.ReinferUtils
     @test !RU.binding_changed_since_require_world(b, Base.get_world_counter())
 end
 
+# A method defined after a loaded code instance was activated, but before its edges are
+# verified, must invalidate it.
+module StaleActivationWorld
+    h(x::Integer) = 1
+    g(x) = h(x)
+end
+let RU = Compiler.ReinferUtils, M = StaleActivationWorld
+    mi_h = Base.specialize_method(only(methods(M.h)), Tuple{typeof(M.h),Int}, Core.svec())
+    mi_g = Base.specialize_method(only(methods(M.g)), Tuple{typeof(M.g),Int}, Core.svec())
+    activation_world = Base.get_world_counter()
+    @eval M h(x::Int) = 2
+    ci = Core.CodeInstance(mi_g, nothing, Any, Any, nothing, nothing, Int32(0), activation_world,
+                           activation_world, UInt32(0), nothing, nothing, Core.svec())
+    @atomic ci.max_world = RU.WORLD_AGE_REVALIDATION_SENTINEL
+    @atomic ci.edges = Core.svec(mi_h)
+    _, _, maxworld = RU.verify_method(ci, Base.get_world_counter(), RU.VerifyMethodWorkspace())
+    @test maxworld < Base.get_world_counter()
+end
+
 # A result with limited accuracy is never cached, and every new caller infers it again.
 # Its CodeInstance must not be registered as a backedge, or each caller adds another one.
 # Here the inner `memo` call is widened against the outer one, which limits the cycle

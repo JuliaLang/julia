@@ -295,13 +295,13 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
                     if edge isa MethodInstance
                         sig = edge.specTypes
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, world, true, possibly_ambiguous, workspace, initial.image)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j, 1, validation_world, true, possibly_ambiguous, workspace, initial.image)
                         j += 1
                     elseif edge isa Int
                         sig = initial.callees[j+1]
                         nmatches = abs(edge)
                         fully_covers = edge > 0
-                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, world, fully_covers, possibly_ambiguous, workspace, initial.image)
+                        min_valid2, max_valid2 = verify_call(sig, initial.callees, j+2, nmatches, validation_world, fully_covers, possibly_ambiguous, workspace, initial.image)
                         j += 2 + nmatches
                         edge = sig
                     elseif edge isa Core.Binding
@@ -341,7 +341,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
                         else
                             meth = callee::Method
                         end
-                        min_valid2, max_valid2 = verify_invokesig(edge, meth, world, matches, initial.image)
+                        min_valid2, max_valid2 = verify_invokesig(edge, meth, validation_world, matches, initial.image)
                         j += 2
                     end
 
