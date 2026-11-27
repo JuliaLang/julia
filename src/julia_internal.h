@@ -1148,6 +1148,7 @@ jl_value_t *jl_apply_generic_cached(jl_value_t *F, jl_value_t **args, uint32_t n
                                     size_t world) JL_CANSAFEPOINT;
 // the interpreter's dispatch caches, by the code they are for (see interpreter.c)
 extern jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED;
+JL_DLLEXPORT void jl_gc_clear_dead_interp_slots(jl_gcframe_t *gcframe, uintptr_t offset, uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT;
 extern jl_mutex_t jl_interp_call_sites_lock;
 jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *clos, jl_value_t **args, size_t nargs) JL_CANSAFEPOINT;
 jl_value_t *jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src) JL_CANSAFEPOINT;

@@ -25,6 +25,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
     jl_genericmemory_t *sites; // each statement's dispatch cache (see call_sites), or NULL
+    const int32_t *dead; // when each SSA value dies, for the GC (see dead_values), or NULL
     size_t nslots, nssa; // the slots and SSA values of src (see frame_set_src)
     size_t world; // the world the frame runs in, which a method body cannot change, or 0
                   // for a top-level thunk, which moves to the latest world as it goes
@@ -185,7 +186,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
     jl_value_t *result;
-    if (s->sites == NULL || s->ip + 1 >= s->sites->length)
+    if (s->sites == NULL || s->ip + 2 >= s->sites->length)
         result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     else if (argv[0] == BUILTIN(apply_type) && nargs > 1)
         result = apply_type_cached(argv, nargs, s->sites, s->ip);
@@ -457,9 +458,8 @@ static NOINLINE jl_value_t *eval_value_full(jl_value_t *e, interpreter_state *s)
         return jl_nothing;
     }
     else if (head == jl_gc_preserve_begin_sym || head == jl_gc_preserve_end_sym) {
-        // The interpreter generally keeps values that were assigned in this scope
-        // rooted. If the interpreter learns to be more aggressive here, we may
-        // want to explicitly root these values.
+        // Slots stay rooted until reassigned, and dead_values keeps the SSA values a
+        // gc_preserve_begin names alive until its gc_preserve_end.
         return jl_nothing;
     }
     else if (head == jl_method_sym && nargs == 1) {
@@ -515,6 +515,351 @@ STATIC_INLINE int ends_phi_block(jl_value_t *e) JL_NOTSAFEPOINT
     return jl_is_expr(e) || jl_is_returnnode(e) || jl_is_gotoifnot(e) ||
            jl_is_gotonode(e) || jl_is_phicnode(e) || jl_is_upsilonnode(e) ||
            jl_is_ssavalue(e);
+}
+
+// SSA value lifetimes. An interpreted frame keeps its SSA values in its GC frame, so
+// without help a value would stay alive until the frame returns, long after compiled code
+// would have let it die. Instead the GC, scanning the frame, leaves out the values that
+// are dead at the statement it is running (see jl_gc_clear_dead_interp_slots).
+// dead_values computes, once per code object, for each SSA value the last statement at
+// which it can be live (by liveness over the control flow graph, with an edge from every
+// block of a `try` to its `catch`), and returns them as a table `t`: ns + 1 offsets into
+// `t` followed by the indices of the values' slots in the frame's locals, where the values
+// whose last live statement is p are those at t[i] for t[p] <= i < t[p + 1]. A value
+// whose last live statement is before statement k is dead at k, and stays dead until its
+// statement runs again; in particular, the statement being run reads no such value.
+
+typedef struct {
+    int32_t *v;
+    size_t n, cap;
+} dv_vec;
+
+static void dv_push(dv_vec *a, int32_t x) JL_NOTSAFEPOINT
+{
+    if (a->n == a->cap) {
+        a->cap = a->cap ? 2 * a->cap : 16;
+        a->v = (int32_t*)realloc_s(a->v, a->cap * sizeof(int32_t));
+    }
+    a->v[a->n++] = x;
+}
+
+// record (SSA index, statement, -1) for each SSA value `e` evaluates
+static void dv_scan(jl_value_t *e, int32_t pos, size_t nssa, dv_vec *uses) JL_NOTSAFEPOINT
+{
+    if (jl_is_ssavalue(e)) {
+        size_t id = ((jl_ssavalue_t*)e)->id - 1;
+        if (id < nssa) {
+            dv_push(uses, (int32_t)id);
+            dv_push(uses, pos);
+            dv_push(uses, -1);
+        }
+    }
+    else if (jl_is_expr(e)) {
+        jl_array_t *args = ((jl_expr_t*)e)->args;
+        for (size_t i = 0; i < jl_array_nrows(args); i++)
+            dv_scan(jl_array_ptr_ref(args, i), pos, nssa, uses);
+    }
+    else if (jl_is_pinode(e)) {
+        dv_scan(jl_fieldref_noalloc(e, 0), pos, nssa, uses);
+    }
+}
+
+// Whether to clear the SSA value of statement `st`: only values the statement computes or
+// copies from another variable, and not constants, globals or code literals, which stay
+// rooted anyway (a global may be reassigned, leaving its old value to this slot until the
+// statement runs again). An Upsilon's slot holds its PhiC, and a PhiC's value is set by
+// Upsilons, so neither is cleared.
+static int dv_defines(jl_value_t *st) JL_NOTSAFEPOINT
+{
+    if (!jl_is_expr(st))
+        return jl_is_ssavalue(st) || jl_is_slotnumber(st) || jl_is_argument(st) ||
+               jl_is_pinode(st) || jl_is_enternode(st);
+    jl_expr_t *ex = (jl_expr_t*)st;
+    jl_sym_t *head = ex->head;
+    if (head == jl_assign_sym)
+        return !jl_is_slotnumber(jl_exprarg(ex, 0));
+    return !(head == jl_leave_sym || head == jl_pop_exception_sym || head == jl_boundscheck_sym ||
+             head == jl_meta_sym || head == jl_static_parameter_sym || head == jl_isdefined_sym);
+}
+
+static jl_value_t *dead_values(jl_code_info_t *src) JL_CANSAFEPOINT
+{
+    jl_array_t *stmts = src->code;
+    size_t ns = jl_array_nrows(stmts);
+    if (ns == 0 || ns + jl_source_nslots(src) >= INT32_MAX / 2 || (size_t)jl_source_nssavalues(src) != ns)
+        return jl_nothing;
+    // at most ns values are cleared; the table is allocated first so that nothing below
+    // can throw while holding the scratch memory
+    jl_array_t *table = jl_alloc_array_1d(jl_array_int32_type, 2 * ns + 1);
+    int32_t *t = jl_array_data(table, int32_t);
+    jl_value_t **code = jl_array_ptr_data(stmts);
+    int ok = 1;
+    // basic blocks: 1 marks the first statement of a block until they are numbered
+    int32_t *blk = (int32_t*)calloc_s(ns * sizeof(int32_t));
+    blk[0] = 1;
+    for (size_t i = 0; i < ns && ok; i++) {
+        jl_value_t *st = code[i];
+        intptr_t target = 0; // 1-based, or 0 for none
+        if (jl_is_gotonode(st))
+            target = jl_gotonode_label(st);
+        else if (jl_is_gotoifnot(st))
+            target = jl_gotoifnot_label(st);
+        else if (jl_is_enternode(st))
+            target = jl_enternode_catch_dest(st);
+        else if (!jl_is_returnnode(st))
+            continue;
+        if (target < 0 || (size_t)target > ns || (target == 0 && !jl_is_returnnode(st) && !jl_is_enternode(st)))
+            ok = 0;
+        else if (target != 0)
+            blk[target - 1] = 1;
+        if (i + 1 < ns)
+            blk[i + 1] = 1;
+    }
+    if (!ok) {
+        free(blk);
+        return jl_nothing;
+    }
+    int32_t nb = 0;
+    for (size_t i = 0; i < ns; i++) {
+        nb += blk[i];
+        blk[i] = nb - 1;
+    }
+    int32_t *bend = (int32_t*)malloc_s(nb * sizeof(int32_t)); // last statement of each block
+    for (size_t i = 0; i < ns; i++)
+        bend[blk[i]] = (int32_t)i;
+    // control flow edges (from, to), normal ones first
+    dv_vec edges = {NULL, 0, 0};
+    for (int32_t b = 0; b < nb; b++) {
+        jl_value_t *st = code[bend[b]];
+        if (jl_is_gotonode(st)) {
+            dv_push(&edges, b);
+            dv_push(&edges, blk[jl_gotonode_label(st) - 1]);
+            continue;
+        }
+        if (jl_is_returnnode(st))
+            continue;
+        if (jl_is_gotoifnot(st)) {
+            dv_push(&edges, b);
+            dv_push(&edges, blk[jl_gotoifnot_label(st) - 1]);
+        }
+        if (b + 1 < nb) {
+            dv_push(&edges, b);
+            dv_push(&edges, b + 1);
+        }
+    }
+    size_t nnormal = edges.n / 2;
+    // successors over normal edges and into catch blocks, for finding `try` regions
+    int32_t *soff = (int32_t*)calloc_s((nb + 1) * sizeof(int32_t));
+    int32_t *succ = (int32_t*)malloc_s((nnormal + nb + 1) * sizeof(int32_t));
+    for (size_t k = 0; k < nnormal; k++)
+        soff[edges.v[2 * k] + 1]++;
+    for (int32_t b = 0; b < nb; b++)
+        soff[b + 1] += soff[b] + (jl_is_enternode(code[bend[b]]) && jl_enternode_catch_dest(code[bend[b]]) != 0);
+    {
+        int32_t *fill = (int32_t*)malloc_s(nb * sizeof(int32_t));
+        memcpy(fill, soff, nb * sizeof(int32_t));
+        for (size_t k = 0; k < nnormal; k++)
+            succ[fill[edges.v[2 * k]]++] = edges.v[2 * k + 1];
+        for (int32_t b = 0; b < nb; b++) {
+            jl_value_t *st = code[bend[b]];
+            if (jl_is_enternode(st) && jl_enternode_catch_dest(st) != 0)
+                succ[fill[b]++] = blk[jl_enternode_catch_dest(st) - 1];
+        }
+        free(fill);
+    }
+    // an exception anywhere in a `try` region reaches its catch block: the region is
+    // what control reaches from the `enter` without passing a `leave` of it
+    int32_t *mark = (int32_t*)malloc_s(nb * sizeof(int32_t));
+    int32_t *mark2 = (int32_t*)malloc_s(nb * sizeof(int32_t));
+    int32_t *stack = (int32_t*)malloc_s(nb * sizeof(int32_t));
+    for (int32_t b = 0; b < nb; b++)
+        mark[b] = mark2[b] = -1;
+    for (int32_t e = 0; e < (int32_t)ns; e++) {
+        jl_value_t *st = code[e];
+        if (!jl_is_enternode(st) || jl_enternode_catch_dest(st) == 0 || (size_t)e + 1 >= ns)
+            continue;
+        int32_t cb = blk[jl_enternode_catch_dest(st) - 1];
+        size_t sp = 0;
+        mark[blk[e + 1]] = e;
+        stack[sp++] = blk[e + 1];
+        while (sp > 0) {
+            int32_t r = stack[--sp];
+            dv_push(&edges, r);
+            dv_push(&edges, cb);
+            int left = 0;
+            for (int32_t i = r == 0 ? 0 : bend[r - 1] + 1; i <= bend[r] && !left; i++) {
+                jl_value_t *li = code[i];
+                if (jl_is_expr(li) && ((jl_expr_t*)li)->head == jl_leave_sym) {
+                    for (size_t j = 0; j < jl_expr_nargs(li); j++) {
+                        jl_value_t *a = jl_exprarg(li, j);
+                        if (jl_is_ssavalue(a) && ((jl_ssavalue_t*)a)->id == e + 1)
+                            left = 1;
+                    }
+                }
+            }
+            if (left)
+                continue;
+            for (int32_t k = soff[r]; k < soff[r + 1]; k++) {
+                if (mark[succ[k]] != e) {
+                    mark[succ[k]] = e;
+                    stack[sp++] = succ[k];
+                }
+            }
+        }
+    }
+    for (int32_t b = 0; b < nb; b++)
+        mark[b] = -1;
+    // predecessors over all edges
+    size_t nedges = edges.n / 2;
+    int32_t *poff = (int32_t*)calloc_s((nb + 1) * sizeof(int32_t));
+    int32_t *pred = (int32_t*)malloc_s((nedges + 1) * sizeof(int32_t));
+    for (size_t k = 0; k < nedges; k++)
+        poff[edges.v[2 * k + 1] + 1]++;
+    for (int32_t b = 0; b < nb; b++)
+        poff[b + 1] += poff[b];
+    {
+        int32_t *fill = (int32_t*)malloc_s(nb * sizeof(int32_t));
+        memcpy(fill, poff, nb * sizeof(int32_t));
+        for (size_t k = 0; k < nedges; k++)
+            pred[fill[edges.v[2 * k + 1]]++] = edges.v[2 * k];
+        free(fill);
+    }
+    // uses: (SSA index, statement, block at whose exit a phi uses it or -1)
+    dv_vec uses = {NULL, 0, 0};
+    for (size_t i = 0; i < ns && ok; i++) {
+        jl_value_t *st = code[i];
+        if (jl_is_gotoifnot(st)) {
+            dv_scan(jl_gotoifnot_cond(st), i, ns, &uses);
+        }
+        else if (jl_is_returnnode(st)) {
+            if (jl_returnnode_value(st))
+                dv_scan(jl_returnnode_value(st), i, ns, &uses);
+        }
+        else if (jl_is_upsilonnode(st)) {
+            if (jl_fieldref_noalloc(st, 0))
+                dv_scan(jl_fieldref_noalloc(st, 0), i, ns, &uses);
+        }
+        else if (jl_is_enternode(st)) {
+            if (jl_enternode_scope(st))
+                dv_scan(jl_enternode_scope(st), i, ns, &uses);
+        }
+        else if (jl_is_phinode(st)) {
+            // a phi reads its value for an edge on the way from that edge's statement
+            jl_array_t *pedges = (jl_array_t*)jl_fieldref_noalloc(st, 0);
+            jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(st, 1);
+            for (size_t j = 0; j < jl_array_nrows(pedges) && j < jl_array_nrows(values); j++) {
+                jl_value_t *v = jl_array_ptr_ref(values, j);
+                int32_t from = jl_array_data(pedges, int32_t)[j];
+                if (from < 1 || (size_t)from > ns) {
+                    ok = 0;
+                    break;
+                }
+                if (v && jl_is_ssavalue(v) && (size_t)(((jl_ssavalue_t*)v)->id - 1) < ns) {
+                    dv_push(&uses, ((jl_ssavalue_t*)v)->id - 1);
+                    dv_push(&uses, from - 1);
+                    dv_push(&uses, blk[from - 1]);
+                }
+            }
+        }
+        else if (jl_is_phicnode(st)) {
+            // its values name Upsilons, whose slots are never cleared
+        }
+        else {
+            dv_scan(st, i, ns, &uses);
+            if (jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_gc_preserve_end_sym) {
+                // the values preserved by the matching gc_preserve_begin live until here
+                for (size_t j = 0; j < jl_expr_nargs(st); j++) {
+                    jl_value_t *tok = jl_exprarg(st, j);
+                    if (!jl_is_ssavalue(tok) || (size_t)(((jl_ssavalue_t*)tok)->id - 1) >= ns)
+                        continue;
+                    jl_value_t *begin = code[((jl_ssavalue_t*)tok)->id - 1];
+                    if (jl_is_expr(begin) && ((jl_expr_t*)begin)->head == jl_gc_preserve_begin_sym)
+                        dv_scan(begin, i, ns, &uses);
+                }
+            }
+        }
+    }
+    // the last live statement of each value, from its uses (grouped by value)
+    int32_t *last = (int32_t*)malloc_s(ns * sizeof(int32_t));
+    size_t nuses = uses.n / 3;
+    int32_t *uoff = (int32_t*)calloc_s((ns + 1) * sizeof(int32_t));
+    int32_t *uidx = (int32_t*)malloc_s((nuses + 1) * sizeof(int32_t));
+    for (size_t k = 0; k < nuses; k++)
+        uoff[uses.v[3 * k] + 1]++;
+    for (size_t v = 0; v < ns; v++)
+        uoff[v + 1] += uoff[v];
+    {
+        int32_t *fill = (int32_t*)malloc_s(ns * sizeof(int32_t));
+        memcpy(fill, uoff, ns * sizeof(int32_t));
+        for (size_t k = 0; k < nuses; k++)
+            uidx[fill[uses.v[3 * k]]++] = (int32_t)k;
+        free(fill);
+    }
+    // eval_phi_slow stores the values of a phi block (its phis and what lies between them) while
+    // the frame's statement is still the one it came from, so those are never cleared
+    int in_phis = 0;
+    for (size_t i = ns; i-- > 0; ) {
+        jl_value_t *st = code[i];
+        if (jl_is_phinode(st))
+            in_phis = 1;
+        else if (ends_phi_block(st))
+            in_phis = 0;
+        last[i] = in_phis ? -1 : 0;
+    }
+    size_t nclear = 0;
+    for (int32_t v = 0; v < (int32_t)ns && ok; v++) {
+        if (last[v] < 0 || !dv_defines(code[v])) {
+            last[v] = -1;
+            continue;
+        }
+        int32_t L = v, dblk = blk[v];
+        size_t sp = 0;
+        // mark: live into the block for v; mark2: live out of the block for v
+#define DV_LIVEOUT(P) do { int32_t p_ = (P); \
+            if (mark2[p_] != v) { mark2[p_] = v; \
+                if (bend[p_] > L) L = bend[p_]; \
+                if (p_ != dblk && mark[p_] != v) { mark[p_] = v; stack[sp++] = p_; } } } while (0)
+        for (int32_t k = uoff[v]; k < uoff[v + 1]; k++) {
+            int32_t pos = uses.v[3 * uidx[k] + 1], ob = uses.v[3 * uidx[k] + 2];
+            if (ob >= 0) {
+                DV_LIVEOUT(ob);
+            }
+            else {
+                if (pos > L)
+                    L = pos;
+                if ((blk[pos] != dblk || pos <= v) && mark[blk[pos]] != v) {
+                    mark[blk[pos]] = v;
+                    stack[sp++] = blk[pos];
+                }
+            }
+        }
+        while (sp > 0) {
+            int32_t b = stack[--sp];
+            for (int32_t k = poff[b]; k < poff[b + 1]; k++)
+                DV_LIVEOUT(pred[k]);
+        }
+#undef DV_LIVEOUT
+        last[v] = L;
+        nclear++;
+    }
+    if (ok && nclear > 0) {
+        // bucket the values by their last live statement
+        memset(t, 0, (ns + 1) * sizeof(int32_t));
+        for (size_t v = 0; v < ns; v++)
+            if (last[v] >= 0)
+                t[last[v] + 1]++;
+        t[0] = ns + 1;
+        for (size_t p = 0; p < ns; p++)
+            t[p + 1] += t[p];
+        memcpy(uoff, t, ns * sizeof(int32_t));
+        int32_t nslots = jl_source_nslots(src);
+        for (size_t v = 0; v < ns; v++)
+            if (last[v] >= 0)
+                t[uoff[last[v]]++] = nslots + (int32_t)v;
+    }
+    free(blk); free(bend); free(edges.v); free(soff); free(succ); free(mark); free(mark2);
+    free(stack); free(poff); free(pred); free(uses.v); free(uoff); free(uidx); free(last);
+    return ok && nclear > 0 ? (jl_value_t*)table : jl_nothing;
 }
 
 // phi nodes don't behave like proper instructions, so we require a special interpreter to handle them
@@ -1022,9 +1367,10 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 }
 
 // Each method body's cache of the dispatch at each of its statements (see
-// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code itself,
-// found by that code. The method remembers the caches it last used, which a frame running
-// the same code finds without the lock. Top-level thunks, which mostly run once, have none.
+// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code's
+// dead-value table (see frame_dead_values) and the code itself, found by that code. The
+// method remembers the caches it last used, which a frame running the same code finds
+// without the lock. Top-level thunks, which mostly run once, have none.
 jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
 jl_mutex_t jl_interp_call_sites_lock;
 
@@ -1039,8 +1385,8 @@ static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_
     jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
     if (sites == NULL) {
         JL_GC_PUSH1(&sites);
-        sites = jl_alloc_memory_any(nstmts + 1);
-        jl_genericmemory_ptr_set(sites, nstmts, (jl_value_t*)src);
+        sites = jl_alloc_memory_any(nstmts + 2);
+        jl_genericmemory_ptr_set(sites, nstmts + 1, (jl_value_t*)src);
         jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
         JL_GC_POP();
     }
@@ -1048,6 +1394,24 @@ static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_
     if (m)
         jl_atomic_store_release(&m->interp_sites, sites);
     return sites;
+}
+
+// The dead-value table (see dead_values) of the code that `sites` belongs to, kept after
+// its dispatch caches, or NULL if the GC can leave out none of its values.
+static const int32_t *frame_dead_values(jl_genericmemory_t *sites, jl_code_info_t *src) JL_CANSAFEPOINT
+{
+    _Atomic(jl_value_t*) *slot = &((_Atomic(jl_value_t*)*)jl_genericmemory_ptr_data(sites))[sites->length - 2];
+    jl_value_t *t = jl_atomic_load_acquire(slot);
+    if (t == NULL) {
+        jl_value_t *expected = NULL;
+        t = dead_values(src);
+        // the first table published stays, so the frames using it keep it alive
+        if (jl_atomic_cmpswap(slot, &expected, t))
+            jl_gc_wb(sites, slot, t);
+        else
+            t = expected;
+    }
+    return t == NULL || t == jl_nothing ? NULL : jl_array_data(t, int32_t);
 }
 
 // interpreter entry points
@@ -1104,6 +1468,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->world = world;
     s->sites = call_sites(jl_is_method(mi->def.value) ? mi->def.method : NULL, src, jl_array_nrows(stmts));
     locals[2] = (jl_value_t*)s->sites;
+    s->dead = frame_dead_values(s->sites, src);
+    s->ip = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -1155,6 +1521,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;
+    s->dead = NULL;
     s->world = 0;
     size_t defargs = source->nargs;
     int isva = source->isva;
@@ -1165,6 +1532,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         assert(defargs >= 2);
         s->locals[defargs - 1] = jl_f_tuple(NULL, &args[defargs - 2], nargs + 2 - defargs);
     }
+    s->ip = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(code->code, s, 0, 0);
     locals[0] = r; // GC root
@@ -1189,7 +1557,9 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;
+    s->dead = NULL;
     s->world = 0;
+    s->ip = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 1);
     JL_GC_POP();
@@ -1214,12 +1584,36 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->mi = NULL;
     s->ci = NULL;
     s->sites = NULL;
+    s->dead = NULL;
     s->world = 0;
+    s->ip = 0;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
     JL_GC_POP();
     return v;
+}
+
+// For the GC, with the frame's thread stopped: clear the SSA slots of the interpreter frame
+// whose GC frame is `gcframe` that hold values dead at the statement the frame is running
+// (see dead_values). The GC then does not mark them, and as the slots are cleared it does
+// not find them again later, after the frame has gone back to an earlier statement, when
+// they would point to freed objects. A stack copied out of [lb, ub) is read `offset` away.
+JL_DLLEXPORT void jl_gc_clear_dead_interp_slots(jl_gcframe_t *gcframe, uintptr_t offset, uintptr_t lb, uintptr_t ub) JL_NOTSAFEPOINT
+{
+#define STACK_ADDR(p) ((uintptr_t)(p) >= lb && (uintptr_t)(p) < ub ? (void*)((uintptr_t)(p) + offset) : (void*)(p))
+    void **frame = (void**)gcframe - 1; // see JL_GC_PUSHFRAME
+    if (*(void**)STACK_ADDR(frame) == NULL)
+        return; // not enabled yet (see JL_GC_ENABLEFRAME), so its state may not be set
+    interpreter_state *s = (interpreter_state*)STACK_ADDR((interpreter_state*)frame - 1);
+    const int32_t *dead = s->dead;
+    if (dead == NULL)
+        return;
+    size_t ip = s->ip < s->nssa ? s->ip : s->nssa;
+    jl_value_t **locals = (jl_value_t**)STACK_ADDR(s->locals);
+    for (const int32_t *p = dead + dead[0], *end = dead + dead[ip]; p < end; p++)
+        locals[*p] = NULL;
+#undef STACK_ADDR
 }
 
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,
