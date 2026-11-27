@@ -520,7 +520,7 @@ end
             end
             return true
         end
-        return false
+        return a === Union{}
     end
     if isa(a, PartialOpaque)
         if isa(b, PartialOpaque)
@@ -530,7 +530,7 @@ end
         end
         return ⊑(widenlattice(lattice), widenconst(a), b)
     elseif isa(b, PartialOpaque)
-        return false
+        return a === Union{}
     end
     if isa(a, PartialTask)
         if isa(b, PartialTask)
@@ -538,7 +538,7 @@ end
         end
         return ⊑(widenlattice(lattice), Task, b)
     elseif isa(b, PartialTask)
-        return false
+        return a === Union{}
     end
     return ⊑(widenlattice(lattice), a, b)
 end
@@ -556,11 +556,11 @@ end
         if issingletontype(a)
             return a.instance === b.val
         end
-        return false
+        return a === Union{}
     elseif isa(a, PartialTypeVar)
         return b === TypeVar || a === b
     elseif isa(b, PartialTypeVar)
-        return false
+        return a === Union{}
     end
     return ⊑(widenlattice(lattice), a, b)
 end
