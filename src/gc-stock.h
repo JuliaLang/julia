@@ -169,7 +169,11 @@ extern jl_gc_page_stack_t global_page_pool_freed;
  *    (i.e., the time window between two consecutive GCs).
  *
  * 2. If a node is popped by a GC thread, it will never be pushed back onto
- *    the same stack.
+ *    the same stack while a pop by a GC thread may be in flight. The parallel
+ *    GC threads only pop during a sweep, which never pushes a node back onto
+ *    the stack it was popped from. The concurrent sweep thread is not stopped
+ *    by a collection, so it is kept out of `global_page_pool_lazily_freed`
+ *    for as long as a sweep may push pages onto it (see `gc_free_pages_lock`).
  *
  * These invariants ensure safe usage of this simplified lock-free stack
  * without requiring ABA prevention.

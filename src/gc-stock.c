@@ -1745,6 +1745,17 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
 // following call to gc_free_pages (which may run on the concurrent sweep thread)
 static _Atomic(size_t) gc_free_pages_keep;
 
+// The concurrent sweep thread is not stopped by a collection, so without further
+// synchronization one of its pops from `global_page_pool_lazily_freed` could
+// still be in flight when a later sweep pushes the same page back onto that
+// stack, which the lock-free page stack does not tolerate (ABA).
+// The concurrent sweep thread therefore holds `gc_free_pages_lock` while it runs
+// `gc_free_pages`, and the thread running a collection holds it for as long as
+// the sweep may push pages. `gc_free_pages_stop` only bounds how long the
+// collection waits for the lock: the pages not reclaimed stay on the stack.
+static uv_mutex_t gc_free_pages_lock;
+static _Atomic(int) gc_free_pages_stop;
+
 // free all but a warm cache of the pages that were lazily freed (i.e. through
 // `madvise` on Linux)
 static void gc_free_pages(void) JL_NOTSAFEPOINT
@@ -1754,6 +1765,9 @@ static void gc_free_pages(void) JL_NOTSAFEPOINT
     size_t n_to_free = n_present > keep ? n_present - keep : 0;
     size_t n_freed = 0;
     while (n_freed < n_to_free) {
+        if (jl_atomic_load_relaxed(&gc_free_pages_stop)) {
+            break;
+        }
         jl_gc_pagemeta_t *pg = pop_lf_back(&global_page_pool_lazily_freed);
         if (pg == NULL) {
             break;
@@ -1777,6 +1791,11 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     // doesn't change over the course of this function
     size_t n_threads = gc_n_threads;
     int epoch = jl_atomic_load_relaxed(&gc_partial_pages_epoch);
+
+    // keep the concurrent sweep thread out of `global_page_pool_lazily_freed`
+    // while this sweep pushes pages onto it (see `gc_free_pages_lock`)
+    jl_atomic_store_relaxed(&gc_free_pages_stop, 1);
+    uv_mutex_lock(&gc_free_pages_lock);
 
     // partially free pages that no thread adopted since the last sweep are on no thread's
     // list; return them to the thread that last owned them so that they are swept like any
@@ -1895,6 +1914,9 @@ static void gc_sweep_pool(void) JL_NOTSAFEPOINT
     if (target > old_heap_size && target - old_heap_size > interval)
         interval = target - old_heap_size;
     jl_atomic_store_relaxed(&gc_free_pages_keep, interval / GC_PAGE_SZ);
+
+    jl_atomic_store_relaxed(&gc_free_pages_stop, 0);
+    uv_mutex_unlock(&gc_free_pages_lock);
 
 #ifdef _P64 // only enable concurrent sweeping on 64bit
     // wake thread up to sweep concurrently
@@ -4408,7 +4430,9 @@ void jl_concurrent_gc_threadfun(void *arg)
     while (1) {
         assert(jl_atomic_load_relaxed(&ptls->gc_state) == JL_GC_CONCURRENT_COLLECTOR_THREAD);
         uv_sem_wait(&gc_sweep_assists_needed);
+        uv_mutex_lock(&gc_free_pages_lock);
         gc_free_pages();
+        uv_mutex_unlock(&gc_free_pages_lock);
     }
 }
 
@@ -4425,6 +4449,7 @@ void jl_gc_init(void)
     uv_mutex_init(&gc_threads_lock);
     uv_cond_init(&gc_threads_cond);
     uv_sem_init(&gc_sweep_assists_needed, 0);
+    uv_mutex_init(&gc_free_pages_lock);
     uv_mutex_init(&gc_queue_observer_lock);
     void *_addr = (void*)calloc_s(1); // dummy allocation to get the sentinel tag
     uintptr_t addr = (uintptr_t)_addr;
