@@ -1049,6 +1049,41 @@ end
 @test_throws UndefVarError undef_phicnode55388(true, true, true)
 @test undef_phicnode55388(false, false, false) === nothing
 
+# a loop at the start of a catch block, so the catch block is also the loop header
+function catch_loop_header(r)
+    x = 0
+    try
+        x = 1
+        error()
+    catch
+        while r[] < 3
+            r[] += 1
+            x += 1
+        end
+    end
+    return x
+end
+function catch_loop_header_undef(n)
+    local y
+    try
+        error()
+    catch
+        i = 0
+        while i < n
+            i += 1
+            y = i
+        end
+    end
+    return y
+end
+for (f, argtypes) in ((catch_loop_header, (Base.RefValue{Int},)), (catch_loop_header_undef, (Int,)))
+    ir = first(only(Base.code_ircode(f, argtypes)))
+    @test (Compiler.verify_ir(ir); true)
+end
+@test catch_loop_header(Ref(0)) == 4
+@test catch_loop_header_undef(2) == 2
+@test_throws UndefVarError catch_loop_header_undef(0)
+
 global global_error_switch::Bool = true
 function gen_must_throw_phinode_edge(world::UInt, source, _)
     ci = make_codeinfo(Any[

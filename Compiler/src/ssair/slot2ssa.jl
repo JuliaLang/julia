@@ -636,6 +636,11 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
         end
         phiblocks = iterated_dominance_frontier(cfg, live, domtree)
         for block in phiblocks
+            # a catch block can also be a loop header; its φᶜ then merges every incoming value
+            if haskey(new_phic_nodes, block) &&
+               any((; slot)::NewPhiCNode2->slot_id(slot)==idx, new_phic_nodes[block])
+                continue
+            end
             push!(phi_slots[block], idx)
             node = PhiNode()
             bbstate = sv.bb_states[block]
@@ -704,6 +709,25 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             end
 
             incoming_vals[slot] = Pair{Any, Any}(ssaval, undef_ssaval)
+        end
+        # an ordinary edge into a catch block (a loop back edge) feeds its φᶜ nodes through ϒ nodes
+        if haskey(new_phic_nodes, item) && pred != 0 &&
+           !any((; enter_block, leave_block)::TryCatchRegion->enter_block==pred && leave_block==item, catch_entry_blocks)
+            last_stmt = last(cfg.blocks[pred].stmts)
+            attach_after = !isterminator(code[last_stmt])
+            for (; slot, insert) in new_phic_nodes[item]
+                (; node, undef_node) = insert
+                (ival, idef) = incoming_vals[slot_id(slot)]
+                ivalundef = ival === UNDEF_TOKEN
+                Υ = NewInstruction(ivalundef ? UpsilonNode() : UpsilonNode(ival),
+                                   ivalundef ? Union{} : typ_for_val(ival, ci, ir, -1, sv.slottypes))
+                push!(node.values, NewSSAValue(insert_node!(ir, last_stmt, Υ, attach_after).id - length(ir.stmts)))
+                if undef_node !== nothing
+                    Υundef = NewInstruction(UpsilonNode(idef), Bool)
+                    push!(undef_node.values,
+                          NewSSAValue(insert_node!(ir, last_stmt, Υundef, attach_after).id - length(ir.stmts)))
+                end
+            end
         end
         (item in visited) && continue
         # Record phi_C nodes if necessary
