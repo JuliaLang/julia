@@ -1515,9 +1515,10 @@ static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
         // A collector thread may get here late, on a request from an earlier
         // collection, and claim work from the current one. Claiming an index is
         // then its only synchronization with the thread that set up this sweep,
-        // so this must not be a relaxed operation, and nothing that depends on
-        // the current collection may be read before an index has been claimed.
-        int i = jl_atomic_fetch_add(&gc_ptls_sweep_idx, -1);
+        // so this acquires what that thread released when it published the
+        // indices, and nothing that depends on the current collection may be
+        // read before an index has been claimed.
+        int i = jl_atomic_fetch_add_acquire(&gc_ptls_sweep_idx, -1);
         if (i < 0)
             break;
         int sweep_big_serially = gc_sweep_big_serially();
