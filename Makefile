@@ -209,7 +209,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_GMP) += libgmp libgmpxx
 JL_PRIVATE_LIBS-$(USE_SYSTEM_MPFR) += libmpfr
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBSSH2) += libssh2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_NGHTTP2) += libnghttp2
-JL_PRIVATE_LIBS-$(USE_SYSTEM_MBEDTLS) += libmbedtls libmbedcrypto libmbedx509
+JL_PRIVATE_LIBS-$(USE_SYSTEM_OPENSSL) += libcrypto libssl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_CURL) += libcurl
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBGIT2) += libgit2
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LIBUV) += libuv
@@ -218,6 +218,7 @@ JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += zlib
 else
 JL_PRIVATE_LIBS-$(USE_SYSTEM_ZLIB) += libz
 endif
+JL_PRIVATE_LIBS-$(USE_SYSTEM_ZSTD) += libzstd
 ifeq ($(USE_LLVM_SHLIB),1)
 JL_PRIVATE_LIBS-$(USE_SYSTEM_LLVM) += libLLVM $(LLVM_SHARED_LIB_NAME)
 endif
@@ -377,6 +378,10 @@ endif
 endif
 	# Install `7z` into private_libexecdir
 	$(INSTALL_M) $(build_bindir)/7z$(EXE) $(DESTDIR)$(private_libexecdir)/
+
+	# Install `zstd` and `zstdmt` into private_libexecdir
+	$(INSTALL_M) $(build_bindir)/zstd$(EXE) $(DESTDIR)$(private_libexecdir)/
+	$(INSTALL_M) $(build_bindir)/zstdmt$(EXE) $(DESTDIR)$(private_libexecdir)/
 
 	# Install `lld` into private_libexecdir
 	$(INSTALL_M) $(build_depsbindir)/lld$(EXE) $(DESTDIR)$(private_libexecdir)/

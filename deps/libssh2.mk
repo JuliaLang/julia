@@ -4,8 +4,8 @@ LIBSSH2_GIT_URL := https://github.com/libssh2/libssh2.git
 LIBSSH2_TAR_URL = https://api.github.com/repos/libssh2/libssh2/tarball/$1
 $(eval $(call git-external,libssh2,LIBSSH2,CMakeLists.txt,,$(SRCCACHE)))
 
-ifeq ($(USE_SYSTEM_MBEDTLS), 0)
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
+ifeq ($(USE_SYSTEM_OPENSSL), 0)
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/openssl
 endif
 
 LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
@@ -17,7 +17,7 @@ ifeq ($(BUILD_OS),WINNT)
 LIBSSH2_OPTS += -G"MSYS Makefiles"
 endif
 else
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=OpenSSL -DENABLE_ZLIB_COMPRESSION=OFF
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
@@ -30,15 +30,65 @@ endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
-$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
-	cd $(LIBSSH2_SRC_PATH) && \
-		patch -p1 -f < $(SRCDIR)/patches/libssh2-mbedtls-size_t.patch
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied: $(LIBSSH2_SRC_PATH)/source-extracted
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch
 	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
-	$(LIBSSH2_SRC_PATH)/libssh2-mbedtls-size_t.patch-applied
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-7598-256d04b60d80bf1190e96b0ad1e91b2174d744b1.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2025-15661.patch
+	echo 1 > $@
 
-$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2025-15661.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55199.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55199.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-55200.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-55200.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58050-3449752.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58050-3449752.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-58051-a9758da.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-58051-a9758da.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-unconst-backport.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-unconst-backport.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66032.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66032.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66033.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66033.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66034.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66034.patch-applied
+	cd $(dir $@) && \
+		patch -p1 -f < $(SRCDIR)/patches/libssh2-CVE-2026-66035.patch
+	echo 1 > $@
+
+$(LIBSSH2_SRC_PATH)/source-patched: $(LIBSSH2_SRC_PATH)/libssh2-CVE-2026-66035.patch-applied
+	echo 1 > $@
+
+$(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-patched
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
 	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)

@@ -38,8 +38,7 @@ const BLAME_TRACK_COPIES_ANY_COMMIT_COPIES  = Cuint(1 << 3)
 const BLAME_FIRST_PARENT                    = Cuint(1 << 4)
 
 # checkout
-const CHECKOUT_NONE                    = Cuint(0)
-const CHECKOUT_SAFE                    = Cuint(1 << 0)
+const CHECKOUT_SAFE                    = Cuint(0)
 const CHECKOUT_FORCE                   = Cuint(1 << 1)
 const CHECKOUT_RECREATE_MISSING        = Cuint(1 << 2)
 const CHECKOUT_ALLOW_CONFLICTS         = Cuint(1 << 4)
@@ -57,6 +56,7 @@ const CHECKOUT_DONT_OVERWRITE_IGNORED  = Cuint(1 << 19)
 const CHECKOUT_CONFLICT_STYLE_MERGE    = Cuint(1 << 20)
 const CHECKOUT_CONFLICT_STYLE_DIFF3    = Cuint(1 << 21)
 const CHECKOUT_DONT_REMOVE_EXISTING    = Cuint(1 << 22)
+const CHECKOUT_NONE                    = Cuint(1 << 30)
 
 const CHECKOUT_UPDATE_SUBMODULES       = Cuint(1 << 16)
 const CHECKOUT_UPDATE_SUBMODULES_IF_CHANGED = Cuint(1 << 17)
@@ -385,7 +385,32 @@ Option flags for `GitRepo`.
                    FEATURE_SSH     = Cuint(1 << 2),
                    FEATURE_NSEC    = Cuint(1 << 3))
 
-if version() >= v"0.24.0"
+if version() >= v"1.8.0"
+    @doc """
+    Priority level of a config file.
+
+    These priority levels correspond to the natural escalation logic (from higher to lower) when searching for config entries in git.
+
+    * `CONFIG_LEVEL_DEFAULT` - Open the global, XDG and system configuration files if any available.
+    * `CONFIG_LEVEL_PROGRAMDATA` - System-wide on Windows, for compatibility with portable git
+    * `CONFIG_LEVEL_SYSTEM` - System-wide configuration file; `/etc/gitconfig` on Linux systems
+    * `CONFIG_LEVEL_XDG` - XDG compatible configuration file; typically `~/.config/git/config`
+    * `CONFIG_LEVEL_GLOBAL` - User-specific configuration file (also called Global configuration file); typically `~/.gitconfig`
+    * `CONFIG_LEVEL_LOCAL` - Repository specific configuration file; `\$WORK_DIR/.git/config` on non-bare repos
+    * `CONFIG_LEVEL_WORKTREE` - Worktree specific configuration file; `\$GIT_DIR/config.worktree`
+    * `CONFIG_LEVEL_APP` - Application specific configuration file; freely defined by applications
+    * `CONFIG_HIGHEST_LEVEL` - Represents the highest level available config file (i.e. the most specific config file available that actually is loaded)
+    """
+    @enum(GIT_CONFIG, CONFIG_LEVEL_DEFAULT     = 0,
+                      CONFIG_LEVEL_PROGRAMDATA = 1,
+                      CONFIG_LEVEL_SYSTEM      = 2,
+                      CONFIG_LEVEL_XDG         = 3,
+                      CONFIG_LEVEL_GLOBAL      = 4,
+                      CONFIG_LEVEL_LOCAL       = 5,
+                      CONFIG_LEVEL_WORKTREE    = 6,
+                      CONFIG_LEVEL_APP         = 7,
+                      CONFIG_HIGHEST_LEVEL     =-1)
+elseif version() >= v"0.24.0"
     @doc """
     Priority level of a config file.
 
