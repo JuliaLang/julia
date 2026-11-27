@@ -1017,6 +1017,8 @@ end
 function _generate_unsafe_getindex!_body(N::Int)
     quote
         @inline
+        R = _boxregion(src, I)
+        R === nothing || _getindex_hooks!(dest, src, R) === nothing || return dest
         D = eachindex(dest)
         Dy = _prechecked_iterate(D)
         @inbounds @nloops $N j d->I[d] begin
@@ -1044,6 +1046,29 @@ end
 
 @noinline throw_checksize_error(A, sz) = throw(DimensionMismatch("output array is the wrong size; expected $sz, got $(size(A))"))
 
+_boxregion(A::AbstractArray, I::Tuple) = nothing
+_boxregion(A::AbstractArray{<:Any,N}, I::NTuple{N,Union{Int,OrdinalRange{Int,Int}}}) where {N} =
+    CartesianIndices(map(_boxrange, I))
+_boxregion(A::AbstractArray, I::Tuple{AbstractUnitRange{Int}}) = UnitRange{Int}(I[1])
+_boxregion(A::AbstractVector, I::Tuple{AbstractUnitRange{Int}}) = UnitRange{Int}(I[1])
+_boxrange(i::Int) = i:i
+_boxrange(r::OrdinalRange{Int,Int}) = r
+
+function _getindex_hooks!(dest::AbstractArray, src::AbstractArray, R)
+    @inline
+    isempty(R) && return nothing
+    Rdest = _wholeregion(dest)
+    copyto_dest!(dest, Rdest, src, R) === nothing || return dest
+    return copyto_src!(dest, Rdest, src, R)
+end
+
+_setindex_box!(A::AbstractArray, R, x, I::Tuple) = nothing
+function _setindex_box!(A::AbstractArray, R::Union{UnitRange{Int},CartesianIndices}, x::AbstractArray, I::Tuple)
+    setindex_shape_check(x, index_sizes(I...))
+    isempty(R) || _copyregions!(A, R, x, _wholeregion(x))
+    return A
+end
+
 ## setindex! ##
 function _setindex!(l::IndexStyle, A::AbstractArray, x, I::Union{Real, AbstractArray}...)
     @inline
@@ -1054,6 +1079,7 @@ end
 
 function _generate_unsafe_setindex!_body(N::Int)
     quote
+        _setindex_box!(A, _boxregion(A, I), x, I) === nothing || return A
         x′ = unalias(A, x)
         @nexprs $N d->(I_d = unalias(A, I[d]))
         setindex_shape_check(x′, @ncall $N index_sizes I)
@@ -1200,27 +1226,134 @@ function copyto!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
     @boundscheck checkbounds(dest, last(Rdest))
     @boundscheck checkbounds(src, first(Rsrc))
     @boundscheck checkbounds(src, last(Rsrc))
-    src′ = unalias(dest, src)
-    return _copyto_loops!(dest, Rdest, src′, Rsrc)
+    return _copyregions!(dest, Rdest, src, Rsrc)
 end
 
-function _copyto_loops!(dest::AbstractArray{T1,N}, Rdest::CartesianIndices{N},
-                        src::AbstractArray{T2,N}, Rsrc::CartesianIndices{N}) where {T1,T2,N}
-    CRdest = CartesianIndices(Rdest)
-    CRsrc = CartesianIndices(Rsrc)
-    ΔI = first(CRdest) - first(CRsrc)
+function _contiguous_start(A::AbstractArray{<:Any,N}, R::CartesianIndices{N}) where {N}
+    _iscontiguousbox(axes(A), R.indices) || return nothing
+    return @inbounds LinearIndices(A)[first(R)]
+end
+_contiguous_start(A::AbstractArray, R::CartesianIndices) = nothing
+
+_iscontiguousbox(::Tuple{}, ::Tuple{}) = true
+_iscontiguousbox(axs::Tuple, inds::Tuple) =
+    inds[1] == axs[1] ? _iscontiguousbox(tail(axs), tail(inds)) :
+        (step(inds[1]) == 1 || length(inds[1]) == 1) && all(r -> length(r) == 1, tail(inds))
+
+_iswholeregion(A::AbstractArray, R::CartesianIndices) = R.indices == axes(A)
+
+function _copyto_loops!(dest::AbstractArray, Rdest::CartesianIndices{N},
+                        src::AbstractArray, Rsrc::CartesianIndices{N}) where {N}
+    size(Rdest) == size(Rsrc) || return _copyto_src_driven!(dest, Rdest, src, Rsrc)
+    ΔI = first(CartesianIndices(Rdest)) - first(CartesianIndices(Rsrc))
     if @generated
-        quote
-            @nloops $N i (n->CRsrc.indices[n]) begin
-                @inbounds @nref($N,dest,n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N,src,n->Rsrc.indices[n][i_n])
+        full = quote
+            @nloops $N i (n->axes(Rsrc, n)) begin
+                @inbounds @nref($N, dest, n->Rdest.indices[n][i_n+ΔI[n]]) = @nref($N, src, n->Rsrc.indices[n][i_n])
+            end
+        end
+        if N <= 1
+            full
+        else
+            lhs = Expr(:ref, :dest, :id_1, (:(Rdest.indices[$(n+1)][$(Symbol(:k_, n)) + ΔI[$(n+1)]]) for n in 1:N-1)...)
+            rhs = Expr(:ref, :src, :is_1, (:(Rsrc.indices[$(n+1)][$(Symbol(:k_, n))]) for n in 1:N-1)...)
+            quote
+                if length(Rsrc.indices[1]) == 1
+                    id_1 = first(Rdest.indices[1]); is_1 = first(Rsrc.indices[1])
+                    @nloops $(N-1) k (n->axes(Rsrc, n+1)) begin
+                        @inbounds $lhs = $rhs
+                    end
+                else
+                    $full
+                end
             end
         end
     else
-        for I in CRsrc
+        for I in CartesianIndices(Rsrc)
             @inbounds dest[Rdest[I + ΔI]] = src[Rsrc[I]]
         end
     end
     dest
+end
+_copyto_loops!(dest::AbstractArray, Rdest::CartesianIndices, src::AbstractArray, Rsrc::CartesianIndices) =
+    _copyto_src_driven!(dest, Rdest, src, Rsrc)
+_copyto_loops!(dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::CartesianIndices) =
+    _copyto_src_driven!(dest, Rdest, src, Rsrc)
+_copyto_loops!(dest::AbstractArray, Rdest::CartesianIndices, src::AbstractArray, Rsrc::UnitRange{Int}) =
+    _copyto_dest_driven!(dest, Rdest, src, Rsrc)
+
+function _copyto_src_driven!(dest::AbstractArray, Rdest, src::AbstractArray, Rsrc::CartesianIndices{N}) where {N}
+    y = _prechecked_iterate(Rdest)
+    if @generated
+        full = quote
+            @nloops $N j d->Rsrc.indices[d] begin
+                (I, st) = y::NTuple{2,Any}
+                @inbounds dest[I] = @nref($N, src, j)
+                y = _prechecked_iterate(Rdest, st)
+            end
+        end
+        if N <= 1
+            full
+        else
+            rhs = Expr(:ref, :src, :j_1, (Symbol(:k_, d) for d in 1:N-1)...)
+            quote
+                if length(Rsrc.indices[1]) == 1
+                    j_1 = first(Rsrc.indices[1])
+                    @nloops $(N-1) k d->Rsrc.indices[d+1] begin
+                        (I, st) = y::NTuple{2,Any}
+                        @inbounds dest[I] = $rhs
+                        y = _prechecked_iterate(Rdest, st)
+                    end
+                else
+                    $full
+                end
+            end
+        end
+    else
+        for J in Rsrc
+            (I, st) = y::NTuple{2,Any}
+            @inbounds dest[I] = src[J]
+            y = _prechecked_iterate(Rdest, st)
+        end
+    end
+    return dest
+end
+
+function _copyto_dest_driven!(dest::AbstractArray, Rdest::CartesianIndices{N}, src::AbstractArray, Rsrc) where {N}
+    y = _prechecked_iterate(Rsrc)
+    if @generated
+        full = quote
+            @nloops $N i d->Rdest.indices[d] begin
+                (J, st) = y::NTuple{2,Any}
+                @inbounds @nref($N, dest, i) = src[J]
+                y = _prechecked_iterate(Rsrc, st)
+            end
+        end
+        if N <= 1
+            full
+        else
+            lhs = Expr(:ref, :dest, :i_1, (Symbol(:k_, d) for d in 1:N-1)...)
+            quote
+                if length(Rdest.indices[1]) == 1
+                    i_1 = first(Rdest.indices[1])
+                    @nloops $(N-1) k d->Rdest.indices[d+1] begin
+                        (J, st) = y::NTuple{2,Any}
+                        @inbounds $lhs = src[J]
+                        y = _prechecked_iterate(Rsrc, st)
+                    end
+                else
+                    $full
+                end
+            end
+        end
+    else
+        for I in Rdest
+            (J, st) = y::NTuple{2,Any}
+            @inbounds dest[I] = src[J]
+            y = _prechecked_iterate(Rsrc, st)
+        end
+    end
+    return dest
 end
 
 """

@@ -467,6 +467,50 @@ V = view(A, [1,2,4], :)   # is not strided, as the spacing between rows is not f
 
 
 
+## [Customizing copies between arrays](@id man-interfaces-copyto)
+
+[`copyto!`](@ref), indexing and indexed assignment with ranges (`A[2:3, :]`,
+`A[2:3, :] = B`), `copy`, `collect` and concatenation let the arrays involved supply the
+algorithm that moves elements between them. Base first checks the arguments, unaliases the
+source from the destination, and copies memory directly when both arrays are plain memory such
+as an `Array` or a contiguous view of one. Otherwise it calls one of two functions, and copies
+element by element if neither has a method for the pair of arrays:
+
+| Method                                          | Brief description                                                     |
+|:----------------------------------------------- |:--------------------------------------------------------------------- |
+| `Base.copyto_dest!(dest::MyArray, Rdest, src, Rsrc)` | Copy into `MyArray`, or return `nothing` to decline              |
+| `Base.copyto_src!(dest, Rdest, src::MyArray, Rsrc)`  | Copy out of `MyArray`, or return `nothing` to decline            |
+
+Base calls the destination's method first, then the source's, and copies element by element
+if both return `nothing`. A method must decline before writing anything. Each region is
+either a `UnitRange{Int}` of linear indices or a `CartesianIndices` of its array, and the
+`k`-th index of `Rdest` receives the element at the `k`-th index of `Rsrc`. The regions have
+the same, nonzero length and are in bounds unless the caller used `@inbounds`, and `src` has
+already been unaliased from `dest`, so these methods need not check or unalias anything.
+
+For example, an array that wraps a `Vector` can copy whole windows from another `Vector` with
+the `Vector` method:
+
+```julia
+struct WrappedVector{T} <: AbstractVector{T}
+    data::Vector{T}
+end
+Base.size(v::WrappedVector) = size(v.data)
+Base.IndexStyle(::Type{<:WrappedVector}) = IndexLinear()
+Base.getindex(v::WrappedVector, i::Int) = v.data[i]
+Base.setindex!(v::WrappedVector, x, i::Int) = (v.data[i] = x; v)
+Base.dataids(v::WrappedVector) = Base.dataids(v.data)
+
+function Base.copyto_dest!(dest::WrappedVector, Rdest::UnitRange{Int}, src::Vector, Rsrc::UnitRange{Int})
+    return copyto!(dest.data, first(Rdest), src, first(Rsrc), length(Rdest))
+end
+```
+
+Copies with other regions or other sources reach Base's method for `copyto_dest!`, which
+returns `nothing`. Specialize these two functions rather than `copyto!` itself, and define
+methods only with your own type in the position its function names, so that methods from
+different packages never compete for the same pair of arrays.
+
 ## [Customizing broadcasting](@id man-interfaces-broadcasting)
 
 | Methods to implement | Brief description |

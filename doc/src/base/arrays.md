@@ -108,6 +108,8 @@ Base.setindex!(::AbstractArray, ::Any, ::Any...)
 Base.nextind
 Base.prevind
 Base.copyto!(::AbstractArray, ::CartesianIndices, ::AbstractArray, ::CartesianIndices)
+Base.copyto_dest!
+Base.copyto_src!
 Base.copy!
 Base.isassigned
 Base.isassigned(::Tuple, ::Integer)

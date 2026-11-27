@@ -290,6 +290,97 @@ end
     @test copyto!(a, 2:3, 1:1, a, 1:2, 1:1) == [1;1:2;]
 end
 
+struct HookVec <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.size(a::HookVec) = size(a.data)
+Base.IndexStyle(::Type{HookVec}) = IndexLinear()
+Base.getindex(a::HookVec, i::Int) = a.data[i]
+Base.setindex!(a::HookVec, x, i::Int) = (a.data[i] = x; a)
+Base.dataids(a::HookVec) = Base.dataids(a.data)
+Base.unaliascopy(a::HookVec) = HookVec(copy(a.data))
+
+struct DeclineVec <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.size(a::DeclineVec) = size(a.data)
+Base.IndexStyle(::Type{DeclineVec}) = IndexLinear()
+Base.getindex(a::DeclineVec, i::Int) = a.data[i]
+Base.setindex!(a::DeclineVec, x, i::Int) = (a.data[i] = x; a)
+
+struct SrcHookVec <: AbstractVector{Int}
+    data::Vector{Int}
+end
+Base.size(a::SrcHookVec) = size(a.data)
+Base.IndexStyle(::Type{SrcHookVec}) = IndexLinear()
+Base.getindex(a::SrcHookVec, i::Int) = a.data[i]
+
+const copyto_hook_calls = Any[]
+function Base.copyto_dest!(dest::HookVec, Rdest, src, Rsrc)
+    push!(copyto_hook_calls, (:dest, Rdest, Rsrc))
+    for (i, j) in zip(Rdest, Rsrc)
+        dest.data[i] = src[j]
+    end
+    return dest
+end
+Base.copyto_dest!(dest::DeclineVec, Rdest, src, Rsrc) = (push!(copyto_hook_calls, (:decline,)); nothing)
+function Base.copyto_src!(dest, Rdest, src::SrcHookVec, Rsrc)
+    push!(copyto_hook_calls, (:src, Rdest, Rsrc))
+    for (i, j) in zip(Rdest, Rsrc)
+        dest[i] = src.data[j]
+    end
+    return dest
+end
+
+@testset "copyto! hooks" begin
+    empty!(copyto_hook_calls)
+    @test copyto!(HookVec(zeros(Int, 4)), [1, 2, 3]) == [1, 2, 3, 0]
+    @test copyto_hook_calls[end] == (:dest, 1:3, 1:3)
+    @test copyto!(HookVec(zeros(Int, 5)), 2, [1, 2, 3], 1, 3) == [0, 1, 2, 3, 0]
+    @test copyto_hook_calls[end] == (:dest, 2:4, 1:3)
+    @test copyto!(HookVec(zeros(Int, 3)), CartesianIndices((2:3,)), [1, 2], CartesianIndices((1:2,))) == [0, 1, 2]
+    @test copyto_hook_calls[end] == (:dest, CartesianIndices((2:3,)), CartesianIndices((1:2,)))
+    h = HookVec(zeros(Int, 5))
+    h[2:4] = [7, 8, 9]
+    @test h == [0, 7, 8, 9, 0]
+    @test copyto_hook_calls[end] == (:dest, 2:4, 1:3)
+    h = HookVec([1, 2, 3, 4])
+    @test copyto!(h, 2, h, 1, 3) == [1, 1, 2, 3]
+
+    empty!(copyto_hook_calls)
+    @test copyto!(HookVec([1, 2]), Int[]) == [1, 2]
+    @test copyto!(HookVec([1, 2]), 1, Int[], 1, 0) == [1, 2]
+    @test_throws BoundsError copyto!(HookVec([1, 2]), [1, 2, 3])
+    @test isempty(copyto_hook_calls)
+
+    @test copyto!(zeros(Int, 3), SrcHookVec([1, 2, 3])) == [1, 2, 3]
+    @test copyto_hook_calls[end] == (:src, 1:3, 1:3)
+    @test collect(SrcHookVec([4, 5])) == [4, 5]
+    @test copyto_hook_calls[end] == (:src, 1:2, 1:2)
+    @test SrcHookVec([4, 5, 6])[2:3] == [5, 6]
+    @test copyto_hook_calls[end] == (:src, 1:2, 2:3)
+
+    empty!(copyto_hook_calls)
+    @test copyto!(HookVec(zeros(Int, 2)), SrcHookVec([1, 2])) == [1, 2]
+    @test copyto_hook_calls == [(:dest, 1:2, 1:2)]
+    empty!(copyto_hook_calls)
+    @test copyto!(DeclineVec(zeros(Int, 2)), SrcHookVec([1, 2])) == [1, 2]
+    @test copyto_hook_calls == [(:decline,), (:src, 1:2, 1:2)]
+    @test copyto!(DeclineVec(zeros(Int, 3)), [5, 6]) == [5, 6, 0]
+end
+
+@testset "copyto! into a PermutedDimsArray pairs elements in linear order" begin
+    a = PermutedDimsArray(zeros(3, 3), (2, 1))
+    @test copyto!(a, ones(2, 2)) == copyto!(zeros(3, 3), ones(2, 2))
+    @test_throws BoundsError copyto!(PermutedDimsArray(zeros(2, 2), (2, 1)), ones(5))
+    b = PermutedDimsArray(zeros(2, 3), (2, 1))
+    @test copyto!(b, reshape(1:6, 3, 2)) == reshape(1:6, 3, 2)
+end
+
+@testset "copyto! with IndexStyle arguments is deprecated" begin
+    @test_deprecated copyto!(IndexLinear(), zeros(3), IndexLinear(), [1, 2])
+end
+
 @testset "`deepcopy` a `GenericCondition`" begin
     a = Base.GenericCondition(ReentrantLock())
     # Test printing

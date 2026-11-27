@@ -305,12 +305,18 @@ function _copyto_impl!(dest::Union{Array,Memory}, doffs::Integer, src::Union{Arr
     doffs = Int(doffs)
     soffs = Int(soffs)
     n = Int(n)
-    @inbounds let dest = memoryref(dest isa Array ? getfield(dest, :ref) : dest, doffs),
-                  src = memoryref(src isa Array ? getfield(src, :ref) : src, soffs)
-        unsafe_copyto!(dest, src, n)
-    end
+    return _copyregions!(dest, doffs:doffs+n-1, src, soffs:soffs+n-1)
+end
+
+_is_storage_pair(::Union{Array,Memory}, ::Union{Array,Memory}) = true
+
+function _copy_storage!(dest::Union{Array,Memory}, d::Int, src::Union{Array,Memory}, s::Int, n::Int)
+    @inbounds unsafe_copyto!(_memoryref(dest, d), _memoryref(src, s), n)
     return dest
 end
+
+_memoryref(A::Array, i::Int) = memoryref(getfield(A, :ref), i)
+_memoryref(A::Memory, i::Int) = memoryref(A, i)
 
 
 # Outlining this because otherwise a catastrophic inference slowdown
@@ -786,12 +792,12 @@ end
 function _collect_indices(::Tuple{}, A)
     dest = Array{eltype(A),0}(undef)
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return _copyregions_unaliased!(dest, _wholeregion(dest), A, _wholeregion(A))
 end
 function _collect_indices(indsA::Tuple{Vararg{OneTo}}, A)
     dest = Array{eltype(A)}(undef, length.(indsA))
     isempty(A) && return dest
-    return copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(A), A)
+    return _copyregions_unaliased!(dest, _wholeregion(dest), A, _wholeregion(A))
 end
 function _collect_indices(indsA, A)
     B = Array{eltype(A)}(undef, length.(indsA))

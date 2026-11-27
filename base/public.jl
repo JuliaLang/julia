@@ -51,6 +51,8 @@ public
     release,
 
 # arrays
+    copyto_dest!,
+    copyto_src!,
     has_offset_axes,
     require_one_based_indexing,
     memoryindex,

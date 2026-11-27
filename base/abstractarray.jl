@@ -1061,72 +1061,103 @@ function copyto!(dest::AbstractArray, src::AbstractArray)
     @_propagate_inbounds_meta
     isempty(src) && return dest
     @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
-    src′ = unalias(dest, src)
-    if dest isa BitArray
-        # avoid ambiguities with other copyto!(::AbstractArray, ::SourceArray) methods
-        return _copyto_bitarray!(dest, src′)
-    end
-    copyto_unaliased!(IndexStyle(dest), dest, IndexStyle(src′), src′)
+    return _copyto_whole!(IndexStyle(dest), dest, src)
 end
 
-function copyto!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    @_propagate_inbounds_meta
-    isempty(src) && return dest
-    @boundscheck length(src) <= length(dest) || throw_boundserror(dest, LinearIndices(src))
-    src′ = unalias(dest, src)
-    copyto_unaliased!(deststyle, dest, srcstyle, src′)
+_copyto_whole!(::IndexLinear, dest::AbstractArray, src::AbstractArray) =
+    _copyregions!(dest, _window(dest, length(src)), src, _wholeregion(src))
+function _copyto_whole!(::IndexStyle, dest::AbstractArray, src::AbstractArray)
+    length(src) == length(dest) &&
+        return _copyregions!(dest, CartesianIndices(dest), src, _wholeregion(src))
+    return _copyregions!(dest, _window(dest, length(src)), src, _wholeregion(src))
 end
 
-function copyto_unaliased!(deststyle::IndexStyle, dest::AbstractArray, srcstyle::IndexStyle, src::AbstractArray)
-    isempty(src) && return dest
-    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
-    idf, isf = first(destinds), first(srcinds)
-    Δi = idf - isf
-    if deststyle isa IndexLinear
-        if srcstyle isa IndexLinear
-            # Single-index implementation
-            @inbounds for i in srcinds
-                dest[i + Δi] = src[i]
-            end
-        else
-            # Dual-index implementation
-            i = idf - 1
-            @inbounds for a in src
-                dest[i+=1] = a
-            end
-        end
-    else
-        iterdest, itersrc = eachindex(dest), eachindex(src)
-        if iterdest == itersrc
-            # Shared-iterator implementation
-            for I in iterdest
-                @inbounds dest[I] = src[I]
-            end
-        elseif axes(dest) == axes(src)
-            # Same shape: one Cartesian iteration keeps the inner loop contiguous
-            for I in CartesianIndices(dest)
-                @inbounds dest[I] = src[I]
-            end
-        else
-            # Dual-iterator implementation
-            for (Idest, Isrc) in zip(iterdest, itersrc)
-                @inbounds dest[Idest] = src[Isrc]
-            end
-        end
-    end
+_window(A::AbstractArray, n::Integer) = (i = first(LinearIndices(A)); i:i+Int(n)-1)
+_wholeregion(A::AbstractArray) = _wholeregion(IndexStyle(A), A)
+_wholeregion(::IndexLinear, A::AbstractArray) = _window(A, length(A))
+_wholeregion(::IndexStyle, A::AbstractArray) = CartesianIndices(A)
+_iswholeregion(A::AbstractArray, R::UnitRange{Int}) =
+    length(R) == length(A) && first(R) == first(LinearIndices(A))
+
+function _copyregions!(dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+    _copyto_storage!(dest, Rdest, src, Rsrc) === nothing || return dest
+    return _copyto_hooks!(dest, Rdest, unalias(dest, src), Rsrc)
+end
+
+function _copyregions_unaliased!(dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+    _copyto_storage!(dest, Rdest, src, Rsrc) === nothing || return dest
+    return _copyto_hooks!(dest, Rdest, src, Rsrc)
+end
+
+function _copyto_hooks!(dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+    copyto_dest!(dest, Rdest, src, Rsrc) === nothing || return dest
+    copyto_src!(dest, Rdest, src, Rsrc) === nothing || return dest
+    return _copyto_loops!(dest, Rdest, src, Rsrc)
+end
+
+function _copyto_storage!(dest::AbstractArray, Rdest, src::AbstractArray, Rsrc)
+    dp, doff = _unwrap_contiguous(dest)
+    sp, soff = _unwrap_contiguous(src)
+    _is_storage_pair(dp, sp) || return nothing
+    d = _contiguous_start(dest, Rdest)
+    d === nothing && return nothing
+    s = _contiguous_start(src, Rsrc)
+    s === nothing && return nothing
+    _copy_storage!(dp, d + doff, sp, s + soff, length(Rdest))
     return dest
 end
 
+_unwrap_contiguous(A::AbstractArray) = (A, 0)
+_is_storage_pair(dest, src) = false
+_contiguous_start(A::AbstractArray, R::UnitRange{Int}) = first(R)
+
+"""
+    Base.copyto_dest!(dest, Rdest, src, Rsrc)
+
+Copy the elements of `src` at the indices `Rsrc` to the indices `Rdest` of `dest` with an
+algorithm for the type of `dest`, or return `nothing` without writing anything to leave the
+copy to [`Base.copyto_src!`](@ref) and then to Base's element-by-element loops.
+
+Each of `Rdest` and `Rsrc` is either a `UnitRange{Int}` of linear indices or a
+`CartesianIndices` of its array. Both have the same, nonzero length, and the `k`-th index of
+`Rdest` receives the element at the `k`-th index of `Rsrc`. `src` has already been unaliased
+from `dest`, and both regions are in bounds unless the caller used `@inbounds`.
+
+Base calls this for [`copyto!`](@ref), for indexing and indexed assignment with ranges, and
+for `copy`, `collect` and concatenation. Define methods only with your own array type as
+`dest`.
+"""
+copyto_dest!(dest, Rdest, src, Rsrc) = nothing
+
+"""
+    Base.copyto_src!(dest, Rdest, src, Rsrc)
+
+Like [`Base.copyto_dest!`](@ref), with an algorithm for the type of `src`. Base calls it when
+the method for the destination returns `nothing`. Define methods only with your own array
+type as `src`.
+"""
+copyto_src!(dest, Rdest, src, Rsrc) = nothing
+
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray)
     @_propagate_inbounds_meta
-    copyto!(dest, dstart, src, first(LinearIndices(src)), length(src))
+    isempty(src) && return dest
+    n = length(src)
+    destinds = LinearIndices(dest)
+    @boundscheck (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    dstart = Int(dstart)
+    return _copyregions!(dest, dstart:dstart+Int(n)-1, src, _wholeregion(src))
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer, src::AbstractArray, sstart::Integer)
     @_propagate_inbounds_meta
-    srcinds = LinearIndices(src)
+    destinds, srcinds = LinearIndices(dest), LinearIndices(src)
     @boundscheck checkbounds(Bool, srcinds, sstart) || throw_boundserror(src, sstart)
-    copyto!(dest, dstart, src, sstart, last(srcinds)-sstart+1)
+    sstart = Int(sstart)
+    n = last(srcinds) - sstart + 1
+    n > 0 || return dest
+    @boundscheck (checkbounds(Bool, destinds, dstart) && n <= last(destinds) - dstart + 1) || throw_boundserror(dest, dstart)
+    dstart = Int(dstart)
+    return _copyregions!(dest, dstart:dstart+n-1, src, sstart:sstart+n-1)
 end
 
 function copyto!(dest::AbstractArray, dstart::Integer,
@@ -1142,14 +1173,19 @@ function copyto!(dest::AbstractArray, dstart::Integer,
     dstart = Int(dstart)
     sstart = Int(sstart)
     n = Int(n)
-    src′ = unalias(dest, src)
-    return _copyto_loops!(dest, dstart:dstart+n-1, src′, sstart:sstart+n-1)
+    return _copyregions!(dest, dstart:dstart+n-1, src, sstart:sstart+n-1)
 end
 
 function _copyto_loops!(dest::AbstractArray, Rdest::UnitRange{Int}, src::AbstractArray, Rsrc::UnitRange{Int})
-    Δi = first(Rsrc) - first(Rdest)
-    for i in Rdest
-        @inbounds dest[i] = src[i + Δi]
+    Δi = first(Rdest) - first(Rsrc)
+    if _iswholeregion(src, Rsrc)
+        @inbounds for i in LinearIndices(src)
+            dest[i + Δi] = src[i]
+        end
+    else
+        @inbounds for i in Rsrc
+            dest[i + Δi] = src[i]
+        end
     end
     return dest
 end
@@ -1172,22 +1208,8 @@ function copyto!(B::AbstractVecOrMat{R}, ir_dest::AbstractRange{Int}, jr_dest::A
     end
     @boundscheck checkbounds(B, ir_dest, jr_dest)
     @boundscheck checkbounds(A, ir_src, jr_src)
-    A′ = unalias(B, A)
-    return _copyto_loops!(B, ir_dest, jr_dest, A′, ir_src, jr_src)
-end
-
-function _copyto_loops!(B::AbstractVecOrMat, ir_dest::AbstractRange{Int}, jr_dest::AbstractRange{Int},
-                        A::AbstractVecOrMat, ir_src::AbstractRange{Int}, jr_src::AbstractRange{Int})
-    jdest = first(jr_dest)
-    for jsrc in jr_src
-        idest = first(ir_dest)
-        for isrc in ir_src
-            @inbounds B[idest,jdest] = A[isrc,jsrc]
-            idest += step(ir_dest)
-        end
-        jdest += step(jr_dest)
-    end
-    return B
+    (isempty(ir_dest) || isempty(jr_dest)) && return B
+    return _copyregions!(B, CartesianIndices((ir_dest, jr_dest)), A, CartesianIndices((ir_src, jr_src)))
 end
 
 @noinline _checkaxs(axd, axs) = axd == axs || throw(DimensionMismatch("axes must agree, got $axd and $axs"))

@@ -765,4 +765,11 @@ end
 # GAP) can still read this.
 const DARWIN_FRAMEWORK = false
 
+@deprecate copyto!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray) copyto!(dest, src) false
+
+function copyto_unaliased!(::IndexStyle, dest::AbstractArray, ::IndexStyle, src::AbstractArray)
+    isempty(src) && return dest
+    return _copyregions_unaliased!(dest, _window(dest, length(src)), src, _wholeregion(src))
+end
+
 # END 1.15 deprecations

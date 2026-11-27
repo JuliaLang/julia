@@ -122,7 +122,7 @@ function unaliascopy(V::SubArray{T,N,A,I,LD}) where {T,N,A<:Array,I<:Tuple{Varar
     trimmedpind = _trimmedpind(V.indices...)
     vdest = trimmedpind isa Tuple{Vararg{Union{Slice,Colon}}} ? dest : view(dest, trimmedpind...)
     src = view(V, _trimmedvind(V.indices...)...)
-    copyto_unaliased!(IndexStyle(vdest), vdest, IndexStyle(src), src)
+    isempty(src) || _copyregions_unaliased!(vdest, _wholeregion(vdest), src, _wholeregion(src))
     indices = map(_trimmedindex, V.indices)
     if LD
         offset1, stride1 = _compute_linear_layout(dest, indices)
@@ -352,6 +352,11 @@ FastContiguousSubArray{T,N,P,I<:Union{Tuple{AbstractUnitRange, Vararg{Any}},
 
 @inline _reindexlinear(V::FastContiguousSubArray, i::Int) = V.offset1 + i
 @inline _reindexlinear(V::FastContiguousSubArray, i::AbstractUnitRange{Int}) = V.offset1 .+ i
+
+function _unwrap_contiguous(V::FastContiguousSubArray)
+    p, offset = _unwrap_contiguous(parent(V))
+    return (p, offset + V.offset1)
+end
 
 """
 An internal type representing arrays stored contiguously in memory.
