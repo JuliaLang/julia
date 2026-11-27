@@ -886,6 +886,17 @@ end
 cfunction_undef_sparam_env(::Union{Nothing,Ref{S}}) where {S} = @cfunction(identity, Ptr{Cvoid}, (Ptr{S},))
 @test_throws UndefVarError(:S, :static_parameter) cfunction_undef_sparam_env(nothing)
 
+# closure cfunction which never returns and has no parameter attributes of its own
+let cfun_noreturn_int(@nospecialize f) = @cfunction($f, Union{}, (Int,)),
+    cfun_noreturn_u8(@nospecialize f) = @cfunction($f, Union{}, (UInt8,)),
+    y = 7
+    f = x -> error("got $x $y")
+    cf = cfun_noreturn_int(f)
+    @test_throws ErrorException("got 3 7") GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Union{}, (Int,), 3)
+    cf = cfun_noreturn_u8(f)
+    @test_throws ErrorException("got 3 7") GC.@preserve cf ccall(Base.unsafe_convert(Ptr{Cvoid}, cf), Union{}, (UInt8,), 3)
+end
+
 verbose && println("Testing cfunction roundtrip: ")
 
 cf64 = 2.84+5.2im
@@ -1787,6 +1798,26 @@ end
 (::CallableSingleton)(x, y) = x + y
 @test ccall(@cfunction(CallableSingleton(), Int, (Int, Int)),
             Int, (Int, Int), 1, 2) === 3
+
+# Most ABIs let a C caller leave the high bits of a small integer argument
+# unspecified, so a cfunction must not assume that they were extended.
+cfun_small_ints(x::UInt8, y::Int16) = Int(x) * 100_000 + Int(y)
+cfun_small_ints_ptr() = @cfunction(cfun_small_ints, Int, (UInt8, Int16))
+if Sys.ARCH in (:x86_64, :i686, :aarch64) && !Sys.isapple()
+    @test ccall(cfun_small_ints_ptr(), Int, (UInt32, UInt32), 0x00018034, 0x00018001) ===
+          cfun_small_ints(0x34, 0x8001 % Int16)
+    let ir = sprint(io -> code_llvm(io, cfun_small_ints_ptr, (); dump_module=true, debuginfo=:none))
+        wrapper = match(r"^define [^\n]*@jlcapi_cfun_small_ints_[^\n]*"m, ir).match
+        @test !contains(wrapper, r"zeroext|signext")
+    end
+end
+# Where the ABI makes the callee extend a small integer result, so must a cfunction.
+cfun_ret_i8(x::Int32) = x % Int8
+cfun_ret_u16(x::Int32) = x % UInt16
+if Sys.isapple() || Sys.ARCH in (:riscv64, :powerpc64le)
+    @test ccall(@cfunction(cfun_ret_i8, Int8, (Int32,)), Int32, (Int32,), 0x00012381) === Int32(-127)
+    @test ccall(@cfunction(cfun_ret_u16, UInt16, (Int32,)), Int32, (Int32,), 0x00018001) === Int32(0x8001)
+end
 
 # 19805
 mutable struct callinfos_19805{FUNC_FT<:Function}

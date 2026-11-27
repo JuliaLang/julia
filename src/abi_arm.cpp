@@ -282,4 +282,10 @@ Type *preferred_llvm_type(jl_datatype_t *dt, bool isret, LLVMContext &ctx) const
     return ArrayType::get(T, (jl_datatype_size(dt) + align - 1) / align);
 }
 
+bool caller_extends_param(unsigned nbits, const Triple &TT) const override
+{
+    // AAPCS stage B extends sub-word integers to a full word.
+    return nbits < 32;
+}
+
 };

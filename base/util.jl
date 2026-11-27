@@ -454,14 +454,14 @@ if Sys.iswindows()
         #         the default username (in theory could also provide a default password)
         credbuf = Vector{UInt8}(undef, 1024)
         credbufsize = Ref{UInt32}(sizeof(credbuf))
-        succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+        succeeded = !iszero(ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Cint,
             (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
-             CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+             CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize))
         if !succeeded
             credbuf = resize!(credbuf, credbufsize[])
-            succeeded = ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Bool,
+            succeeded = !iszero(ccall((:CredPackAuthenticationBufferW, "credui.dll"), stdcall, Cint,
                 (UInt32, Cwstring, Cwstring, Ptr{UInt8}, Ptr{UInt32}),
-                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize)
+                 CRED_PACK_GENERIC_CREDENTIALS, default_username, "", credbuf, credbufsize))
             @assert succeeded
         end
 
@@ -469,7 +469,7 @@ if Sys.iswindows()
         #      2.1: Set up the window
         messageArr = Base.cwstring(message)
         captionArr = Base.cwstring(caption)
-        pfSave = Ref{Bool}(false)
+        pfSave = Ref{Cint}(false)
         cred = Ref{CREDUI_INFO}(CREDUI_INFO(sizeof(CREDUI_INFO), C_NULL, pointer(messageArr), pointer(captionArr), C_NULL))
         dwflags = CREDUIWIN_GENERIC | CREDUIWIN_ENUMERATE_CURRENT_USER
         if !prompt_username
@@ -482,7 +482,7 @@ if Sys.iswindows()
 
         #      2.2: Do the actual request
         code = ccall((:CredUIPromptForWindowsCredentialsW, "credui.dll"), stdcall, UInt32, (Ptr{CREDUI_INFO}, UInt32, Ptr{Culong},
-            Ptr{Cvoid}, Culong, Ptr{Ptr{Cvoid}}, Ptr{Culong}, Ptr{Bool}, UInt32), cred, 0, authPackage, credbuf, credbufsize[],
+            Ptr{Cvoid}, Culong, Ptr{Ptr{Cvoid}}, Ptr{Culong}, Ptr{Cint}, UInt32), cred, 0, authPackage, credbuf, credbufsize[],
             outbuf_data, outbuf_size, pfSave, dwflags)
 
         #      2.3: If that failed for any reason other than the user canceling, error out.
@@ -497,15 +497,15 @@ if Sys.iswindows()
         usernamelen = Ref{UInt32}(length(usernamebuf))
         # Need valid buffers for domain, even though we don't care
         dummybuf = Vector{UInt16}(undef, 1024)
-        succeeded = ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), Bool,
+        succeeded = !iszero(ccall((:CredUnPackAuthenticationBufferW, "credui.dll"), stdcall, Cint,
             (UInt32, Ptr{Cvoid}, UInt32, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}, Ptr{UInt16}, Ptr{UInt32}),
-            0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen)
+            0, outbuf_data[], outbuf_size[], usernamebuf, usernamelen, dummybuf, Ref{UInt32}(1024), passbuf, passlen))
         windowserror(:winprompt, !succeeded)
 
         # Step 4: Free the encrypted buffer
         # ccall(:SecureZeroMemory, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), outbuf_data[], outbuf_size[]) - not an actual function
         unsafe_securezero!(outbuf_data[], outbuf_size[])
-        ccall((:CoTaskMemFree, "ole32.dll"), Cvoid, (Ptr{Cvoid},), outbuf_data[])
+        ccall((:CoTaskMemFree, "ole32.dll"), stdcall, Cvoid, (Ptr{Cvoid},), outbuf_data[])
 
         # Done.
         passbuf_ = passbuf[1:passlen[]-1]
