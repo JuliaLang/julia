@@ -584,7 +584,7 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         loop->stop_flag = 0;
                         jl_uv_loop_unwatched = 0;
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_enter = cycleclock() );
-                        active = uv_run(loop, UV_RUN_ONCE);
+                        active = jl_run_event_loop(loop, UV_RUN_ONCE, 1);
                         JULIA_DEBUG_SLEEPWAKE( ptls->uv_run_leave = cycleclock() );
                         jl_gc_safepoint();
                     }

@@ -482,7 +482,7 @@ function put_unbuffered(c::Channel, v, cancel::CancelTokenArg=DEFAULT_CANCEL)
         unlock(c)
     end
     schedule(taker, v)
-    yield()  # immediately give taker a chance to run, but don't block the current task
+    _yield(false)  # immediately give taker a chance to run, but don't block the current task
     return v
 end
 

@@ -514,6 +514,21 @@ end
     end
 end
 
+@testset "tasks that keep switching do not starve the event loop" begin
+    fired = Ref(false)
+    t = Timer(_ -> (fired[] = true), 0.01)
+    # buffered, so that the tasks only switch by blocking in `take!`
+    a = Channel{Int}(1); b = Channel{Int}(1)
+    echo = @async for x in a; put!(b, x); end
+    deadline = time_ns() + 10_000_000_000
+    while !fired[] && time_ns() < deadline
+        put!(a, 1); take!(b)
+    end
+    @test fired[]
+    close(a); wait(echo)
+    close(t)
+end
+
 struct CustomError <: Exception end
 
 @testset "check_channel_state" begin

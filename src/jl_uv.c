@@ -408,6 +408,66 @@ JL_DLLEXPORT void *jl_uv_handle_data(uv_handle_t *handle) { return handle->data;
  */
 JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
 
+// A task that blocks polls the event loop (`wait` in base/task.jl). After a run of
+// the loop that found no IO event, that poll is skipped for `EVENT_POLL_BACKOFF`
+// times as long as such a poll takes, and for at most `EVENT_POLL_MAX_SKIP_NS`.
+#define EVENT_POLL_BACKOFF 8
+#define EVENT_POLL_MAX_SKIP_NS 100000
+static _Atomic(uint64_t) event_poll_resume; // `jl_hrtime()` from which a blocking task polls again
+static uint64_t event_poll_cost; // duration of the last poll that found no events; protected by jl_uv_mutex
+
+// run the event loop and decide when a blocking task polls it next; requires jl_uv_mutex
+// `backoff`: whether a run that finds no event starts a skip
+int jl_run_event_loop(uv_loop_t *loop, uv_run_mode mode, int backoff)
+{
+    uv_metrics_t metrics;
+    uv_metrics_info(loop, &metrics);
+    uint64_t events = metrics.events;
+    uint64_t start = backoff && mode == UV_RUN_NOWAIT ? jl_hrtime() : 0;
+    int r = uv_run(loop, mode);
+    uv_metrics_info(loop, &metrics);
+    if (metrics.events != events) {
+        jl_atomic_store_relaxed(&event_poll_resume, 0);
+    }
+    else if (backoff) {
+        uint64_t end = jl_hrtime();
+        if (mode == UV_RUN_NOWAIT)
+            event_poll_cost = end - start;
+        uint64_t skip = event_poll_cost * EVENT_POLL_BACKOFF;
+        if (skip > EVENT_POLL_MAX_SKIP_NS)
+            skip = EVENT_POLL_MAX_SKIP_NS;
+        jl_atomic_store_relaxed(&event_poll_resume, end + skip);
+    }
+    return r;
+}
+
+// whether the current thread is one that runs the event loop
+static int may_process_events(jl_task_t *ct) JL_NOTSAFEPOINT
+{
+    return jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == jl_atomic_load_relaxed(&io_loop_tid);
+}
+
+static int process_events(int backoff) JL_CANSAFEPOINT
+{
+    jl_task_t *ct = jl_current_task;
+    uv_loop_t *loop = jl_io_loop;
+    jl_gc_safepoint_(ct->ptls);
+    if (loop && may_process_events(ct)) {
+        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
+            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
+            loop->stop_flag = 0;
+            uv_ref((uv_handle_t*)&signal_async); // force the loop alive
+            int r = jl_run_event_loop(loop, UV_RUN_NOWAIT, backoff);
+            uv_unref((uv_handle_t*)&signal_async);
+            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
+            JL_UV_UNLOCK();
+            return r;
+        }
+        jl_gc_safepoint_(ct->ptls);
+    }
+    return 0;
+}
+
 /**
  * @brief Process pending UV events.
  *
@@ -417,23 +477,26 @@ JL_DLLEXPORT void *jl_uv_write_handle(uv_write_t *req) { return req->handle; }
  */
 JL_DLLEXPORT int jl_process_events(void)
 {
+    return process_events(0);
+}
+
+/**
+ * @brief Process pending UV events, unless the event loop was idle a moment ago.
+ *
+ * This is the poll that a task makes when it blocks.
+ *
+ * @return 0 if the poll was skipped, 1 otherwise.
+ */
+JL_DLLEXPORT int jl_process_events_throttled(void)
+{
     jl_task_t *ct = jl_current_task;
-    uv_loop_t *loop = jl_io_loop;
-    jl_gc_safepoint_(ct->ptls);
-    if (loop && (jl_atomic_load_relaxed(&_threadedregion) || jl_atomic_load_relaxed(&ct->tid) == jl_atomic_load_relaxed(&io_loop_tid))) {
-        if (jl_atomic_load_relaxed(&jl_uv_n_waiters) == 0 && jl_mutex_trylock(&jl_uv_mutex)) {
-            JL_PROBE_RT_START_PROCESS_EVENTS(ct);
-            loop->stop_flag = 0;
-            uv_ref((uv_handle_t*)&signal_async); // force the loop alive
-            int r = uv_run(loop, UV_RUN_NOWAIT);
-            uv_unref((uv_handle_t*)&signal_async);
-            JL_PROBE_RT_FINISH_PROCESS_EVENTS(ct);
-            JL_UV_UNLOCK();
-            return r;
-        }
-        jl_gc_safepoint_(ct->ptls);
-    }
-    return 0;
+    if (!jl_io_loop || !may_process_events(ct))
+        return 1;
+    uint64_t resume = jl_atomic_load_relaxed(&event_poll_resume);
+    if (resume != 0 && jl_hrtime() < resume)
+        return 0;
+    process_events(1);
+    return 1;
 }
 
 static void jl_proc_exit_cleanup_cb(uv_process_t *process, int64_t exit_status, int term_signal)
