@@ -4,11 +4,31 @@ using Test, Random
 
 include("buildkitetestjson.jl")
 
+function cleanup_test_tempfiles(name, original_paths)
+    fs = Base.Filesystem
+    paths = @lock fs.TEMP_CLEANUP_LOCK setdiff(keys(fs.TEMP_CLEANUP), original_paths)
+    isempty(paths) && return
+    # Release open handles before attempting deletion, particularly on Windows.
+    any(ispath, paths) && GC.gc(true)
+    @lock fs.TEMP_CLEANUP_LOCK begin
+        leftovers = filter(ispath, paths)
+        if !isempty(leftovers)
+            @warn "Test set left temporary paths behind" testset_name=name paths=leftovers
+        end
+        for path in paths
+            haskey(fs.TEMP_CLEANUP, path) && (fs.TEMP_CLEANUP[path] = true)
+        end
+        fs.temp_cleanup_purge_prelocked(false)
+    end
+    return nothing
+end
+
 function runtests(name, path, isolate=true; seed=nothing)
     @Base.ScopedValues.with Test.TESTSET_PRINT_ENABLE=>false Test.TEST_RECORD_PASSES=>Base.get_bool_env("CI", false) begin
     # remove all hint_handlers, so that errorshow tests are not changed by which packages have been loaded on this worker already
     # packages that call register_error_hint should also call this again, and then re-add any hooks they want to test
     empty!(Base.Experimental._hint_handlers)
+    original_temp_paths = @lock Base.Filesystem.TEMP_CLEANUP_LOCK Set(keys(Base.Filesystem.TEMP_CLEANUP))
     try
         if isolate
             # Simple enough to type and random enough so that no one will hard
@@ -103,6 +123,8 @@ function runtests(name, path, isolate=true; seed=nothing)
     catch ex
         ex isa TestSetException || rethrow()
         return Any[ex]
+    finally
+        cleanup_test_tempfiles(name, original_temp_paths)
     end
     end # TESTSET_PRINT_ENABLE
 end
