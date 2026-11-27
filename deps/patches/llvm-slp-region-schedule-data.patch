@@ -1,0 +1,86 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Wed, 25 Nov 2026 17:06:46 -0500
+Subject: [PATCH 1/2] [SLP] Reset only the current region's scheduling data
+
+resetSchedule, and the dependency reset in tryScheduleBundle when the
+region grows downward, looped over every ScheduleData the block has ever
+had and skipped those outside the current region. In a block with many
+vectorizable trees this is linear in the block for each tree. Keep the
+ScheduleData of the current region in a list and loop over that instead.
+
+The resetSchedule part is from llvm/llvm-project#233866 (Alexey Bataev),
+without its other scheduling changes or the higher budget. No change in
+the generated code.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ .../Transforms/Vectorize/SLPVectorizer.cpp    | 27 ++++++++-----------
+ 1 file changed, 11 insertions(+), 16 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+index defb50f..c44303a 100644
+--- a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
++++ b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+@@ -5535,6 +5535,7 @@ private:
+       ScheduleCopyableDataMapByUsers.clear();
+       ReadyInsts.clear();
+       RecalcCopyableOperandDeps.clear();
++      RegionScheduleData.clear();
+       ScheduleStart = nullptr;
+       ScheduleEnd = nullptr;
+       FirstLoadStoreInRegion = nullptr;
+@@ -6324,6 +6325,9 @@ private:
+     /// ScheduleData structures are recycled.
+     SmallDenseMap<Instruction *, ScheduleData *> ScheduleDataMap;
+ 
++    /// The ScheduleData in the scheduling region.
++    SmallVector<ScheduleData *> RegionScheduleData;
++
+     /// Attaches ScheduleCopyableData to EdgeInfo (UserTreeEntry + operand
+     /// number) and the operand instruction, represented as copyable element.
+     SmallDenseMap<std::pair<EdgeInfo, const Value *>,
+@@ -26121,13 +26125,8 @@ BoUpSLP::BlockScheduling::tryScheduleBundle(ArrayRef<Value *> VL, BoUpSLP *SLP,
+     // It is seldom that this needs to be done a second time after adding the
+     // initial bundle to the region.
+     if (OldScheduleEnd && ScheduleEnd != OldScheduleEnd) {
+-      for_each(ScheduleDataMap, [&](auto &P) {
+-        if (BB != P.first->getParent())
+-          return;
+-        ScheduleData *SD = P.second;
+-        if (isInSchedulingRegion(*SD))
+-          SD->clearDependencies();
+-      });
++      for (ScheduleData *SD : RegionScheduleData)
++        SD->clearDependencies();
+       for_each(ScheduleCopyableDataMapByInst, [&](auto &P) {
+         for_each(P.second, [&](ScheduleCopyableData *SD) {
+           if (isInSchedulingRegion(*SD))
+@@ -26429,6 +26428,7 @@ void BoUpSLP::BlockScheduling::initScheduleData(Instruction *FromI,
+     assert(!isInSchedulingRegion(*SD) &&
+            "new ScheduleData already in scheduling region");
+     SD->init(SchedulingRegionID, I);
++    RegionScheduleData.push_back(SD);
+ 
+     auto CanIgnoreLoad = [](const Instruction *I) {
+       const auto *LI = dyn_cast<LoadInst>(I);
+@@ -26778,15 +26778,10 @@ void BoUpSLP::BlockScheduling::calculateDependencies(
+ void BoUpSLP::BlockScheduling::resetSchedule() {
+   assert(ScheduleStart &&
+          "tried to reset schedule on block which has not been scheduled");
+-  for_each(ScheduleDataMap, [&](auto &P) {
+-    if (BB != P.first->getParent())
+-      return;
+-    ScheduleData *SD = P.second;
+-    if (isInSchedulingRegion(*SD)) {
+-      SD->setScheduled(/*Scheduled=*/false);
+-      SD->resetUnscheduledDeps();
+-    }
+-  });
++  for (ScheduleData *SD : RegionScheduleData) {
++    SD->setScheduled(/*Scheduled=*/false);
++    SD->resetUnscheduledDeps();
++  }
+   for_each(ScheduleCopyableDataMapByInst, [&](auto &P) {
+     for_each(P.second, [&](ScheduleCopyableData *SD) {
+       if (isInSchedulingRegion(*SD)) {

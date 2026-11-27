@@ -1,0 +1,155 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Wed, 25 Nov 2026 17:06:46 -0500
+Subject: [PATCH 2/2] [SLP] Do not renumber a block for each extract of an
+ external use
+
+Each extract emitted for a scalar used outside the tree invalidates the
+instruction order of its block, so the next comesBefore check of a cached
+extract against the insertion point renumbers the whole block. In a large
+block with many external uses this is quadratic.
+
+Number each block once, the first time the loop asks, and answer from
+those numbers. A numbered instruction that moves loses its number. An
+extract inserted after the numbering remembers the numbered instruction
+it was inserted right before, which only unnumbered instructions can
+separate it from. Anything else falls back to comesBefore. No change in
+the generated code.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ .../Transforms/Vectorize/SLPVectorizer.cpp    | 74 +++++++++++++++++--
+ 1 file changed, 69 insertions(+), 5 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+index c44303a..0b69a13 100644
+--- a/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
++++ b/llvm/lib/Transforms/Vectorize/SLPVectorizer.cpp
+@@ -24940,6 +24940,61 @@ Value *BoUpSLP::vectorizeTree(
+   DenseMap<std::pair<Value *, Type *>, Value *> VectorCasts;
+   SmallDenseSet<Value *, 4> ScalarsWithNullptrUser;
+   SmallDenseSet<ExtractElementInst *, 4> IgnoredExtracts;
++  // Every extract inserted below invalidates the order of its block, so each
++  // comesBefore query on a huge block would renumber it. Instead, number each
++  // block once, when it is first queried, and answer from those numbers. A
++  // numbered instruction that moves loses its number. An extract inserted
++  // later remembers the numbered instruction it was inserted right before;
++  // only unnumbered instructions can come between them.
++  DenseMap<const Instruction *, unsigned> OrderAtStart;
++  SmallPtrSet<const BasicBlock *, 4> NumberedBlocks;
++  DenseMap<const Instruction *, const Instruction *> InsertedBefore;
++  auto ComesBefore = [&](const Instruction *A, const Instruction *B) {
++    const BasicBlock *BB = A->getParent();
++    assert(BB == B->getParent() && "Expected instructions in one block.");
++    if (NumberedBlocks.insert(BB).second) {
++      unsigned N = 0;
++      for (const Instruction &I : *BB)
++        OrderAtStart.try_emplace(&I, N++);
++    }
++    auto PosA = OrderAtStart.find(A);
++    if (PosA != OrderAtStart.end()) {
++      auto PosB = OrderAtStart.find(B);
++      if (PosB != OrderAtStart.end())
++        return PosA->second < PosB->second;
++      auto Next = InsertedBefore.find(B);
++      if (Next != InsertedBefore.end()) {
++        if (Next->second == A)
++          return false;
++        auto PosNext = OrderAtStart.find(Next->second);
++        if (PosNext != OrderAtStart.end())
++          return PosA->second < PosNext->second;
++      }
++    }
++    return A->comesBefore(B);
++  };
++  auto Moved = [&](const Instruction *I) {
++    OrderAtStart.erase(I);
++    InsertedBefore.erase(I);
++  };
++  // Record that I was just inserted before the builder's insertion point, if
++  // that point is numbered and only unnumbered instructions lie between them.
++  auto NoteInserted = [&](Instruction *I) {
++    if (!NumberedBlocks.contains(I->getParent()) || OrderAtStart.contains(I) ||
++        Builder.GetInsertPoint() == Builder.GetInsertBlock()->end())
++      return;
++    const Instruction *IP = &*Builder.GetInsertPoint();
++    if (IP->getParent() != I->getParent() || !OrderAtStart.contains(IP))
++      return;
++    const Instruction *Cur = I->getNextNode();
++    for (unsigned Steps = 0; Cur && Cur != IP && Steps < 8; ++Steps) {
++      if (OrderAtStart.contains(Cur))
++        return;
++      Cur = Cur->getNextNode();
++    }
++    if (Cur == IP)
++      InsertedBefore[I] = IP;
++  };
+   // Extract all of the elements with the external uses.
+   for (const auto &ExternalUse : ExternalUses) {
+     Value *Scalar = ExternalUse.Scalar;
+@@ -24990,7 +25045,7 @@ Value *BoUpSLP::vectorizeTree(
+             if (auto *I = dyn_cast<Instruction>(PrevV);
+                 I && !ReplaceInst &&
+                 Builder.GetInsertPoint() != Builder.GetInsertBlock()->end() &&
+-                Builder.GetInsertPoint()->comesBefore(I)) {
++                ComesBefore(&*Builder.GetInsertPoint(), I)) {
+               // For struct extracts the cached extractelement depends on a
+               // cached extractvalue (FieldVec). Move FieldVec up first so it
+               // still dominates the relocated extractelement after the move.
+@@ -25003,16 +25058,22 @@ Value *BoUpSLP::vectorizeTree(
+                     if (auto *FieldI = dyn_cast<Instruction>(BBIt->second);
+                         FieldI &&
+                         FieldI->getParent() == Builder.GetInsertBlock() &&
+-                        Builder.GetInsertPoint()->comesBefore(FieldI))
++                        ComesBefore(&*Builder.GetInsertPoint(), FieldI)) {
+                       FieldI->moveBefore(*Builder.GetInsertBlock(),
+                                          Builder.GetInsertPoint());
++                      Moved(FieldI);
++                    }
+                   }
+                 }
+               }
+               I->moveBefore(*Builder.GetInsertPoint()->getParent(),
+                             Builder.GetInsertPoint());
+-              if (auto *CI = dyn_cast<Instruction>(EEIt->second.second))
++              Moved(I);
++              if (auto *CI = dyn_cast<Instruction>(EEIt->second.second)) {
+                 CI->moveAfter(I);
++                Moved(CI);
++              }
++              NoteInserted(I);
+             }
+             Ex = PrevV;
+             ExV = EEIt->second.second ? EEIt->second.second : Ex;
+@@ -25041,7 +25102,7 @@ Value *BoUpSLP::vectorizeTree(
+               V = ETEs.front()->VectorizedValue;
+             if (auto *IV = dyn_cast<Instruction>(V);
+                 !IV || IV == Vec || IV->getParent() != IVec->getParent() ||
+-                IV->comesBefore(IVec))
++                ComesBefore(IV, IVec))
+               Ex = Builder.CreateExtractElement(V, ES->getIndexOperand());
+             else
+               Ex = Builder.CreateExtractElement(Vec, ExternalUse.Lane);
+@@ -25072,11 +25133,12 @@ Value *BoUpSLP::vectorizeTree(
+                 StructFieldExtracts[FieldKey][EVBB] = FieldVec;
+               } else if (auto *FieldI = dyn_cast<Instruction>(FieldVec);
+                          FieldI && Builder.GetInsertPoint() != EVBB->end() &&
+-                         Builder.GetInsertPoint()->comesBefore(FieldI)) {
++                         ComesBefore(&*Builder.GetInsertPoint(), FieldI)) {
+                 // Cached extractvalue is below the current insertion point;
+                 // move it up so the extractelement we are about to emit can
+                 // use it.
+                 FieldI->moveBefore(*EVBB, Builder.GetInsertPoint());
++                Moved(FieldI);
+               }
+               Vec = FieldVec;
+             }
+@@ -25100,6 +25162,8 @@ Value *BoUpSLP::vectorizeTree(
+                 Ex, Scalar->getType(),
+                 !isKnownNonNegative(Scalar, SimplifyQuery(*DL)));
+           auto *I = dyn_cast<Instruction>(Ex);
++          if (I)
++            NoteInserted(I);
+           ScalarToEEs[Key].try_emplace(I ? I->getParent() : &F->getEntryBlock(),
+                                        std::make_pair(Ex, ExV));
+         }
