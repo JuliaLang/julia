@@ -1799,6 +1799,7 @@ const const_field_effects = ConstFieldEffects("a", "b", C_NULL)
 @test !Compiler.is_consistent(Base.infer_effects(() -> const_field_effects.b, ()))
 abstract type AbstractConstFieldEffects end
 @test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, 1), (Any,)))
+@test !Compiler.is_immutable_type(Union{Nothing, T} where T)
 @test !Compiler.is_consistent(Base.infer_effects(x -> x.a, (AbstractConstFieldEffects,)))
 # `Memory` and `MemoryRef` data pointers are relocated by staticdata.c
 @test !Compiler.is_consistent(Base.infer_effects(x -> getfield(x, :ptr), (Memory{Int},)))
