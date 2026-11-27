@@ -641,10 +641,11 @@ function widen_call_result end
 For some call sites (for example calls to varargs methods), the signature to be compiled
 and executed at run time can differ from the argument types known at the call site.
 This flag controls whether we should always infer the compilation signature in addition
-to the call site signature.
+to the call site signature. When it is off, an invoke of the compilation signature is
+inferred if and when code generation needs it; inferring it speculatively can cost far more
+than the call site signature, since the widened argument types reach more code.
 """
 infer_compilation_signature(::AbstractInterpreter) = false
-infer_compilation_signature(::NativeInterpreter) = true
 
 typeinf_lattice(::AbstractInterpreter) = InferenceLattice(BaseInferenceLattice.instance)
 ipo_lattice(::AbstractInterpreter) = InferenceLattice(IPOResultLattice.instance)
