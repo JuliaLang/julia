@@ -1,0 +1,12 @@
+name = "BaseSyntax"
+uuid = "a901ca6a-331f-4dff-b5f6-9ec4ddfd738c"
+version = "0.1.0"
+
+[compat]
+julia = "1.0"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
