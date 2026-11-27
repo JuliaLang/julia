@@ -1683,7 +1683,12 @@ static void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *n
 static void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 {
     jl_atomic_store(&gc_allocd_scratch, NULL);
-    while (jl_atomic_load_acquire(&gc_n_threads_sweeping_pools) != 0) {
+    // This load must be seq_cst: together with the store above it forms a
+    // store-then-load handshake with `gc_sweep_pool_parallel`, which increments
+    // the counter and then loads `gc_allocd_scratch`. An acquire load may be
+    // satisfied before the store is visible (e.g. `ldapr` on AArch64), letting a
+    // late worker sweep with a stale scratch pointer.
+    while (jl_atomic_load(&gc_n_threads_sweeping_pools) != 0) {
         jl_cpu_pause();
     }
 }
