@@ -908,6 +908,8 @@ end
     @test Float16(6.0e-8) == 1//16777216
     @test 1.0 != big(1//0)
     @test Inf == big(1//0)
+    @test cmp(-0.0, 0//1) == -1
+    @test cmp(0//1, -0.0) == 1
 end
 
 @testset "rationalize fallback result (#61296) " begin

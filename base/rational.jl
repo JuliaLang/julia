@@ -528,16 +528,11 @@ end
 
 ==(q::Rational, x::AbstractFloat) = x == q
 
-for rel in (:<,:<=,:cmp)
+for rel in (:<,:<=)
     for (Tx,Ty) in ((Rational,AbstractFloat), (AbstractFloat,Rational))
         @eval function ($rel)(x::$Tx, y::$Ty)
-            if isnan(x)
-                $(rel === :cmp ? :(return isnan(y) ? 0 : 1) :
-                                :(return false))
-            end
-            if isnan(y)
-                $(rel === :cmp ? :(return -1) :
-                                :(return false))
+            if isnan(x) || isnan(y)
+                return false
             end
 
             xn, xp, xd = decompose(x)
