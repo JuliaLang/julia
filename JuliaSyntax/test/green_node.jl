@@ -63,6 +63,24 @@
         11:11     │  )                          ")"
     """
 
+    # Highlight a child, found by its path of child indices
+    let src = "f(x, y)", t = parsestmt(GreenNode, src)
+        @test sprint(highlight, SourceFile(src), t, 3) == "f(x, y)\n# ╙"
+        @test sprint(highlight, SourceFile(src), t) == "f(x, y)\n└─────┘"
+    end
+
+    @test sprint(show, MIME("text/plain"), parsestmt(GreenNode, "(1 +"; ignore_errors=true)) ==
+    """
+         1:4      │[parens]
+         1:1      │  (
+         2:4      │  [call]
+         2:2      │    Integer              ✔
+         3:3      │    Whitespace
+         4:4      │    Identifier           ✔
+         5:4      │    error                ✔✘
+         5:4      │  [error]                 ✘
+    """
+
     @test sprint(show, parsestmt(GreenNode, "a + bb - f(ccc)")) ==
         "(call-i (call-i 1-1::Identifier 2-2::Whitespace-t 3-3::Identifier 4-4::Whitespace-t 5-6::Identifier) 7-7::Whitespace-t 8-8::Identifier 9-9::Whitespace-t (call 10-10::Identifier 11-11::(-t 12-14::Identifier 15-15::)-t))"
 end

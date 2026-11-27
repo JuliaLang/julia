@@ -767,6 +767,31 @@ end
     """) isa Expr
 end
 
+@testset "print_ir with a method filter that matches nothing" begin
+    ex = parsestmt(SyntaxTree, "f_print_ir(x) = x"; version=VersionNumber(JL_NEW_EDITION))
+    ir = JuliaLowering.lower(test_mod, ex)
+    s = @test_logs (:warn, r"Method not found") sprint(JuliaLowering.print_ir, ir, "no_such_method")
+    @test contains(s, "core.define_method")
+end
+
+@testset "JuliaLowering.include" begin
+    mod = @newmod()
+    mktempdir() do dir
+        path = joinpath(dir, "included.jl")
+        write(path, "x_included = 40\nx_included + 2\n")
+        @test JuliaLowering.include(mod, path) == 42
+        @test invokelatest(getglobal, mod, :x_included) == 40
+        # A task with no current file has none again afterwards
+        @test fetch(@async begin
+            JuliaLowering.include(mod, path)
+            get(task_local_storage(), :SOURCE_PATH, nothing)
+        end) === nothing
+        # With no module given, include into JuliaLowering
+        write(path, "@__FILE__")
+        @test JuliaLowering.include(path) == path
+    end
+end
+
 # SyntaxTree @eval should pass along the syntax edition
 @test jl_eval(test_mod, raw"""
     let T = gensym("documented_sym_no_logspam")

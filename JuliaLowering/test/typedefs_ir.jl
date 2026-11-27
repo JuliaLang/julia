@@ -172,6 +172,14 @@ X{S, T=w}
 #   └──┘
 
 ########################################
+# Error: empty type parameter list in type alias
+A{} = Int
+#---------------------
+LoweringError:
+A{} = Int
+└─┘ ── empty type parameter list in type alias
+
+########################################
 # Simple abstract type definition
 abstract type A end
 #---------------------

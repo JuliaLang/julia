@@ -131,3 +131,19 @@ end
         @test flattened_provenance(stmm1) == Syntax[stmm1]
     end
 end
+
+@testset "LineNumberNode as a source reference" begin
+    lnn = LineNumberNode(3, :foo)
+    @test byte_range(lnn) == 0:0
+    @test source_location(lnn) == source_location(lnn, 5) == (3, 0)
+    @test source_location(LineNumberNode, lnn) === lnn
+    @test source_location(LineNumberNode, lnn, 5) === lnn
+    @test source_line(lnn) == 3
+    @test JuliaSyntax.sourcefile(lnn) === lnn
+    @test sourcetext(lnn) == ""
+    @test filename(lnn) == "foo"
+    @test sprint(io->highlight(io, lnn; note="here")) == "#= foo:3 =# - here"
+    st = @mknode(;head=:value, value=3, context=DUMMY_CONTEXT, source=lnn)
+    @test sourcetext(st) == ""
+    @test byte_range(st) == 0:0
+end

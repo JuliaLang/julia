@@ -241,6 +241,18 @@ let
 end
 """) == [(1,1), (2,1), (3,1)]
 
+# `_` names the innermost loop
+@test JuliaLowering.include_string(test_mod, """
+let a = []
+    for i in 1:4
+        isodd(i) && continue _
+        i == 4 && break _
+        push!(a, i)
+    end
+    a
+end
+""") == [2]
+
 # An unlabeled break exits an anonymous `@label` block
 @test JuliaLowering.include_string(test_mod, """
 @label begin
@@ -255,6 +267,23 @@ end
     break
 end
 """)
+
+@testset "jump error: $msg" for (code, msg) in [
+        "while true; break foo; end" => "`break foo` is not inside a `@label foo` block"
+        "for i = 1:2; @label x begin; continue x; end; end" =>
+            "`continue x` is not inside a `@label x` loop"
+        "for i = 1:2; @label x begin; break; end; end" =>
+            "plain `break` inside `@label x` block is disallowed"
+        "for i = 1:2; @label begin; continue; end; end" =>
+            "`continue` inside an anonymous `@label` block is not allowed"
+        "@label a begin; @label a begin; end; end" => "Label `a` defined multiple times"
+        "function f_goto_block(); @label a begin; end; @goto a; end" =>
+            "cannot use @goto to jump to @label block `a`"
+    ]
+    err = try JuliaLowering.include_string(test_mod, code) catch e; e; end
+    @test err isa LoweringError
+    @test contains(sprint(showerror, err), msg)
+end
 
 # Values of labeled breaks are scope-resolved: variables (not just
 # literals) work as break values, including from inside nested scopes
