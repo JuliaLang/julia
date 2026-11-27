@@ -337,74 +337,13 @@ symbol_table(symbols...) = table_entries(tab_completions(symbols...), unicode_da
 
 end # module UnicodeTables
 
-Manual = [
-    "manual/getting-started.md",
-    "manual/installation.md",
-    "manual/variables.md",
-    "manual/integers-and-floating-point-numbers.md",
-    "manual/mathematical-operations.md",
-    "manual/complex-and-rational-numbers.md",
-    "manual/strings.md",
-    "manual/functions.md",
-    "manual/control-flow.md",
-    "manual/variables-and-scoping.md",
-    "manual/types.md",
-    "manual/methods.md",
-    "manual/constructors.md",
-    "manual/conversion-and-promotion.md",
-    "manual/interfaces.md",
-    "manual/modules.md",
-    "manual/documentation.md",
-    "manual/metaprogramming.md",
-    "manual/arrays.md",
-    "manual/missing.md",
-    "manual/networking-and-streams.md",
-    "manual/parallel-computing.md",
-    "manual/asynchronous-programming.md",
-    "manual/multi-threading.md",
-    "manual/distributed-computing.md",
-    "manual/running-external-programs.md",
-    "manual/calling-c-and-fortran-code.md",
-    "manual/handling-operating-system-variation.md",
-    "manual/environment-variables.md",
-    "manual/embedding.md",
-    "manual/code-loading.md",
-    "manual/profile.md",
-    "manual/stacktraces.md",
-    "manual/memory-management.md",
-    "manual/performance-tips.md",
-    "manual/workflow-tips.md",
-    "manual/style-guide.md",
-    "manual/faq.md",
-    "manual/noteworthy-differences.md",
-    "manual/unicode-input.md",
-    "manual/emoji-input.md",
-    "manual/command-line-interface.md",
-    "manual/worldage.md",
-]
+# The page lists are shared with the REPL's documentation browser, which reads them from the
+# installed copy of `src`.
+const PAGE_LISTS = Base.parsed_toml(joinpath(@__DIR__, "src", "pages.toml"))
 
-BaseDocs = [
-    "base/base.md",
-    "base/collections.md",
-    "base/math.md",
-    "base/numbers.md",
-    "base/strings.md",
-    "base/arrays.md",
-    "base/parallel.md",
-    "base/multi-threading.md",
-    "base/scopedvalues.md",
-    "base/constants.md",
-    "base/file.md",
-    "base/io-network.md",
-    "base/punctuation.md",
-    "base/sort.md",
-    "base/iterators.md",
-    "base/reflection.md",
-    "base/c.md",
-    "base/libc.md",
-    "base/stacktraces.md",
-    "base/simd-types.md",
-]
+Manual = String.(PAGE_LISTS["manual"])
+
+BaseDocs = String.(PAGE_LISTS["base"])
 
 StdlibDocs = [[stdlib.targetfile for stdlib in STDLIB_DOCS]; STDLIB_EXTRA_DOCS]
 
@@ -417,77 +356,11 @@ sort!(StdlibDocs, by=function(x)
     return lowercase(x)
 end)
 
-DevDocs = [
-    "Documentation of Julia's Internals" => [
-        "devdocs/init.md",
-        "devdocs/ast.md",
-        "devdocs/types.md",
-        "devdocs/ub.md",
-        "devdocs/object.md",
-        "devdocs/eval.md",
-        "devdocs/callconv.md",
-        "devdocs/compiler.md",
-        "devdocs/functions.md",
-        "devdocs/cartesian.md",
-        "devdocs/meta.md",
-        "devdocs/subarrays.md",
-        "devdocs/isbitsunionarrays.md",
-        "devdocs/sysimg.md",
-        "devdocs/pkgimg.md",
-        "devdocs/llvm-passes.md",
-        "devdocs/llvm.md",
-        "devdocs/stdio.md",
-        "devdocs/boundscheck.md",
-        "devdocs/locks.md",
-        "devdocs/scheduler-wakeup.md",
-        "devdocs/offset-arrays.md",
-        "devdocs/require.md",
-        "devdocs/inference.md",
-        "devdocs/ssair.md",
-        "devdocs/EscapeAnalysis.md",
-        "devdocs/aot.md",
-        "devdocs/gc-sa.md",
-        "devdocs/gc.md",
-        "devdocs/gc-mmtk.md",
-        "devdocs/jit.md",
-        "devdocs/builtins.md",
-        "devdocs/precompile_hang.md",
-        "devdocs/compiler_changes.md",
-    ],
-    "Developing/debugging Julia's C code" => [
-        "devdocs/backtraces.md",
-        "devdocs/debuggingtips.md",
-        "devdocs/valgrind.md",
-        "devdocs/gc-debug.md",
-        "devdocs/external_profilers.md",
-        "devdocs/sanitizers.md",
-        "devdocs/probes.md",
-    ],
-    "Building Julia" => [
-        "devdocs/build/build.md",
-        "devdocs/build/linux.md",
-        "devdocs/build/macos.md",
-        "devdocs/build/windows.md",
-        "devdocs/build/freebsd.md",
-        "devdocs/build/arm.md",
-        "devdocs/build/riscv.md",
-        "devdocs/build/distributing.md",
-    ],
-    "Contributor's Guide" => [
-        "devdocs/contributing/code-changes.md",
-        "devdocs/contributing/tests.md",
-        "devdocs/contributing/documentation.md",
-        "devdocs/contributing/jldoctests.md",
-        "devdocs/contributing/patch-releases.md",
-        "devdocs/contributing/formatting.md",
-        "devdocs/contributing/git-workflow.md",
-        "devdocs/contributing/aiagents.md"
-    ],
-    "Agentic Devdocs" => [
-        "Index" => "devdocs/agents/README.md",
-        "Agent Skills" => AgentSkillDocs,
-    ]
-]
+DevDocs = Any[String(g["title"]) => String.(g["pages"]) for g in PAGE_LISTS["devdocs"]]
+push!(DevDocs, "Agentic Devdocs" => [
+    "Index" => "devdocs/agents/README.md",
+    "Agent Skills" => AgentSkillDocs,
+])
 
 
 if render_pdf

@@ -79,6 +79,14 @@ New library features
 Standard library changes
 ------------------------
 
+* The new `DocBrowser` standard library is a full-window, mouse-aware browser for Julia's
+  manual, the manuals of packages, and the documentation of every loaded module. Julia now
+  installs the Markdown source of the manual in `share/doc/julia/src` for it. It separates the
+  active project's direct dependencies from indirect ones, marks names as exported, public or
+  internal, follows cross-references, searches names or docstring text, and can load project
+  dependencies that are not loaded yet. The REPL opens it from `help?>`. It is developed at
+  [DocBrowser.jl](https://github.com/IanButterworth/DocBrowser.jl), which also works as a
+  package on Julia 1.12 to 1.14 ([#64993]).
 
 #### Dates
 
@@ -108,6 +116,9 @@ Standard library changes
   commands without pipes or redirections through `$SHELL -c` on systems other than Windows. It no
   longer reads the `JULIA_SHELL` environment variable. The new `export NAME=value` and `unset NAME`
   commands in shell mode set and remove environment variables for later commands ([#20401]).
+
+* Pressing Enter at an empty `help?>` prompt now opens the documentation browser from the new
+  `DocBrowser` standard library, and Alt-Enter opens it at the name typed ([#64993]).
 
 #### SharedArrays
 

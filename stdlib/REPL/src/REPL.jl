@@ -155,6 +155,44 @@ using .History
 
 histsearch(args...) = runsearch(args...)
 
+const DocBrowser_pkgid = Base.PkgId(Base.UUID("208986ce-fd7f-47a4-b86f-e50b7a34e96d"), "DocBrowser")
+
+# Run the documentation browser in place of the current prompt, then return to `julia_prompt`
+# with the name the user picked, if any, typed in.
+function open_docbrowser(s::LineEdit.MIState, julia_prompt::LineEdit.Prompt)
+    term = LineEdit.terminal(s)
+    mode = LineEdit.mode(s)
+    query = String(take!(copy(LineEdit.buffer(s))))
+    termbuf = LineEdit.TerminalBuffer(IOBuffer())
+    s.mode_state[mode] = LineEdit.deactivate(mode, LineEdit.state(s), termbuf, term)
+    LineEdit.commit_changes(term, termbuf)
+    name = nothing
+    try
+        DocBrowser = Base.require_stdlib(DocBrowser_pkgid)
+        name = Base.invokelatest(DocBrowser.browse, term; query, context=Base.active_module(s))
+    catch err
+        err isa InterruptException || @error "The documentation browser failed" exception=(err, catch_backtrace())
+    end
+    mode isa LineEdit.Prompt && LineEdit.reset_state(LineEdit.state(s, mode))
+    LineEdit.enter_input_mode(term)
+    s.current_mode = julia_prompt
+    # Whatever was typed went to the browser, so the prompt starts empty, as after `help?>`.
+    if haskey(s.mode_state, julia_prompt)
+        LineEdit.reset_state(LineEdit.state(s, julia_prompt))
+    else
+        s.mode_state[julia_prompt] = LineEdit.init_state(term, julia_prompt)
+    end
+    termbuf = LineEdit.TerminalBuffer(IOBuffer())
+    LineEdit.activate(julia_prompt, LineEdit.state(s, julia_prompt), termbuf, term)
+    LineEdit.commit_changes(term, termbuf)
+    name === nothing || LineEdit.edit_insert(LineEdit.buffer(s), name)
+    LineEdit.refresh_line(s)
+    return nothing
+end
+
+# Whether a line of help mode names a place in the docs, which the documentation browser opens.
+is_docs_place(line::AbstractString) = occursin(r"^\s*(docs:|https?://(pkg)?docs\.julialang\.org/)", line)
+
 include("Pkg_beforeload.jl")
 
 answer_color(::AbstractREPL) = ""
@@ -1537,7 +1575,10 @@ function setup_interface(
             if isempty(s) || position(LineEdit.buffer(s)) == 0
                 let buf = copy(LineEdit.buffer(s))
                     transition(s, help_mode) do
-                        LineEdit.state(s, help_mode).input_buffer = buf
+                        st = LineEdit.state(s, help_mode)
+                        st.input_buffer = buf
+                        # shown until the first key press redraws the line
+                        buf.size == 0 && (st.hint = "press return to browse the docs")
                     end
                 end
             else
@@ -1720,11 +1761,15 @@ function setup_interface(
                     # put the line on the screen and history
                     LineEdit.replace_line(s, line)
                     LineEdit.commit_line(s)
-                    # execute the statement
-                    terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
-                    LineEdit.leave_input_mode(terminal)
-                    @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
-                    LineEdit.enter_input_mode(terminal)
+                    if LineEdit.mode(s) === help_mode && is_docs_place(line)
+                        open_docbrowser(s, julia_prompt)
+                    else
+                        # execute the statement
+                        terminal = LineEdit.terminal(s) # This is slightly ugly but ok for now
+                        LineEdit.leave_input_mode(terminal)
+                        @invokelatest LineEdit.mode(s).on_done(s, LineEdit.buffer(s), true)
+                        LineEdit.enter_input_mode(terminal)
+                    end
                     LineEdit.push_undo(s) # when the last line is incomplete
                 end
                 oldpos = pos
@@ -1784,7 +1829,21 @@ function setup_interface(
     b = mode_base_keymaps
     prepend!(b, extra_repl_keymap)
 
-    shell_mode.keymap_dict = help_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
+    shell_mode.keymap_dict = dummy_pkg_mode.keymap_dict = LineEdit.keymap(b)
+
+    help_keymap = AnyDict(
+        # Enter on an empty help prompt, or on a place in the docs, opens the documentation browser
+        '\r' => function (s::MIState, o...)
+            isempty(s) || is_docs_place(String(take!(copy(LineEdit.buffer(s))))) ||
+                return LineEdit.default_keymap['\r'](s, o...)
+            open_docbrowser(s, julia_prompt)
+        end,
+        # Alt-Enter opens it at what was typed
+        "\e\r" => (s::MIState, o...) -> open_docbrowser(s, julia_prompt),
+    )
+    # The user's own key bindings still come first.
+    nextra = length(extra_repl_keymap)
+    help_mode.keymap_dict = LineEdit.keymap(Dict{Any,Any}[b[1:nextra]; help_keymap; b[nextra+1:end]])
 
     allprompts = LineEdit.TextInterface[julia_prompt, shell_mode, help_mode, dummy_pkg_mode, prefix_prompt]
     return ModalInterface(allprompts)
