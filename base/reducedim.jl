@@ -61,8 +61,12 @@ promote_union(T) = T
 
 _realtype(::Type{<:Complex}) = Real
 _realtype(::Type{Complex{T}}) where T<:Real = T
+_realtype(T::Union) = Union{_realtype(T.a), _realtype(T.b)}
 _realtype(T::Type) = T
-_realtype(::Union{typeof(abs),typeof(abs2)}, T) = _realtype(T)
+_realtype(::typeof(abs2), T) = _realtype(T)
+_realtype(::typeof(abs), T::Union) = Union{_realtype(abs, T.a), _realtype(abs, T.b)}
+_realtype(::typeof(abs), ::Type{Complex{T}}) where T<:Real = isconcretetype(T) ? float(T) : Real
+_realtype(::typeof(abs), T) = _realtype(T)
 _realtype(::Any, T) = T
 
 function reducedim_init(f, op::Union{typeof(+),typeof(add_sum)}, A::AbstractArray, region)
@@ -170,8 +174,15 @@ function reducedim_init(f::ExtremaMap, op::typeof(_extrema_rf), A::AbstractArray
     return reducedim_initarray(A, region, v0, Tuple{Tmin,Tmax})
 end
 
-reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T} =
-    reducedim_initarray(A, region, zero(f(zero(T))), _realtype(f, T))
+function reducedim_init(f::Union{typeof(abs),typeof(abs2)}, op::typeof(max), A::AbstractArray{T}, region) where {T}
+    R = _realtype(f, T)
+    if T !== Any && applicable(zero, T) && (!isa(T, UnionAll) || applicable(T, 0))
+        z = zero(f(zero(T)))
+        return reducedim_initarray(A, region, z, z isa R ? R : typeof(z))
+    else
+        return invoke(reducedim_init, Tuple{Any, typeof(max), AbstractArray, Any}, f, op, A, region)
+    end
+end
 
 reducedim_init(f, op::typeof(and_all), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::typeof(or_any), A::AbstractArrayOrBroadcasted, region) = reducedim_initarray(A, region, false)

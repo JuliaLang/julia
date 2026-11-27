@@ -403,6 +403,60 @@ end
     end
 end
 
+# issue #54920
+@testset "reducedim with abs on complex arrays (#54920)" begin
+    let A = Complex{Int}[1+2im 3+4im; 5+6im 7+8im]
+        @test @inferred(maximum(abs, A; dims=(1, 2))) == [maximum(abs, A);;]
+        @test eltype(maximum(abs, A; dims=(1, 2))) === Float64
+        @test @inferred(maximum(abs, A; dims=1)) == [abs(5+6im) abs(7+8im)]
+        @test @inferred(maximum(abs2, A; dims=(1, 2))) == [maximum(abs2, A);;]
+        @test eltype(maximum(abs2, A; dims=(1, 2))) === Int
+        @test @inferred(minimum(abs, A; dims=1)) == [abs(1+2im) abs(3+4im)]
+        @test @inferred(sum(abs, A; dims=1)) == [abs(1+2im)+abs(5+6im) abs(3+4im)+abs(7+8im)]
+        @test @inferred(Base.FastMath.maximum_fast(abs, A; dims=(1, 2))) ≈ [maximum(abs, A);;]
+    end
+    for T in (Int8, Int16, Int32, Int64, Int128, UInt8, BigInt, Rational{Int},
+              Float16, Float32, Float64, BigFloat)
+        A = Complex{T}[3+4im]
+        res = @inferred maximum(abs, A; dims=1)
+        @test res == [abs(A[1])]
+        @test eltype(res) === typeof(abs(zero(Complex{T})))
+        @test @inferred(sum(abs, A; dims=1)) == [abs(A[1])]
+        @test eltype(sum(abs, A; dims=1)) === typeof(abs(zero(Complex{T})))
+        res2 = @inferred maximum(abs2, A; dims=1)
+        @test res2 == [abs2(A[1])]
+    end
+    let A = Complex{Bool}[true+true*im false+true*im]
+        @test @inferred(maximum(abs, A; dims=1)) == [sqrt(2) 1.0]
+        @test eltype(maximum(abs, A; dims=1)) === Float64
+        @test @inferred(sum(abs, A; dims=1)) == [sqrt(2) 1.0]
+        @test @inferred(maximum(abs2, A; dims=1)) == [2 1]
+    end
+    for A in (Complex[1+2im 3.0+4.0im],
+              Complex{Real}[1+2im BigFloat(3)+4im],
+              Complex{<:Integer}[Int8(1)+Int8(2)im BigInt(3)+BigInt(4)im],
+              Any[1+2im 3+4im])
+        @test maximum(abs, A; dims=1) == [abs(A[1, 1]) abs(A[1, 2])]
+        @test maximum(abs2, A; dims=1) == [abs2(A[1, 1]) abs2(A[1, 2])]
+    end
+    let A = Union{Complex{Int}, Missing}[1+2im missing; 3+4im 5+6im]
+        @test isequal(maximum(abs, A; dims=1), Union{Float64, Missing}[abs(3+4im) missing])
+        @test isequal(minimum(abs, A; dims=1), Union{Float64, Missing}[abs(1+2im) missing])
+        @test isequal(sum(abs, A; dims=1), Union{Float64, Missing}[abs(1+2im)+abs(3+4im) missing])
+        @test isequal(maximum(abs2, A; dims=1), Union{Int, Missing}[25 missing])
+        @test isequal(maximum(abs, A; dims=2), reshape(Union{Float64, Missing}[missing, abs(5+6im)], 2, 1))
+    end
+    let A = Complex{Int}[]
+        @test maximum(abs, A; dims=1) == [0.0]
+        @test eltype(maximum(abs, A; dims=1)) === Float64
+        @test eltype(maximum(abs, reshape(A, 0, 1); dims=2)) === Float64
+        @test eltype(maximum(abs2, reshape(A, 0, 1); dims=2)) === Int
+    end
+    let A = fill(3+4im)
+        @test @inferred(maximum(abs, A; dims=1)) == fill(5.0)
+    end
+end
+
 @testset "NaN in findmin/findmax/minimum/maximum" begin
     A = [1.0 NaN 6.0;
          NaN 2.0 4.0]
