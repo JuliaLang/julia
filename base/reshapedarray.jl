@@ -235,6 +235,7 @@ length(A::ReshapedArray) = length(parent(A))
 similar(A::ReshapedArray, eltype::Type, dims::Dims) = similar(parent(A), eltype, dims)
 similar(::Type{TA}, dims::Dims) where {T,N,P,TA<:ReshapedArray{T,N,P}} = similar(P, dims)
 IndexStyle(::Type{<:ReshapedArrayLF}) = IndexLinear()
+_unwrap_contiguous(A::ReshapedArrayLF) = _unwrap_contiguous(parent(A))
 parent(A::ReshapedArray) = A.parent
 parentindices(A::ReshapedArray) = map(oneto, size(parent(A)))
 elsize(::Type{<:ReshapedArray{<:Any,<:Any,P}}) where {P} = elsize(P)

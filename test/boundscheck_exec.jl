@@ -446,11 +446,13 @@ inbounds_copyto!(a, b, c, d, e, f) = @inbounds copyto!(a, b, c, d, e, f)
             @test inbounds_copyto!(dest, args...) === dest
         end
     end
-    dest = PaddedVector(zeros(Int, 8), 2)
-    if bc_opt == bc_on
-        @test_throws BoundsError inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4)
-    else
-        @test inbounds_copyto!(IndexLinear(), dest, IndexLinear(), 1:4) === dest
+    for args in (([true, true, false],), (BitVector([true, true, false]),), (1, [1, 1, 0], 1, 3))
+        dest = falses(2)
+        if bc_opt == bc_on
+            @test_throws BoundsError inbounds_copyto!(dest, args...)
+        else
+            @test inbounds_copyto!(dest, args...) === dest
+        end
     end
     for src in ([1, 2, 3, 4], [1.0, 2.0, 3.0, 4.0], Memory{Int}(1:4), Memory{Float64}(1:4))
         dest = Base.wrap(Array, Memory{Int}(undef, 8), (2,))
