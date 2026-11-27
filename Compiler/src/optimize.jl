@@ -1805,8 +1805,9 @@ end
 
 ## Computing the cost of a function body
 
-# saturating sum (inputs are non-negative), prevents overflow with typemax(Int) below
+# saturating sum and product (inputs are non-negative), prevents overflow with typemax(Int)
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
+times_saturate(x::Int, y::Int) = x == 0 || y <= typemax(Int) ÷ x ? x * y : typemax(Int)
 
 # known return type
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))

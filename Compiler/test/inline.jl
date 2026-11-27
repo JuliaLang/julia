@@ -2655,4 +2655,15 @@ let src = code_typed1((Base.RefValue{Any},); interp=HighInlineThreshold()) do r
     @test count(isinvoke(:five_dynamic_calls), src.code) == 0
 end
 
+# a non-concrete tuple return under the largest possible threshold
+@newinterp MaxInlineThreshold
+Compiler.OptimizationParams(::MaxInlineThreshold) =
+    Compiler.OptimizationParams(; inline_cost_threshold=typemax(Int))
+tuple_return_inline(x::Int) = x > 0 ? (x,) : (x, x)
+let src = code_typed1((Int,); interp=MaxInlineThreshold()) do x
+        tuple_return_inline(x)
+    end
+    @test count(isinvoke(:tuple_return_inline), src.code) == 0
+end
+
 end # module inline_tests
