@@ -2666,4 +2666,8 @@ let src = code_typed1((Int,); interp=MaxInlineThreshold()) do x
     @test count(isinvoke(:tuple_return_inline), src.code) == 0
 end
 
+# a one-argument `typeassert` call, which always throws
+one_arg_typeassert(x, c) = c ? Core.typeassert(x) : 1
+@test only(code_typed(one_arg_typeassert, (Int, Bool)))[2] === Int
+
 end # module inline_tests

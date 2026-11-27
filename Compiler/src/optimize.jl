@@ -1880,7 +1880,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             elseif f === Core.memoryrefunset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
-            elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
+            elseif f === typeassert && length(ex.args) == 3 && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
             elseif f === Core._apply_iterate && length(ex.args) >= 3
                 fa = singleton_type(argextype(ex.args[3], src, sptypes))
