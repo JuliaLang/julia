@@ -180,6 +180,7 @@ typedef struct JL_GC_TRACKED_TYPE jl_stenv_t {
     int envsz;                // length of envout
     int envidx;               // current index in envout
     int invdepth;             // current number of invariant constructors we're nested in
+    int forall_lb;
     int bound_channel;        // certainty (jl_bound_certainty_t) of lower-bound
                               // contributions recorded in the current context;
                               // starts at BOUND_EGAL and is only ever lowered:
@@ -1169,9 +1170,12 @@ static int has_existential_typevar(jl_value_t *x, jl_stenv_t *e) JL_NOTSAFEPOINT
 
 static void record_var_pin(jl_varbinding_t *vb, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
 {
-    if (e->envsz > 0 && param == PARAM_INVARIANT && e->invdepth > vb->depth0 && !vb->pinned &&
-        (!jl_has_free_typevars(a) || !has_existential_typevar(a, e)))
-        vb->pinned = 1;
+    if (e->envsz > 0 && param == PARAM_INVARIANT && e->invdepth > vb->depth0 &&
+        (!jl_has_free_typevars(a) || !has_existential_typevar(a, e))) {
+        int8_t grade = e->forall_lb ? 1 : 2;
+        if (vb->pinned < grade)
+            vb->pinned = grade;
+    }
 }
 
 static void record_var_occurrence(jl_varbinding_t *vb, jl_stenv_t *e, jl_param_pos_t param) JL_NOTSAFEPOINT
@@ -1395,7 +1399,10 @@ static int var_gt(jl_tvar_t *b, jl_value_t *a, jl_stenv_t *e, jl_param_pos_t par
         // lower bound away from the enclosing tuple body.
         int8_t *saved_fb = (int8_t*)alloca(current_env_length(e));
         int nsaved_fb = push_forall_bound_scope(e, saved_fb);
+        int ranged = bb->lb != bb->ub;
+        e->forall_lb += ranged;
         int sub = subtype_left_var(a, bb->lb, e, param);
+        e->forall_lb -= ranged;
         pop_forall_bound_scope(e, saved_fb, nsaved_fb);
         return sub;
     }
@@ -2127,7 +2134,9 @@ static int subtype_unionall(jl_value_t *t, jl_unionall_t *u, jl_stenv_t *e, int8
         // however, is present in every concrete member even when the tuple tail
         // length is free, so a statically constraining right-side element at that
         // position records `lb_required` while matching that tuple element.
-        int eff_constrained = (vb.occurs_inv ||
+        int eff_constrained = (vb.pinned == 2 ||
+            (vb.pinned != 1 && vb.occurs_inv && !jl_has_free_typevars(vb.lb) &&
+             (vb.lb != jl_bottom_type || vb.lb == vb.ub)) ||
             (cov_count(&vb) && u->var->lb == jl_bottom_type &&
              (vb.lb_certainty > BOUND_PROXY || vb.lb_required)));
         jl_value_t *val = subtype_unionall_envout_value(t, u, e, &vb, lb, &new_tvar,
@@ -3631,6 +3640,7 @@ static void init_stenv(jl_stenv_t *e, jl_value_t **env, int envsz)
     }
     e->envidx = 0;
     e->invdepth = 0;
+    e->forall_lb = 0;
     e->bound_channel = BOUND_EGAL;
     e->spell_channel = BOUND_EGAL;
     e->value_descent = 0;
@@ -4156,6 +4166,7 @@ static int subtype_in_env(jl_value_t *x, jl_value_t *y, jl_stenv_t *e) JL_CANSAF
     e2.vars = e->vars;
     e2.intersection = e->intersection;
     e2.invdepth = e->invdepth;
+    e2.forall_lb = e->forall_lb;
     e2.envsz = e->envsz;
     e2.envout = e->envout;
     e2.envidx = e->envidx;

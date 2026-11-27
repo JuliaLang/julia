@@ -872,10 +872,11 @@ function resolve_todo(mi::MethodInstance, call_result::Union{Nothing,LocalInfere
     return InliningTodo(mi, ir, spec_info, debuginfo, effects)
 end
 
+is_known_sparam(@nospecialize(sp)) = !(isa(sp, SimpleVector) || has_free_typevars(sp) || isvarargtype(sp))
+
 function validate_sparams(sparams::SimpleVector)
     for i = 1:length(sparams)
-        spᵢ = sparams[i]
-        (isa(spᵢ, SimpleVector) || has_free_typevars(spᵢ) || isvarargtype(spᵢ)) && return false
+        is_known_sparam(sparams[i]) || return false
     end
     return true
 end
@@ -1876,37 +1877,25 @@ function ssa_substitute_op!(insert_node!::Inserter, subst_inst::Instruction, @no
         if head === :static_parameter
             spidx = e.args[1]::Int
             val = sparam_vals[spidx]
-            val_uncertain = isa(val, SimpleVector) || has_free_typevars(val)
-            if !val_uncertain && val !== Vararg
-                return quoted(val)
-            else
-                flag = subst_inst[:flag]
-                if isa(val, SimpleVector)
-                    spstate = cached_sptypes(ssa_substitute)[spidx]
-                    maybe_undef = spstate.undef && !has_flag(flag, IR_FLAG_NOTHROW)
-                    typ = spstate.undef ? Any : spstate.typ
-                else
-                    maybe_undef = !has_flag(flag, IR_FLAG_NOTHROW) && val_uncertain
-                    typ = Any
-                end
-                (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef, typ)
-                if maybe_undef
-                    insert_node!(
-                        NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
-                end
-                return ret
+            is_known_sparam(val) && return quoted(val)
+            spstate = cached_sptypes(ssa_substitute)[spidx]
+            typ = spstate.typ
+            if !spstate.undef && isa(typ, Const)
+                return quoted(typ.val)
             end
+            maybe_undef = spstate.undef && !has_flag(subst_inst[:flag], IR_FLAG_NOTHROW)
+            (ret, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, maybe_undef, spstate.undef ? Any : typ)
+            if maybe_undef
+                insert_node!(
+                    NewInstruction(Expr(:throw_undef_if_not, sp_at_idx(ssa_substitute.mi.def.sig, spidx).name, tcheck_not), Nothing))
+            end
+            return ret
         elseif head === :isdefined && isa(e.args[1], Expr) && e.args[1].head === :static_parameter
             spidx = (e.args[1]::Expr).args[1]::Int
-            val = sparam_vals[spidx]
-            if !isa(val, SimpleVector)
-                return true
-            elseif val[2]::Bool
-                return true
-            else
-                (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)
-                return tcheck_not
-            end
+            is_known_sparam(sparam_vals[spidx]) && return true
+            cached_sptypes(ssa_substitute)[spidx].undef || return true
+            (_, tcheck_not) = insert_spval!(insert_node!, ssa_substitute.spvals_ssa::SSAValue, spidx, true)
+            return tcheck_not
         elseif head === :cfunction && ssa_substitute.spvals_ssa === nothing
             msig = (ssa_substitute.mi.def::Method).sig
             @assert !isa(msig, UnionAll) || !isempty(sparam_vals)
