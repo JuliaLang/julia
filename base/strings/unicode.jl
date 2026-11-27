@@ -185,7 +185,7 @@ to perform on Julia identifiers, to canonicalize characters that
 are both easily confused and easily inputted by accident.
 
 !!! warning
-    When this table is updated, also update the corresponding table in `src/flisp/julia_charmap.h`.
+    When this table is updated, also update the corresponding table in `JuliaSyntax/src/julia/literal_parsing.jl`.
 """
 const _julia_charmap = Dict{UInt32,UInt32}(
     0x025B => 0x03B5, # latin small letter open e -> greek small letter epsilon

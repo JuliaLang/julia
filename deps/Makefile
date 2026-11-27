@@ -212,13 +212,19 @@ endif
 
 DEP_LIBS_STAGED := $(DEP_LIBS)
 
+# Not staged into usr/: the julia release that builds the bootstrap frontend,
+# unless an installation of it is provided
+ifeq ($(JULIA_BOOTSTRAP_HOME),$(JULIA_BOOTSTRAP_DEFAULT_HOME))
+DEP_LIBS += julia-bootstrap
+endif
+
 # list all targets
 DEP_LIBS_STAGED_ALL := llvm llvm-tools clang llvmunwind unwind libuv pcre \
 	openlibm dsfmt blastrampoline openblas lapack gmp mpfr patchelf utf8proc \
 	objconv openssl libssh2 nghttp2 curl libgit2 libwhich zlib zstd lmdb p7zip libpicosat csl \
 	sanitizers libsuitesparse lld libtracyclient ittapi nvtx \
 	terminfo cpufeatures
-DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL)
+DEP_LIBS_ALL := $(DEP_LIBS_STAGED_ALL) julia-bootstrap
 
 ifneq ($(USE_BINARYBUILDER_OPENBLAS),0)
 DEP_LIBS_ALL := $(filter-out lapack,$(DEP_LIBS_ALL))
@@ -300,5 +306,6 @@ include $(SRCDIR)/libwhich.mk
 include $(SRCDIR)/p7zip.mk
 include $(SRCDIR)/libtracyclient.mk
 include $(SRCDIR)/terminfo.mk
+include $(SRCDIR)/julia-bootstrap.mk
 
 include $(SRCDIR)/tools/uninstallers.mk

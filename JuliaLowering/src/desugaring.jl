@@ -5,6 +5,10 @@ mutable struct DesugaringContext <: AbstractLoweringContext
     const bindings::Bindings
     const ssa_mapping::Dict{Int, IdTag}
     const world::UInt
+    # Produce output that a runtime can evaluate without this JuliaLowering (or
+    # Base) loaded: no values of types defined in either may be embedded. This is
+    # the case for a frontend serving another runtime, e.g. libjulia-frontend.
+    const portable::Bool
 end
 
 # Translate a :ssavalue node from pre-lowered code into a normal SSA binding.
@@ -2640,6 +2644,8 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     end
 
     sc = src.context
+    ctx.portable && return portable_generated_method_defs(
+        ctx, src, mtable, sparams, argl, body, rett, gen_name)
     gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
          gen_argl = SyntaxList(
              @ast(ctx, src, [:(::) arg1_name [:function_type gen_name]]),
@@ -2681,6 +2687,50 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
         [:method_defs gen_name [:block] gen_mdef]
         nongen_mdef]
 end
+
+# Generated function definitions for portable output (see DesugaringContext),
+# using the runtime's own `Core.GeneratedFunctionStub` protocol, as flisp does:
+# the generator is called as `gen(spvals..., argtypes...)` (see its call method in
+# base/expr.jl), so it has no context argument, and it returns the body as an
+# `Expr`, which the runtime lowers (`Base.generated_body_to_codeinfo`). All of
+# its arguments are `@nospecialize`d (`_untyped_arg`), which
+# `Compiler.may_invoke_generator` requires.
+function portable_generated_method_defs(ctx, src, mtable, sparams, argl, body, rett, gen_name)
+    gen_mdef = let arg1_name = newsym(ctx, argl[1], "#self#"),
+         gen_argl = SyntaxList(
+             @ast(ctx, src, [:(::) arg1_name [:function_type gen_name]]),
+             mapsyntax(_untyped_arg, sparams)...,
+             mapsyntax(_untyped_arg, argl)...)
+        @jl_assert head(body[1]) === :syntaxquote body
+        # The surrounding body is a template with the generator's result
+        # interpolated (see `split_generated`): build it as an `Expr`
+        template = exprquote_template(trim_provenance(body[1][1], true))
+        gen_body = est_to_dst(expand_exprquote(ctx, template))
+        method_def_expr(ctx, src, gen_name, SyntaxList(), gen_argl, gen_body,
+                        @ast(ctx, src, "Any"::core))
+    end
+    nongen_mdef = let
+        nongen_body = @ast ctx body[2] [:block [:meta "generated"::symbol
+            [:new
+                "GeneratedFunctionStub"::core
+                gen_name
+                [:call "svec"::core _expr_arg_syms(argl)...]
+                [:call "svec"::core _expr_arg_syms(sparams)...]]]
+            body[2]]
+        method_def_expr(ctx, src, mtable, sparams, argl, nongen_body, rett)
+    end
+    @ast ctx src [:block
+        [:global gen_name]
+        [:function_decl gen_name]
+        [:method_defs gen_name [:block] gen_mdef]
+        nongen_mdef]
+end
+
+# The generated function body template with the generator's part spliced in
+# with `$` rather than `syntaxunquote`
+exprquote_template(st) = head(st) === :syntaxunquote ?
+    @mknode(st; head=:$) :
+    is_leaf(st) ? st : mapchildren(exprquote_template, st)
 
 # Semantically, we want each wrapper method's body to call the method with one
 # additional default (on top of its args, `passed`) until we reach the body
@@ -4250,13 +4300,18 @@ function expand_import_or_using(ctx, ex)
         push!(path_specs, @ast ctx spec [:inert path])
     end
     is_using = head(ex) == :using
+    # Portable output uses the runtime's own implementation, as flisp does
+    eval_using_fn(src) = ctx.portable ? @ast(ctx, src, "_eval_using"::top) :
+        @ast(ctx, src, eval_using::value)
+    eval_import_fn(src) = ctx.portable ? @ast(ctx, src, "_eval_import"::top) :
+        @ast(ctx, src, eval_import::value)
     stmts = SyntaxList()
     if isnothing(from_path)
         for spec in path_specs
             if is_using
                 push!(stmts,
                     @ast ctx spec [:call
-                        eval_using   ::value
+                        eval_using_fn(spec)
                         ctx.layer.mod::value
                         spec
                     ]
@@ -4264,7 +4319,7 @@ function expand_import_or_using(ctx, ex)
             else
                 push!(stmts,
                     @ast ctx spec [:call
-                        eval_import   ::value
+                        eval_import_fn(spec)
                         (!is_using)   ::value
                         ctx.layer.mod::value
                         (::nothing)
@@ -4278,7 +4333,7 @@ function expand_import_or_using(ctx, ex)
         end
     else
         push!(stmts, @ast ctx ex [:call
-            eval_import   ::value
+            eval_import_fn(ex)
             (!is_using)   ::value
             ctx.layer.mod::value
             from_path
@@ -4305,12 +4360,37 @@ function expand_public(ctx, ex)
                 ex, "unexpected public/export with names from multiple modules"))
         push!(identifiers, syntax_name(e))
     end
+    if ctx.portable
+        # the runtime evaluates the Expr form itself
+        return @ast ctx ex [:call
+            "eval"::core
+            mod::value
+            exprquote_inert(ex, Expr(head(ex), map(Symbol, identifiers)...))
+        ]
+    end
     @ast ctx ex [:call
         eval_public::value
         mod::value
         (head(ex) == :export)::value
         identifiers::value
     ]
+end
+
+# The `Expr` form of a `toplevel` form for the runtime to evaluate (portable
+# output, see DesugaringContext): chunks from macro expansions are wrapped in
+# `hygienic-scope` with the module of the macro, so that the runtime's lowering
+# of each chunk resolves its names as ours would have.
+function portable_toplevel_expr(ex)
+    out = Expr(:toplevel)
+    for c in children(ex)
+        e = est_to_expr(c)
+        layer = c.context.layer
+        if !isnothing(layer) && !is_base_layer(c.context)
+            e = Expr(Symbol("hygienic-scope"), e, layer.mod, first_linenode(c))
+        end
+        push!(out.args, e)
+    end
+    out
 end
 
 #-------------------------------------------------------------------------------
@@ -4562,6 +4642,21 @@ function expand_forms_2(ctx::DesugaringContext, ex::SyntaxTree, docs=nothing)
         # toplevel iteration over SyntaxTree exists, but for now, a call to
         # `eval` lets JuliaLowering retain provenance and hygiene here.
         # (alternatively, insert eval in flisp too, simplifying the interpreter)
+        if ctx.portable
+            # The runtime evaluates the Expr form itself, one chunk at a time,
+            # each in the hygienic context of the macro expansion it is from
+            ex2 = @ast ctx ex [:block
+                [:assert "toplevel_only"::symbol [:syntaxinert ex]]
+                [:(=) tmp [:call
+                    "eval"::core
+                    ctx.layer.mod::value
+                    exprquote_inert(ex, portable_toplevel_expr(ex))
+                ]]
+                (::latestworld)
+                tmp
+            ]
+            return expand_forms_2(ctx, ex2)
+        end
         ex2 = @ast ctx ex [:block
             [:assert "toplevel_only"::symbol [:syntaxinert ex]]
             [:(=) tmp [:call
@@ -4645,9 +4740,9 @@ function expand_forms_2(ctx::DesugaringContext, exs::Union{Tuple,AbstractVector}
     res
 end
 
-@fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
+@fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt, portable::Bool=false)
     sl = base_layer(ex.context)
-    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
+    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world, portable)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !validation_ok(vr)

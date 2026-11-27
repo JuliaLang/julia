@@ -201,7 +201,7 @@ function is_driver_machinery(frame)
     frame.from_c && return false
     mod = parentmodule(frame)
     (mod === Base || mod === Core || mod === nothing) || return false
-    return frame.func in (:eval, :include_string, :_include, :include, :fl_toplevel_eval)
+    return frame.func in (:eval, :include_string, :_include, :include, :frontend_toplevel_eval)
 end
 
 function scrub_repl_backtrace(bt)
@@ -853,11 +853,10 @@ end
 
 function init_frontend()
     JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
-    if get_bool_env("JULIA_USE_FLISP_LOWERING", false) === true
-        JuliaLowering.activate!(false)
-    else
-        JuliaLowering.activate!(true; freeze_world_age=true)
-    end
+    # the runtime's operator queries (for printing) answer as this JuliaSyntax
+    # classifies operators from now on, rather than ask the runtime's frontend
+    JuliaSyntax.register_operator_queries()
+    JuliaLowering.activate!(true; freeze_world_age=true)
 end
 
 function uninit_frontend()

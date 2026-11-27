@@ -854,7 +854,8 @@ end
     @test fl(:(@outer_hs())) === :lib_inner
     @test fl(:(@outer_gr())) === :lib_inner
     @test fl(:(@outer_val())) === :lib_inner
-    for ex in (:(@outer_esc()), :(@outer_esc_dot()), :(@outer_escl_dot()))
+    # (flisp's errors; JuliaLowering's results are tested above)
+    has_flisp && for ex in (:(@outer_esc()), :(@outer_esc_dot()), :(@outer_escl_dot()))
         err = try fl(ex); nothing; catch e; e; end
         err isa LoadError && (err = err.error)
         @test err isa ErrorException && occursin("used outside of macro expansion", err.msg)

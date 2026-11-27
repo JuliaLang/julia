@@ -36,7 +36,10 @@ end
 include("source_files.jl")
 
 include("hooks.jl")
-include("parse_packages.jl")
+# Comparison with the reference flisp parser, in julia versions which have it
+if JuliaSyntax._has_flisp
+    include("parse_packages.jl")
+end
 
 include("serialization.jl")
 

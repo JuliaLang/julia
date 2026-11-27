@@ -218,6 +218,7 @@ function core_parser_hook(code, filename::String, lineno::Int, offset::Int,
         # Rewrap result in an svec for use by the C code
         return Core.svec(ex, last_offset)
     catch exc
+        _has_flisp || rethrow()
         @error("""JuliaSyntax parser failed — falling back to flisp!
                   This is not your fault. Please submit a bug report to https://github.com/JuliaLang/JuliaSyntax.jl/issues""",
                exception=(exc,catch_backtrace()),
@@ -290,6 +291,7 @@ end
             end
             return ex, last_byte(stream)
         catch exc
+            _has_flisp || rethrow()
             @error("""JuliaSyntax parser failed — falling back to flisp!
                       This is not your fault. Please submit a bug report to https://github.com/JuliaLang/julia""",
                    exception=(exc,catch_backtrace()),
@@ -338,10 +340,12 @@ function enable_in_core!(enable=true; freeze_world_age = true)
 end
 
 #-------------------------------------------------------------------------------
-# Tools to call the reference flisp parser
+# Tools to call the reference flisp parser, in julia versions which have it
+const _has_flisp = isdefined(Base, :fl_parse) || isdefined(Core.Compiler, :fl_parse)
 #
 # Call the flisp parser
 function _fl_parse_hook(code, filename, lineno, offset, options)
+    _has_flisp || error("this julia does not have the flisp parser")
     @static if _has_v1_14_version_hooks
         Base.fl_parse(code, filename, lineno, offset, options, (1, 14))
     else

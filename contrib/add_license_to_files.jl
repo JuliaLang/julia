@@ -25,7 +25,6 @@ const rootdirs = [
 const excludedirs = [
     # see: https://github.com/JuliaLang/julia/pull/11073#issuecomment-98090053
     "../base/ryu",
-    "../src/flisp",
     "../stdlib/TOML/test/testfiles",
     "../test/testhelpers/allocation_file.jl",
 ]

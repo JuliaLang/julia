@@ -261,15 +261,24 @@ function with_lowering(f, enable::Bool)
     end
 end
 
-with_flisp(f) = with_lowering(f, false)
+# The reference implementation of the old edition used to be the flisp frontend,
+# which julia no longer has (since 1.15). Without it, the `fl_*` functions use
+# JuliaLowering's compatibility with flisp instead (Expr lowering, at the old
+# edition): tests of their results still check the old edition's behavior, while
+# comparisons of JuliaLowering's other modes with them check consistency.
+const has_flisp = isdefined(Base, :fl_lower)
+
+with_flisp(f) = with_lowering(f, !has_flisp)
 
 function fl_macroexpand(mod::Module, x::Expr)
+    has_flisp || return macroexpand(mod, x; recursive=true, legacyscope=true)
     with_flisp() do
         ccall(:jl_macroexpand, Any, (Any, Any, Cint, Cint, Cint), x, mod, true, false, true)
     end
 end
 
 function fl_lower(mod::Module, x::Expr)
+    has_flisp || return with_flisp(() -> Meta.lower(mod, x))
     with_flisp() do
         Base.fl_lower(mod, x, Base.get_world_counter(), false, Base.first_linenode(x))[1]
     end

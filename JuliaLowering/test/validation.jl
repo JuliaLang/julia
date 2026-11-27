@@ -144,7 +144,7 @@ let
     end
     @testset for h in standalone_heads
         ex = Expr(Symbol(h))
-        @test !Meta.isexpr(fl_lower(@__MODULE__, ex), :error)
+        @test !Meta.isexpr(fl_lower(@__MODULE__, ex), :error) skip=!has_flisp
         @test vst1_ok(ex)
     end
 end

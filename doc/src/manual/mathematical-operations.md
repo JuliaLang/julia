@@ -449,7 +449,7 @@ julia> x = 3; 2^2x
 It is also possible to define additional operators by appending suffixes to most operators.[^3]
 The valid suffixes include the Unicode combining characters, along with the subscripts, superscripts, and various
 primes (such as `′ ″ ‴ ⁗ ‵ ‶ ‷`) listed in
-[`src/flisp/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/flisp/julia_opsuffs.h).  The
+[`src/support/julia_opsuffs.h`](https://github.com/JuliaLang/julia/blob/master/src/support/julia_opsuffs.h).  The
 resulting operators can be used with either functional or infix notation, and have the same precedence and
 associativity as the base operator.  For example, `⋆̂ᵝ₁′` could be defined as a function, and used as an infix operator
 with the same precedence and associativity as `⋆` and `*`.  However, operators ending with a subscript or superscript

@@ -16,7 +16,7 @@ JLDFLAGS += $(LINK_LDFLAGS) $(JL_LDFLAGS)
 #  #define ARGUMENT_TO_OVERRIDE 1
 FLAGS_COMMON := \
 	-D_GNU_SOURCE -I$(BUILDDIR) -I$(SRCDIR) \
-	-I$(SRCDIR)/flisp -I$(SRCDIR)/support \
+	-I$(SRCDIR)/support \
 	-I$(LIBUV_INC) -I$(build_includedir) \
 	-I$(JULIAHOME)/deps/valgrind
 FLAGS_COMMON += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer $(JL_VISIBILITY_FLAGS) -fno-common \
@@ -70,7 +70,7 @@ SRCS := \
 	simplevector runtime_intrinsics precompile jloptions mtarraylist \
 	threading scheduler stackwalk static_exports \
 	method jlapi signal-handling safepoint timing subtype rtutils \
-	crc32c APInt processor ircode opaque_closure codegen-stubs coverage runtime_ccall engine \
+	crc32c APInt processor ircode opaque_closure codegen-stubs frontend-stubs coverage runtime_ccall engine \
 	$(GC_SRCS)
 
 RT_LLVMLINK :=
@@ -248,9 +248,9 @@ RT_LIBS += $(MMTK_LIB)
 CG_LIBS += $(MMTK_LIB)
 endif
 
-RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp-debug.a) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) -ljulia-debug $(RT_LIBS)
+RT_DEBUG_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/support/libsupport-debug.a) -ljulia-debug $(RT_LIBS)
 CG_DEBUG_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia-debug -ljulia-internal-debug
-RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/flisp/libflisp.a) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
+RT_RELEASE_LIBS := $(COMMON_LIBPATHS) $(call whole_archive,$(BUILDDIR)/support/libsupport.a) -ljulia $(RT_LIBS)
 CG_RELEASE_LIBS := $(COMMON_LIBPATHS) $(CG_LIBS) -ljulia -ljulia-internal
 
 # assembly in arch/<arch>/, linked into libjulia-internal; each file only defines
@@ -284,21 +284,6 @@ DEBUGFLAGS_COMMON += $(FLAGS_COMMON)
 SHIPFLAGS_GCC  += $(FLAGS_GCC)
 DEBUGFLAGS_GCC += $(FLAGS_GCC)
 
-ifeq ($(USE_CROSS_FLISP), 1)
-FLISPDIR := $(BUILDDIR)/flisp/host
-FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(BUILD_EXE)
-FLISP_EXECUTABLE_release := $(FLISPDIR)/flisp$(BUILD_EXE)
-else
-FLISPDIR := $(BUILDDIR)/flisp
-FLISP_EXECUTABLE_debug := $(FLISPDIR)/flisp-debug$(EXE)
-FLISP_EXECUTABLE_release := $(FLISPDIR)/flisp$(EXE)
-endif
-ifeq ($(OS),WINNT)
-FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_release)
-else
-FLISP_EXECUTABLE := $(FLISP_EXECUTABLE_$(JULIA_BUILD_MODE))
-endif
-
 .PHONY: default
 default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 
@@ -306,7 +291,7 @@ default: $(JULIA_BUILD_MODE) # contains either "debug" or "release"
 all: debug release
 
 .PHONY: release debug
-release debug: %: libjulia-internal-% libjulia-codegen-% regenerate-compile_commands
+release debug: %: libjulia-internal-% libjulia-codegen-% libjulia-frontend-% regenerate-compile_commands
 
 $(BUILDDIR):
 	mkdir -p $(BUILDDIR)
@@ -499,27 +484,10 @@ $(build_shlibdir)/libllvmcalltest.$(SHLIB_EXT): $(SRCDIR)/llvmcalltest.cpp $(LLV
 		$@.tmp.o $(CG_LLVMLINK) -lpthread))
 	@rm -f $@.tmp.o
 
-.PHONY: julia_flisp.boot.inc.phony
-julia_flisp.boot.inc.phony: $(BUILDDIR)/julia_flisp.boot.inc
-
-$(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
-	  $(call spawn,$(FLISP_EXECUTABLE_release)) $(call cygpath_w,$(SRCDIR)/bin2hex.scm) < $< > $$TMPFILE; \
-	  mv $$TMPFILE $@)
-
-$(BUILDDIR)/julia_flisp.boot: $(addprefix $(SRCDIR)/,jlfrontend.scm flisp/aliases.scm flisp/profile.scm \
-		julia-parser.scm julia-syntax.scm match.scm utils.scm ast.scm macroexpand.scm mk_julia_flisp_boot.scm) \
-		$(FLISP_EXECUTABLE_release)
-	@$(call PRINT_FLISP, TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
-	  $(call spawn,$(FLISP_EXECUTABLE_release)) \
-		$(call cygpath_w,$(SRCDIR)/mk_julia_flisp_boot.scm) $(call cygpath_w,$(dir $<)) $(notdir $<) $(call cygpath_w,$$TMPFILE); \
-	  mv $$TMPFILE $@)
-
 # additional dependency links
-$(BUILDDIR)/codegen-stubs.static.o $(BUILDDIR)/codegen-stubs.static.dbg.obj: $(BUILDDIR)/jl_static_codegen_fallbacks.inc
+$(BUILDDIR)/codegen-stubs.static.o $(BUILDDIR)/codegen-stubs.static.dbg.obj $(BUILDDIR)/frontend-stubs.static.o $(BUILDDIR)/frontend-stubs.static.dbg.obj: $(BUILDDIR)/jl_static_codegen_fallbacks.inc
 $(BUILDDIR)/codegen-stubs.o $(BUILDDIR)/codegen-stubs.dbg.obj $(BUILDDIR)/codegen-stubs.static.o $(BUILDDIR)/codegen-stubs.static.dbg.obj: $(addprefix $(SRCDIR)/,intrinsics.h llvm-julia-passes.inc)
 $(BUILDDIR)/aotcompile.o $(BUILDDIR)/aotcompile.dbg.obj: $(addprefix $(SRCDIR)/,jitlayers.h llvm-codegen-shared.h objcache.h serialize.h processor.h)
-$(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj $(BUILDDIR)/ast.static.o $(BUILDDIR)/ast.static.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc $(SRCDIR)/flisp/*.h
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj $(BUILDDIR)/builtins.static.o $(BUILDDIR)/builtins.static.dbg.obj: $(addprefix $(SRCDIR)/,iddict.c idset.c builtin_proto.h intrinsics.h)
 $(BUILDDIR)/cgmemmgr.o $(BUILDDIR)/cgmemmgr.dbg.obj: $(SRCDIR)/llvm-codegen-shared.h
 $(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: $(addprefix $(SRCDIR)/,\
@@ -587,18 +555,6 @@ $(BUILDDIR)/support/libsupport.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) 
 $(BUILDDIR)/support/libsupport-debug.a: $(addprefix $(SRCDIR)/support/,*.h *.c *.inc) $(wildcard $(SRCDIR)/arch/*/win_setjmp.S) $(SRCDIR)/support/*.c
 	$(MAKE) -C $(SRCDIR)/support debug BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
-$(FLISP_EXECUTABLE_release): $(BUILDDIR)/flisp/libflisp.a
-	$(MAKE) -C $(BUILDDIR)/flisp $(subst $(abspath $(BUILDDIR)/flisp)/,,$(abspath $(FLISP_EXECUTABLE_release)))
-
-$(FLISP_EXECUTABLE_debug): $(BUILDDIR)/flisp/libflisp-debug.a
-	$(MAKE) -C $(BUILDDIR)/flisp $(subst $(abspath $(BUILDDIR)/flisp)/,,$(abspath $(FLISP_EXECUTABLE_debug)))
-
-$(BUILDDIR)/flisp/libflisp.a: $(addprefix $(SRCDIR)/flisp/,*.h *.c) $(BUILDDIR)/support/libsupport.a $(BUILDDIR)/julia.expmap
-	$(MAKE) -C $(SRCDIR)/flisp BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
-
-$(BUILDDIR)/flisp/libflisp-debug.a: $(addprefix $(SRCDIR)/,flisp/*.h flisp/*.c) $(BUILDDIR)/support/libsupport-debug.a $(BUILDDIR)/julia.expmap
-	$(MAKE) -C $(SRCDIR)/flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
-
 $(BUILDDIR)/julia_version.h: $(JULIAHOME)/VERSION
 	@TMPFILE=$$(mktemp $(abspath $@.XXXXXX)); \
 	{ \
@@ -623,7 +579,7 @@ $(BUILDDIR)/julia.expmap: $(SRCDIR)/julia.expmap.in $(JULIAHOME)/VERSION $(LLVM_
 		        -e "s/@LLVM_SHLIB_SYMBOL_VERSION@/$(LLVM_SHLIB_SYMBOL_VERSION)/"; \
 	mv $$TMPFILE $@
 
-$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
+$(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(OBJS) $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS) $(BOLT_LDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(OBJS) $(JLIBLDFLAGS) $(RT_RELEASE_LIBS) $(WIN_LD_CRT_END), \
@@ -632,7 +588,7 @@ $(build_shlibdir)/libjulia-internal.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/jul
 	@$(INSTALL_NAME_CMD)libjulia-internal.$(SHLIB_EXT) $@
 	$(call dsymutil,$@)
 
-$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
+$(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDIR)/julia.expmap $(DOBJS) $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBTARGET_PARSING)
 	@$(call PRINT_LINK, $(call link-dll,$@, \
 		$(call IMPLIB_FLAGS,$@) $(JLDFLAGS), \
 		$(WIN_LD_DLL_CRT_START) $(DOBJS) $(JLIBLDFLAGS) $(RT_DEBUG_LIBS) $(WIN_LD_CRT_END), \
@@ -644,8 +600,8 @@ $(build_shlibdir)/libjulia-internal-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(BUILDDI
 # Fold in the support archives, so consumers only add the sysimage object and
 # the external libraries (libunwind, zstd, ...); `-l` system
 # libraries are left to the consumer.
-STATIC_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
-STATIC_DEBUG_LIBS := $(filter %.a,$(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+STATIC_LIBS := $(filter %.a,$(BUILDDIR)/support/libsupport.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
+STATIC_DEBUG_LIBS := $(filter %.a,$(BUILDDIR)/support/libsupport-debug.a $(LIBUV) $(LIBUTF8PROC) $(LIBTARGET_PARSING))
 # $(1): objects, $(2): archives to fold in
 ifeq ($(OS),Darwin)
 static_archive = libtool -static -o $@ $(1) $(2)
@@ -713,6 +669,84 @@ libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SH
 libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
+# libjulia-frontend: the frontend (parsing, macro expansion and lowering) that
+# bootstraps julia. It is compiled from JuliaSyntax and JuliaLowering by the
+# julia release in JULIA_BOOTSTRAP_HOME (see deps/julia-bootstrap.mk) and
+# linked with that release's static runtime into a self-contained library,
+# which runs in julia's process as a second, private runtime; see
+# frontend/README.md.
+FRONTEND_BUILDDIR := $(BUILDDIR)/frontend-build
+JULIA_BOOTSTRAP := $(JULIA_BOOTSTRAP_HOME)/bin/julia$(EXE)
+JULIA_BOOTSTRAP_RUNTIME := $(JULIA_BOOTSTRAP_HOME)/lib/julia/libjulia-internal.a
+FRONTEND_JL_SRCS := $(wildcard $(SRCDIR)/frontend/*.jl $(SRCDIR)/frontend/JuliaFrontend/src/*.jl \
+	$(JULIAHOME)/JuliaSyntax/src/*.jl $(JULIAHOME)/JuliaSyntax/src/*/*.jl $(JULIAHOME)/JuliaLowering/src/*.jl)
+# the external libraries that the release's static runtime uses
+FRONTEND_LIBS := $(wildcard $(build_libdir)/libunwind.a $(build_libdir)/libunwind-$(ARCH).a) \
+	-L$(build_shlibdir) -lzstd $(if $(filter Linux,$(OS)),-latomic -lrt) -ldl -lpthread -lm
+# The library is loaded with RTLD_LOCAL | RTLD_DEEPBIND and its own references
+# bind within it (-Bsymbolic), so that its runtime stays private to it
+FRONTEND_LDFLAGS := -static-libstdc++ -static-libgcc -Wl,-Bsymbolic -Wl,--no-undefined \
+	-Wl,-rpath,'$$ORIGIN' -Wl,-rpath,'$$ORIGIN/julia'
+FRONTEND_CHECK_LDFLAGS := -Wl,--export-dynamic -Wl,-rpath,$(build_shlibdir) -Wl,-rpath,$(build_private_libdir)
+
+# The packages that the image is built from, as an environment of their own
+$(FRONTEND_BUILDDIR)/loadpath:
+	@mkdir -p $@
+	@ln -sfn $(JULIAHOME)/JuliaSyntax $@/JuliaSyntax
+	@ln -sfn $(JULIAHOME)/JuliaLowering $@/JuliaLowering
+	@ln -sfn $(SRCDIR)/frontend/JuliaFrontend $@/JuliaFrontend
+
+$(FRONTEND_BUILDDIR)/image.a: $(FRONTEND_JL_SRCS) | $(FRONTEND_BUILDDIR)/loadpath
+	@$(call PRINT_JULIA, JULIA_DEPOT_PATH='$(abspath $(FRONTEND_BUILDDIR))/depot:' \
+		JULIA_LOAD_PATH='$(abspath $(FRONTEND_BUILDDIR))/loadpath:@stdlib' \
+		JULIA_FRONTEND_SOURCE_ROOT='$(JULIAHOME)' JULIA_NUM_THREADS=1 \
+		$(JULIA_BOOTSTRAP) --startup-file=no --history-file=no \
+			-J $(JULIA_BOOTSTRAP_HOME)/lib/julia/sys.$(SHLIB_EXT) \
+			--output-o $(FRONTEND_BUILDDIR)/image-tmp.a --output-incremental=no \
+			$(SRCDIR)/frontend/build_image.jl $(SRCDIR)/frontend/image.jl)
+	@mv $(FRONTEND_BUILDDIR)/image-tmp.a $@
+
+# n.b. compiled against the release's headers, not this julia's
+$(FRONTEND_BUILDDIR)/entry.o: $(SRCDIR)/frontend/entry.c | $(FRONTEND_BUILDDIR)/loadpath
+	@$(call PRINT_CC, $(CC) -std=gnu11 -O2 $(fPIC) -D_GNU_SOURCE \
+		-I$(JULIA_BOOTSTRAP_HOME)/include/julia -c $< -o $@)
+
+ifneq (,$(filter $(OS),Linux FreeBSD))
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT): $(FRONTEND_BUILDDIR)/entry.o $(FRONTEND_BUILDDIR)/image.a
+	@$(call PRINT_LINK, $(CXX) -shared -o $@ $(FRONTEND_BUILDDIR)/entry.o \
+		$(call whole_archive,$(FRONTEND_BUILDDIR)/image.a $(JULIA_BOOTSTRAP_RUNTIME)) \
+		$(FRONTEND_LIBS) $(FRONTEND_LDFLAGS) $(call SONAME_FLAGS,libjulia-frontend.$(JL_MAJOR_SHLIB_EXT)))
+else
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT):
+	@echo "error: building libjulia-frontend is not yet supported on $(OS)" 1>&2; false
+endif
+
+# The frontend is the same for either build mode
+$(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_MINOR_SHLIB_EXT): $(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -f $< $@)
+
+# Check the library in a host julia (which needs a system image)
+$(FRONTEND_BUILDDIR)/check$(EXE): $(SRCDIR)/frontend/check.c
+	@$(call PRINT_CC, $(CC) -std=gnu11 $(fPIC) -o $@ $< -I$(build_includedir)/julia -L$(build_shlibdir) \
+		$(FRONTEND_CHECK_LDFLAGS) -ljulia -ldl)
+.PHONY: check-frontend
+check-frontend: $(FRONTEND_BUILDDIR)/check$(EXE)
+	$< $(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT)
+
+ifneq ($(OS), WINNT)
+$(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT): $(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+$(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(SHLIB_EXT): $(build_shlibdir)/libjulia-frontend%.$(SHLIB_EXT): \
+		$(build_shlibdir)/libjulia-frontend%.$(JL_MAJOR_MINOR_SHLIB_EXT)
+	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
+libjulia-frontend-release: $(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend.$(SHLIB_EXT)
+libjulia-frontend-debug: $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_SHLIB_EXT) $(build_shlibdir)/libjulia-frontend-debug.$(SHLIB_EXT)
+endif
+libjulia-frontend-release: $(build_shlibdir)/libjulia-frontend.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-frontend-debug: $(build_shlibdir)/libjulia-frontend-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
+libjulia-frontend-debug libjulia-frontend-release: $(PUBLIC_HEADER_TARGETS)
+
 # set the exports for the source files based on where they are getting linked
 $(OBJS) $(DOBJS): FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_INTERNAL -DBUILDING_UV_SHARED
 $(CODEGEN_OBJS) $(CODEGEN_DOBJS) $(BUILDDIR)/jl_codegen_hash.inc: FLAGS_COMMON += -DJL_LIBRARY_EXPORTS_CODEGEN -DUSING_UV_SHARED
@@ -774,24 +808,22 @@ INCLUDED_CXX_FILES := \
 .PHONY: clean
 clean:
 	rm -rf $(BUILDDIR)/*.lto
-	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen*
+	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libjulia-frontend*
 	-rm -rf $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest* $(build_shlibdir)/libccalllazyfoo* $(build_shlibdir)/libccalllazybar*
-	-rm -f $(BUILDDIR)/julia_flisp.boot* $(BUILDDIR)/julia_flisp.boot.inc* $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc* $(BUILDDIR)/jl_codegen_hash.inc* $(BUILDDIR)/jl_static_codegen_fallbacks.inc*
+	-rm -rf $(FRONTEND_BUILDDIR)
+	-rm -f $(BUILDDIR)/jl_internal_funcs.inc* $(BUILDDIR)/jl_data_globals_defs.inc* $(BUILDDIR)/jl_codegen_hash.inc* $(BUILDDIR)/jl_static_codegen_fallbacks.inc*
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia.expmap
 	-rm -f $(BUILDDIR)/julia_version.h
 	-rm -f $(BUILDDIR)/compile_commands.json*
 
-.PHONY: clean-flisp
-clean-flisp:
-	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
 .PHONY: clean-support
 clean-support:
 	-$(MAKE) -C $(SRCDIR)/support clean BUILDDIR='$(abspath $(BUILDDIR)/support)'
 
 .PHONY: cleanall
-cleanall: clean clean-flisp clean-support clean-analyzegc
+cleanall: clean clean-support clean-analyzegc
 
 GC_CHECKER_SOURCES := \
 	$(SRCDIR)/clangsa/GCChecker.cpp \
@@ -829,7 +861,7 @@ install-analysis-deps:
 	$(MAKE) -C $(JULIAHOME)/deps $(addprefix install-,$(ANALYSIS_DEPS))
 
 .PHONY: analyzegc-deps-check
-analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h julia_flisp.boot.inc jl_internal_funcs.inc jl_data_globals_defs.inc jl_codegen_hash.inc)
+analyzegc-deps-check: $(addprefix $(BUILDDIR)/,julia_version.h jl_internal_funcs.inc jl_data_globals_defs.inc jl_codegen_hash.inc)
 ifeq ($(USE_BINARYBUILDER_LLVM),0)
 ifneq ($(BUILD_LLVM_CLANG),1)
 	$(error Clang must be available to use the clang analyzer. Either build it (BUILD_LLVM_CLANG=1) or use BinaryBuilder)
@@ -1009,9 +1041,11 @@ regenerate-compile_commands:
 
 .PHONY: compile-database
 compile-database: regenerate-compile_commands
-	$(MAKE) -C $(SRCDIR)/flisp compile-database BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 	$(MAKE) -C $(SRCDIR)/support compile-database BUILDDIR='$(abspath $(BUILDDIR)/support)'
 	@echo "Compilation database created for src"
 
 .FORCE:
 .PHONY: .FORCE
+
+print-%:
+	@echo '$*=$($*)'

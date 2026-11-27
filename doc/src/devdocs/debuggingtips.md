@@ -21,8 +21,6 @@ ccall(:jl_, Cvoid, (Any,), obj)
 This is a good way to circumvent problems that arise from the order in which julia's output streams
 are initialized.
 
-Julia's flisp interpreter uses `value_t` objects; these can be displayed with `call fl_print(fl_ctx, ios_stdout, obj)`.
-
 ## Useful Julia variables for Inspecting
 
 While the addresses of many variables, like singletons, can be useful to print for many failures,

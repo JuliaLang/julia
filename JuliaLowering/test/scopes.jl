@@ -230,7 +230,11 @@ distraction_scope_end === "resolve me!"
 
         if lhs == :spname && decls_s == decls_func && assign_ex.args[1].head === :local
             # flisp specifically disallows locals shadowing sparams; why?
-            @test_broken fl_eval(fl_mod, ex) === "resolve me!"
+            if has_flisp
+                @test_broken fl_eval(fl_mod, ex) === "resolve me!"
+            else
+                @test fl_eval(fl_mod, ex) === "resolve me!"
+            end
         elseif lhs in (:spname, :argname) && decls_s != decls_func
             continue
         else
@@ -366,7 +370,9 @@ f_g_shadow_sp_bound(1)
                  (decls_s === decls_neutral && lhs === :implicit_gname))
             warnings = ambiguous && lhs in (:name, :implicit_gname) ?
                 (softscope_ambiguous_local_warning(lhs),) : ()
-            reference_ok = @test_logs(warnings..., fl_eval(fl_mod, ex)) === expected
+            # (JuliaLowering's warnings are tested below)
+            reference_ok = (has_flisp ? @test_logs(warnings..., fl_eval(fl_mod, ex)) :
+                            Test.collect_test_logs(() -> fl_eval(fl_mod, ex))[2]) === expected
             !reference_ok && @error("flisp produced unexpected result; fix that or JL scope tests:\n",
                                    "expected $(expected_s(expected)), got $(expected_s(!expected))\n", ex)
             @test reference_ok

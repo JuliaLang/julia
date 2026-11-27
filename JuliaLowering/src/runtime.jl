@@ -61,63 +61,6 @@ end
 end
 
 #--------------------------------------------------
-# Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box,
-                           field_is_nospec=nothing)
-    type_params = Core.TypeVar[]
-    field_types = []
-    for name in capt_sp
-        push!(type_params, Core.TypeVar(name))
-    end
-    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
-        if isbox
-            push!(field_types, Core.Box)
-        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
-            push!(field_types, Any)
-        else
-            T = Core.TypeVar(Symbol(name, "_type"))
-            push!(type_params, T)
-            push!(field_types, T)
-        end
-    end
-    type = Core._structtype(mod, closure_type_name,
-                            Core.svec(type_params...),
-                            Core.svec(field_names...),
-                            Core.svec(),
-                            false,
-                            length(field_names))
-    Core._setsuper!(type, Core.Function)
-    Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(type, Core.svec(field_types...))
-    type
-end
-
-# Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
-    ci = copy(ci_in)
-    for (i, ex) in enumerate(ci.code)
-        ci.code[i] = _replace_captured_locals(ex, locals)
-    end
-    ci
-end
-function _replace_captured_locals(@nospecialize(e), locals)
-    if e isa Expr
-        if e.head === :captured_local
-            v = locals[e.args[1]::Int]
-            isa_lowering_ast_node(v) ? QuoteNode(v) : v
-        else
-            # could possibly limit to foreigncall
-            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
-        end
-    elseif e isa QuoteNode
-        QuoteNode(_replace_captured_locals(e.value, locals))
-    else
-        e
-    end
-end
-
-#--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
 # For partial compatibility with older julia (JETLS)
@@ -325,7 +268,17 @@ _module_binding_i_taken(mod::Module, basename::AbstractString, i::Int) =
 # closure types as a more local alternative to current-julia-module-counter.
 # However, we should ideally defer it to eval-time to make lowering itself
 # completely non-mutating.
-function reserve_module_binding_i(mod::Module, basename::AbstractString)
+# Inserted into the names that lowering reserves in modules (closure types,
+# generators, ...; see `reserve_module_binding_i` and `module_unique_name`) by
+# a frontend that serves another runtime. Such a frontend sees that runtime's
+# modules through shadow modules which start empty in every process, so without
+# a token unique to the session (e.g. derived from the other runtime's world
+# counter) it would reuse names reserved by earlier sessions whose lowered code
+# went into the same image, such as the earlier stages of julia's bootstrap.
+const _module_binding_salt = Base.RefValue{String}("")
+
+function reserve_module_binding_i(mod::Module, basename0::AbstractString)
+    basename = string(basename0, _module_binding_salt[])
     hi = 0
     while _module_binding_i_taken(mod, basename, hi)
         hi = 2hi + 1
@@ -356,7 +309,7 @@ function module_unique_name(mod::Module)
         # (JETLS) jl_module_next_counter is not exported before 1.14.0-DEV.3063
         reserve_module_binding_i(mod, "")[3:end]
     else
-        string(@ccall(jl_module_next_counter(mod::Module)::UInt32))
+        string(_module_binding_salt[], @ccall(jl_module_next_counter(mod::Module)::UInt32))
     end
 end
 function module_unique_name(mod::Module, funcname::AbstractString)

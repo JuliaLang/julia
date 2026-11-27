@@ -28,7 +28,6 @@ allow_tabs(path) =
     endswith(path, ".make") ||
     endswith(path, ".mk") ||
     startswith(path, "src/support") ||
-    startswith(path, "src/flisp") ||
     endswith(path, "test/syntax.jl") ||
     endswith(path, "test/triplequote.jl")
 

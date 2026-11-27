@@ -75,7 +75,6 @@ JL_DLLEXPORT const char* __asan_default_options(void)
     return "allow_user_segv_handler=1:detect_leaks=0";
     // FIXME: enable LSAN after fixing leaks & defining __lsan_default_suppressions(),
     //        or defining __lsan_default_options = exitcode=0 once publicly available
-    //        (here and in flisp/flmain.c)
 }
 #endif
 

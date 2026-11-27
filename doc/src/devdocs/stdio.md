@@ -81,14 +81,11 @@ It provides cross-platform buffered file IO and in-memory temporary buffers.
 
 `ios.c` is still used by:
 
-  * `src/flisp/*.c`
   * `src/dump.c` – for serialization file IO and for memory buffers.
   * `src/staticdata.c` – for serialization file IO and for memory buffers.
   * `base/iostream.jl` – for file IO (see `base/fs.jl` for libuv equivalent).
 
 Use of `ios.c` in these modules is mostly self-contained and separated from the libuv I/O system.
-However, there is [one place](https://github.com/JuliaLang/julia/blob/master/src/flisp/print.c#L654)
-where femtolisp calls through to `jl_printf()` with a legacy `ios_t` stream.
 
 There is a hack in `ios.h` that makes the `ios_t.bm` field line up with the `uv_stream_t.type`
 and ensures that the values used for `ios_t.bm` do not overlap with valid `UV_HANDLE_TYPE` values.

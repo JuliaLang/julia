@@ -2924,6 +2924,94 @@ JL_CALLABLE(jl_f__typebody)
     return args[0];
 }
 
+// Create and declare the type of a closure, for the code that JuliaLowering's
+// closure conversion produces (through `Core.eval_closure_type`). The type has
+// a parameter for each captured static parameter (named in `capt_sp`) and for
+// each field that is neither boxed (`field_is_box`, whose fields have type
+// `Core.Box`) nor `@nospecialize`d (`field_is_nospec`, or `nothing` if no
+// field is, whose fields have type `Any`); those of the fields are named after
+// them, with a `_type` suffix.
+JL_DLLEXPORT jl_value_t *jl_eval_closure_type(jl_module_t *mod, jl_sym_t *name, jl_svec_t *capt_sp,
+                                              jl_svec_t *field_names, jl_svec_t *field_is_box,
+                                              jl_value_t *field_is_nospec)
+{
+    JL_TYPECHK(eval_closure_type, module, (jl_value_t*)mod);
+    JL_TYPECHK(eval_closure_type, symbol, (jl_value_t*)name);
+    JL_TYPECHK(eval_closure_type, simplevector, (jl_value_t*)capt_sp);
+    JL_TYPECHK(eval_closure_type, simplevector, (jl_value_t*)field_names);
+    JL_TYPECHK(eval_closure_type, simplevector, (jl_value_t*)field_is_box);
+    size_t nsp = jl_svec_len(capt_sp), nf = jl_svec_len(field_names);
+    jl_svec_t *nospec = NULL;
+    if (field_is_nospec != jl_nothing) {
+        JL_TYPECHK(eval_closure_type, simplevector, field_is_nospec);
+        nospec = (jl_svec_t*)field_is_nospec;
+    }
+    if (jl_svec_len(field_is_box) != nf || (nospec != NULL && jl_svec_len(nospec) != nf))
+        jl_error("eval_closure_type: inconsistent number of fields");
+    jl_value_t *box_type = jl_get_global(jl_core_module, jl_symbol("Box"));
+    if (box_type == NULL)
+        jl_error("eval_closure_type: Core.Box is not defined yet");
+    size_t i, np = nsp;
+    for (i = 0; i < nf; i++) {
+        if (jl_svecref(field_is_box, i) != jl_true && (nospec == NULL || jl_svecref(nospec, i) != jl_true))
+            np++;
+    }
+    jl_value_t **args; // the arguments of the type definition builtins, then the type
+    JL_GC_PUSHARGS(args, 8);
+    jl_svec_t *params = jl_alloc_svec(np);
+    args[2] = (jl_value_t*)params;
+    jl_svec_t *ftypes = jl_alloc_svec(nf);
+    args[7] = (jl_value_t*)ftypes;
+    size_t ip = 0;
+    for (i = 0; i < nsp; i++) {
+        jl_value_t *spname = jl_svecref(capt_sp, i);
+        JL_TYPECHK(eval_closure_type, symbol, spname);
+        jl_svecset(params, ip++, jl_new_typevar((jl_sym_t*)spname, jl_bottom_type, (jl_value_t*)jl_any_type));
+    }
+    for (i = 0; i < nf; i++) {
+        jl_value_t *fname = jl_svecref(field_names, i);
+        JL_TYPECHK(eval_closure_type, symbol, fname);
+        if (jl_svecref(field_is_box, i) == jl_true) {
+            jl_svecset(ftypes, i, box_type);
+        }
+        else if (nospec != NULL && jl_svecref(nospec, i) == jl_true) {
+            jl_svecset(ftypes, i, (jl_value_t*)jl_any_type);
+        }
+        else {
+            const char *fstr = jl_symbol_name((jl_sym_t*)fname);
+            size_t len = strlen(fstr);
+            char *tvname = (char*)malloc_s(len + sizeof("_type"));
+            memcpy(tvname, fstr, len);
+            memcpy(tvname + len, "_type", sizeof("_type"));
+            jl_sym_t *tvsym = jl_symbol(tvname);
+            free(tvname);
+            jl_value_t *tv = (jl_value_t*)jl_new_typevar(tvsym, jl_bottom_type, (jl_value_t*)jl_any_type);
+            jl_svecset(params, ip++, tv);
+            jl_svecset(ftypes, i, tv);
+        }
+    }
+    // _structtype(mod, name, params, field_names, attrs, mutable, ninitialized)
+    args[0] = (jl_value_t*)mod;
+    args[1] = (jl_value_t*)name;
+    args[3] = (jl_value_t*)field_names;
+    args[4] = (jl_value_t*)jl_emptysvec;
+    args[5] = jl_false;
+    args[6] = jl_box_long(nf);
+    jl_value_t *ty = jl_f__structtype(NULL, args, 7);
+    args[6] = ty;
+    // _setsuper!(ty, Function)
+    args[4] = ty;
+    args[5] = (jl_value_t*)jl_function_type;
+    jl_f__setsuper(NULL, &args[4], 2);
+    // declare_const(mod, name, ty)
+    args[2] = ty;
+    jl_f_declare_const(NULL, args, 3);
+    // _typebody!(ty, field types)
+    jl_f__typebody(NULL, &args[6], 2);
+    JL_GC_POP();
+    return ty;
+}
+
 // this is a heuristic for allowing "redefining" a type to something identical
 int equiv_type(jl_value_t *ta, jl_value_t *tb) JL_CANSAFEPOINT
 {

@@ -717,17 +717,355 @@ end
 # `suppress_linenodes` is true if `st`'s parent knows `st` is an exception to
 # normal linenode rules.  It only applies to `st`, and not transitively to its
 # children.
-function syntax_to_expr(s::Syntax, suppress_linenodes=false)
+syntax_to_expr(s::Syntax, suppress_linenodes=false) = _syntax_to_expr(s, suppress_linenodes, nothing, nothing)
+
+"""
+    syntax_to_hygienic_expr(s::Syntax)
+
+Like `syntax_to_expr`, but keeping the hygiene of the macro expansions in `s`:
+where the scope layer of a part of `s` differs from that of its parent, the
+`Expr` has `hygienic-scope` (for entering a macro expansion's layer) and
+`escape` (for leaving it) forms, as macro expansion without legacy scope
+resolution produced for `Expr`s.
+"""
+# n.b. relative to the base layer: the root of `s` may itself be from a macro
+# expansion, whose result needs the `hygienic-scope` wrapper too
+syntax_to_hygienic_expr(s::Syntax) =
+    _syntax_to_expr(s, false, base_layer(s.context::SyntaxContext), nothing)
+
+"""
+    syntax_to_legacy_expr(s::Syntax)
+
+Like `syntax_to_expr`, but resolving the hygiene of the macro expansions in `s`
+as macro expansion with legacy scope resolution did for `Expr`s: the variables
+that an expansion binds are renamed apart, and its other names refer to
+globals of the macro's module.
+"""
+syntax_to_legacy_expr(s::Syntax) =
+    _resolve_macroscope(_syntax_to_expr(s, false, nothing, base_layer(s.context::SyntaxContext)))
+
+# Legacy scope resolution for `syntax_to_legacy_expr`. Its input is an `Expr`
+# in which the identifiers from macro expansions are marked with their scope
+# layer, as `Expr(:macro_identifier, name, layer)`. The variables that some
+# form binds (by assignment, as an argument, etc.) are renamed apart per layer;
+# the other marked names refer to globals of the module of their layer's macro.
+function _resolve_macroscope(@nospecialize(ex))
+    vars = Set{Tuple{ScopeLayer,Symbol}}()
+    globals = Set{Tuple{ScopeLayer,Symbol}}()
+    _expansion_locals!(vars, globals, ex)
+    renames = Dict{Tuple{ScopeLayer,Symbol},Symbol}()
+    for v in setdiff!(vars, globals)
+        renames[v] = gensym(v[2])
+    end
+    return _resolve_macroscope(ex, renames)
+end
+
+_is_marked(@nospecialize(x)) = isexpr(x, :macro_identifier, 2)
+_unmark(@nospecialize(x)) = _is_marked(x) ? x.args[1]::Symbol : x
+# names that are not variables wherever they appear
+const _MACROSCOPE_PLAIN = (:end, :begin, :ccall, :cglobal, :_, :nothing, Symbol("#self#"))
+
+# `signature`: in a function signature, where keyword argument names are
+# variables (rather than the names of keywords passed in a call)
+function _resolve_macroscope(@nospecialize(ex), renames::Dict{Tuple{ScopeLayer,Symbol},Symbol},
+                             signature::Bool=false)
+    ex isa Expr || return ex
+    rec(x) = _resolve_macroscope(x, renames, signature)
+    h = ex.head
+    args = ex.args
+    if h === :macro_identifier
+        name = args[1]::Symbol
+        layer = args[2]::ScopeLayer
+        name in _MACROSCOPE_PLAIN && return name
+        r = get(renames, (layer, name), nothing)
+        return r === nothing ? GlobalRef(layer.mod, name) : r
+    elseif h === :quote
+        return _resolve_quote(ex, 0, renames)
+    elseif h === Symbol("hygienic-scope") || h === :escape
+        return ex # from the arguments of `toplevel`, kept for their expansion
+    elseif h in (:inert, :meta, :line, :symboliclabel, :symbolicgoto, :module, :import,
+                 :using, :export, :public, :inbounds, :boundscheck, :loopinfo,
+                 :foreigncall, :cfunction)
+        return _unmark_all(ex)
+    elseif h === :global
+        # the names of the module's globals (but not their types or values)
+        return Expr(h, Any[_resolve_global_decl(a, renames) for a in args]...)
+    elseif h === :call && length(args) >= 3 && _unmark(args[1]) === :ccall &&
+           _unmark(args[3]) in _CALLING_CONVENTIONS
+        return Expr(h, :ccall, rec(args[2]), _unmark(args[3]), Any[rec(a) for a in args[4:end]]...)
+    elseif h === :macrocall && length(args) >= 2
+        return Expr(h, _unmark_all(args[1]), args[2], Any[rec(a) for a in args[3:end]]...)
+    elseif h === :. && length(args) == 2 && args[2] isa QuoteNode
+        return Expr(h, rec(args[1]), args[2])
+    elseif (h === :(=) || h === :function) && length(args) >= 1 &&
+           (h === :function || _is_function_signature(args[1]))
+        return Expr(h, _resolve_macroscope(args[1], renames, true),
+                    Any[_resolve_macroscope(a, renames) for a in args[2:end]]...)
+    elseif h === :-> && length(args) == 2
+        return Expr(h, _resolve_macroscope(args[1], renames, true),
+                    _resolve_macroscope(args[2], renames))
+    elseif h === :kw && length(args) == 2 && !signature
+        return Expr(h, _unmark(args[1]), rec(args[2]))  # the name of a keyword passed in a call
+    elseif h === :tuple && !signature
+        # the field names of named tuples
+        return Expr(h, Any[(isexpr(a, :(=), 2) || isexpr(a, :kw, 2)) &&
+                           (a.args[1] isa Symbol || _is_marked(a.args[1])) ?
+                           Expr(a.head, _unmark(a.args[1]), rec(a.args[2])) : rec(a)
+                           for a in args]...)
+    elseif h === :struct && length(args) == 3
+        return Expr(h, args[1], rec(args[2]), _resolve_struct_body(args[3], renames))
+    end
+    return Expr(h, Any[rec(a) for a in args]...)
+end
+
+const _CALLING_CONVENTIONS = (:cdecl, :stdcall, :fastcall, :thiscall, :llvmcall)
+
+function _resolve_global_decl(@nospecialize(ex), renames)
+    (ex isa Symbol || _is_marked(ex)) && return _unmark(ex)
+    if isexpr(ex, :(::), 2)
+        return Expr(:(::), _resolve_global_decl(ex.args[1], renames),
+                    _resolve_macroscope(ex.args[2], renames))
+    elseif isexpr(ex, :(=), 2)
+        return Expr(:(=), _resolve_global_decl(ex.args[1], renames),
+                    _resolve_macroscope(ex.args[2], renames))
+    elseif isexpr(ex, :tuple) || isexpr(ex, :parameters)
+        return Expr(ex.head, Any[_resolve_global_decl(a, renames) for a in ex.args]...)
+    end
+    return _resolve_macroscope(ex, renames)
+end
+
+_unmark_all(@nospecialize(ex)) = _is_marked(ex) ? ex.args[1]::Symbol :
+    ex isa Expr ? Expr(ex.head, Any[_unmark_all(a) for a in ex.args]...) : ex
+
+# in quoted code, only what is interpolated at the quote's own level is code
+function _resolve_quote(@nospecialize(ex), depth::Int, renames)
+    ex isa Expr || return ex
+    _is_marked(ex) && return _unmark(ex)
+    if ex.head === :$
+        depth == 1 && return Expr(:$, Any[_resolve_macroscope(a, renames) for a in ex.args]...)
+        return Expr(:$, Any[_resolve_quote(a, depth - 1, renames) for a in ex.args]...)
+    end
+    d = ex.head === :quote ? depth + 1 : depth
+    return Expr(ex.head, Any[_resolve_quote(a, d, renames) for a in ex.args]...)
+end
+
+# field names are not variables
+function _resolve_struct_body(@nospecialize(body), renames)
+    isexpr(body, :block) || return _resolve_macroscope(body, renames)
+    return Expr(:block, Any[_resolve_field(a, renames) for a in body.args]...)
+end
+function _resolve_field(@nospecialize(a), renames)
+    (a isa Symbol || _is_marked(a)) && return _unmark(a)
+    if isexpr(a, :(::), 2) && (a.args[1] isa Symbol || _is_marked(a.args[1]))
+        return Expr(:(::), _unmark(a.args[1]), _resolve_macroscope(a.args[2], renames))
+    elseif isexpr(a, :const, 1) || isexpr(a, :atomic, 1)
+        return Expr(a.head, _resolve_field(a.args[1], renames))
+    end
+    return _resolve_macroscope(a, renames)
+end
+
+# The marked variables that the forms in `ex` bind (`vars`), or declare global
+function _expansion_locals!(vars, globals, @nospecialize(ex))
+    ex isa Expr || return
+    h = ex.head
+    args = ex.args
+    (h === :quote || h === :inert || h === :meta || h === :module || h === :macro_identifier ||
+     h === Symbol("hygienic-scope") || h === :escape) && return
+    if h === :global
+        for a in args
+            _lhs_vars!(globals, a)
+        end
+        return
+    elseif h === :local
+        for a in args
+            _lhs_vars!(vars, a)
+        end
+    elseif (h === :(=) || h === :function) && length(args) >= 1
+        lhs = args[1]
+        if _is_function_signature(lhs) || h === :function
+            _signature_vars!(vars, lhs)
+        else
+            _lhs_vars!(vars, lhs)
+        end
+    elseif h === :-> && length(args) == 2
+        _args_vars!(vars, isexpr(args[1], :tuple) ? args[1].args : Any[args[1]])
+    elseif h === :macro && length(args) >= 1 && isexpr(args[1], :call)
+        _args_vars!(vars, args[1].args[2:end])
+    elseif (h === :for || h === :let) && length(args) >= 1
+        _binding_vars!(vars, args[1])
+    elseif (h === :generator || h === :filter) && length(args) >= 2
+        for a in args[2:end]
+            _binding_vars!(vars, a)
+        end
+    elseif h === :try && length(args) >= 2
+        _push_var!(vars, args[2])
+    elseif h === :where
+        for a in args[2:end]
+            _typevar_name!(vars, a)
+        end
+    elseif h === :struct && length(args) == 3
+        _typedef_name!(vars, args[2])
+        _expansion_locals!(vars, globals, args[3])
+        return
+    elseif (h === :abstract || h === :primitive) && length(args) >= 1
+        _typedef_name!(vars, args[1])
+        return
+    end
+    for a in args
+        _expansion_locals!(vars, globals, a)
+    end
+end
+
+_push_var!(vars, @nospecialize(x)) =
+    _is_marked(x) && push!(vars, (x.args[2]::ScopeLayer, x.args[1]::Symbol))
+
+_is_function_signature(@nospecialize(ex)) =
+    isexpr(ex, :call) && !isempty(ex.args) ||
+    isexpr(ex, :where) && !isempty(ex.args) && _is_function_signature(ex.args[1]) ||
+    isexpr(ex, :(::), 2) && _is_function_signature(ex.args[1])
+
+function _signature_vars!(vars, @nospecialize(sig))
+    if isexpr(sig, :where) && !isempty(sig.args)
+        for a in sig.args[2:end]
+            _typevar_name!(vars, a)
+        end
+        _signature_vars!(vars, sig.args[1])
+    elseif isexpr(sig, :(::), 2) && isexpr(sig.args[1], :call)
+        _signature_vars!(vars, sig.args[1])
+    elseif isexpr(sig, :call) && !isempty(sig.args)
+        f = sig.args[1]
+        _push_var!(vars, f)
+        isexpr(f, :curly) && !isempty(f.args) && _push_var!(vars, f.args[1])
+        isexpr(f, :(::), 2) && _push_var!(vars, f.args[1])
+        _args_vars!(vars, sig.args[2:end])
+    elseif isexpr(sig, :tuple)
+        _args_vars!(vars, sig.args)
+    else
+        _push_var!(vars, sig) # `function f end`
+    end
+end
+
+function _args_vars!(vars, args)
+    for a in args
+        if _is_marked(a)
+            _push_var!(vars, a)
+        elseif isexpr(a, :(::)) && length(a.args) == 2
+            _args_vars!(vars, Any[a.args[1]])
+        elseif isexpr(a, :kw, 2) || isexpr(a, :(=), 2) || isexpr(a, :..., 1)
+            _args_vars!(vars, Any[a.args[1]])
+        elseif isexpr(a, :parameters) || isexpr(a, :tuple)
+            _args_vars!(vars, a.args)
+        end
+    end
+end
+
+function _lhs_vars!(vars, @nospecialize(lhs))
+    if _is_marked(lhs)
+        _push_var!(vars, lhs)
+    elseif isexpr(lhs, :(::), 2) || isexpr(lhs, :..., 1) || isexpr(lhs, :(=), 2) ||
+           isexpr(lhs, :const, 1)
+        _lhs_vars!(vars, lhs.args[1])
+    elseif isexpr(lhs, :tuple) || isexpr(lhs, :parameters)
+        for a in lhs.args
+            _lhs_vars!(vars, a)
+        end
+    end
+end
+
+function _binding_vars!(vars, @nospecialize(b))
+    if isexpr(b, :block)
+        for a in b.args
+            _binding_vars!(vars, a)
+        end
+    elseif isexpr(b, :(=), 2) || isexpr(b, :in, 2) || isexpr(b, :∈, 2)
+        _lhs_vars!(vars, b.args[1])
+    else
+        _lhs_vars!(vars, b)
+    end
+end
+
+function _typevar_name!(vars, @nospecialize(tv))
+    if _is_marked(tv)
+        _push_var!(vars, tv)
+    elseif isexpr(tv, :<:) || isexpr(tv, :>:) || isexpr(tv, :comparison)
+        for a in tv.args
+            _is_marked(a) && (_push_var!(vars, a); break)
+        end
+    end
+end
+
+function _typedef_name!(vars, @nospecialize(spec))
+    if _is_marked(spec)
+        _push_var!(vars, spec)
+    elseif isexpr(spec, :curly) && !isempty(spec.args)
+        _typedef_name!(vars, spec.args[1])
+        for a in spec.args[2:end]
+            _typevar_name!(vars, a)
+        end
+    elseif isexpr(spec, :<:, 2)
+        _typedef_name!(vars, spec.args[1])
+    end
+end
+
+# `parent_layer` is the scope layer of the parent of `s`, or `nothing` when not
+# keeping hygiene. With `legacy_base`, the base layer, identifiers from macro
+# expansions are marked with their layer instead (see _resolve_macroscope).
+function _syntax_to_expr(s::Syntax, suppress_linenodes::Bool, parent_layer::Union{Nothing,ScopeLayer},
+                         legacy_base::Union{Nothing,ScopeLayer})
+    ex = _syntax_to_expr_(s, suppress_linenodes, parent_layer, legacy_base)
+    parent_layer === nothing && return ex
+    is_leaf(s) && head(s) !== :identifier && return ex # nothing to resolve
+    return _rescope_expr(ex, s, parent_layer)
+end
+
+_layer_index(layers::Vector{ScopeLayer}, l::ScopeLayer) = findfirst(x -> x === l, layers)
+
+function _rescope_expr(@nospecialize(ex), s::Syntax, parent::ScopeLayer)
+    layer = (s.context::SyntaxContext).layer
+    (layer === nothing || layer === parent) && return ex
+    # escape out of the layers of `parent` back to their common ancestor with
+    # `layer`, then enter the layers from there to `layer`
+    outer = ScopeLayer[]
+    l = parent
+    while l !== nothing
+        push!(outer, l)
+        l = l.escaped
+    end
+    inner = ScopeLayer[]
+    l = layer
+    while l !== nothing && _layer_index(outer, l) === nothing
+        push!(inner, l)
+        l = l.escaped
+    end
+    nescape = l === nothing ? length(outer) : _layer_index(outer, l)::Int - 1
+    for il in inner
+        ex = Expr(Symbol("hygienic-scope"), ex, il.mod, first_linenode(s))
+    end
+    for _ in 1:nescape
+        ex = Expr(:escape, ex)
+    end
+    return ex
+end
+
+function _syntax_to_expr_(s::Syntax, suppress_linenodes::Bool, parent_layer::Union{Nothing,ScopeLayer},
+                          legacy_base::Union{Nothing,ScopeLayer})
     push_lno!(ex::Expr, lno::LineNumberNode, first::Bool=false) =
         if lno.file !== :var"" || lno.line != 0
             first ? pushfirst!(ex.args, lno) : push!(ex.args, lno)
         end
     h = head(s)
+    # the parent layer of children, if keeping hygiene (not inside quoted code,
+    # which is data)
+    child_layer = parent_layer === nothing || h === :quote ? nothing :
+        (s.context::SyntaxContext).layer
     if h === :identifier
         # @assert scope layer is base
         n = Symbol(s.value::String)
         mod = s.mod
-        !isnothing(mod) ? GlobalRef(mod, n) : n
+        layer = (s.context::SyntaxContext).layer
+        !isnothing(mod) ? GlobalRef(mod, n) :
+            legacy_base !== nothing && layer !== nothing && layer !== legacy_base ?
+            Expr(:macro_identifier, n, layer) : n
     elseif h === :value
         v = s.value
         # Let `s.value isa Symbol` (or other AST node).  Since we enforce that
@@ -757,7 +1095,12 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
         for (i, c) in enumerate(children(s))
             need_lnns && push_lno!(out, first_linenode(c))
             let suppress_c = i == 1 && (h == :for || h == :let) || i == 2 && h == :do
-                push!(out.args, syntax_to_expr(c, suppress_c))
+                # Macro expansion leaves the arguments of `toplevel` unexpanded (they
+                # are expanded as they are evaluated), so they may contain `escape`s:
+                # keep their hygiene as forms, which macro expansion understands.
+                push!(out.args, h === :toplevel && legacy_base !== nothing ?
+                      _syntax_to_expr(c, suppress_c, legacy_base, nothing) :
+                      _syntax_to_expr(c, suppress_c, child_layer, legacy_base))
             end
         end
         # Add extra linenodes to some blocks for better provenance

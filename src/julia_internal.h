@@ -885,7 +885,7 @@ JL_DLLEXPORT int jl_compile_hint(jl_tupletype_t *types) JL_CANSAFEPOINT;
 jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 jl_value_t *jl_code_or_ci_for_interpreter(jl_method_instance_t *lam JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 int jl_code_requires_compiler(jl_code_info_t *src, int include_force_compile) JL_CANSAFEPOINT;
-jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_code_info_t *jl_new_code_info_from_ir(jl_expr_t *ast) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_info_t *jl_new_code_info_uninit(void) JL_CANSAFEPOINT;
 JL_DLLEXPORT void jl_resolve_definition_effects_in_ir(jl_array_t *stmts, jl_module_t *m, jl_svec_t *sparam_vals, jl_value_t *binding_edge,
                                            int binding_effects) JL_CANSAFEPOINT;
@@ -1037,6 +1037,9 @@ void jl_typegroup_region_drop(jl_deferred_typecache_t *region, size_t i) JL_NOTS
 void jl_typecache_region_layouts(jl_deferred_typecache_t *region) JL_CANSAFEPOINT;
 void jl_typecache_region_end(jl_deferred_typecache_t *region, int publish) JL_CANSAFEPOINT;
 void jl_reinstantiate_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_eval_closure_type(jl_module_t *mod, jl_sym_t *name, jl_svec_t *capt_sp,
+                                              jl_svec_t *field_names, jl_svec_t *field_is_box,
+                                              jl_value_t *field_is_nospec) JL_CANSAFEPOINT;
 void jl_finish_inner_types(jl_datatype_t *t) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_datatype_t *jl_datatype_compute_super(jl_datatype_t *ndt JL_PROPAGATES_ROOT) JL_CANSAFEPOINT;
 // The supertype of `dt`, computed on first use if it was deferred; NULL while the definition is in progress.
@@ -1074,7 +1077,7 @@ jl_value_t *replace_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *par
 jl_value_t *modify_value(jl_value_t *ty, _Atomic(jl_value_t*) *p, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, int isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
 jl_value_t *modify_bits(jl_value_t *ty, char *p, uint8_t *psel, jl_value_t *parent, jl_value_t *op, jl_value_t *rhs, enum atomic_kind isatomic, jl_value_t *op_target) JL_CANSAFEPOINT;
 int setonce_bits(jl_datatype_t *rty, char *p, jl_value_t *owner, jl_value_t *rhs, enum atomic_kind isatomic);
-jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
+JL_DLLEXPORT jl_expr_t *jl_exprn(jl_sym_t *head, size_t n) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function(jl_sym_t *name, jl_module_t *module, size_t new_world) JL_CANSAFEPOINT;
 jl_value_t *jl_new_generic_function_with_supertype(jl_sym_t *name, jl_module_t *module, jl_datatype_t *st, size_t new_world) JL_CANSAFEPOINT;
 int jl_foreach_reachable_mtable(int (*visit)(jl_methtable_t *mt, void *env) JL_CANSAFEPOINT, jl_array_t *mod_array, void *env) JL_CANSAFEPOINT;
@@ -1155,7 +1158,9 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                           jl_code_info_t *src,
                                           jl_svec_t *sparam_vals) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_toplevel_only_expr(jl_value_t *e) JL_NOTSAFEPOINT;
-int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_isa_ast_node(jl_value_t *e) JL_NOTSAFEPOINT;
+JL_DLLEXPORT jl_value_t *jl_invoke_julia_macro(jl_array_t *args, jl_module_t *inmodule, jl_module_t **ctx,
+                                               jl_value_t **lineinfo, size_t world, int throw_load_error) JL_CANSAFEPOINT;
 
 jl_method_instance_t *jl_builtin_method_lookup(jl_value_t *builtin) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world) JL_CANSAFEPOINT;
@@ -1413,7 +1418,6 @@ STATIC_INLINE jl_vararg_kind_t jl_va_tuple_kind(jl_datatype_t *t) JL_NOTSAFEPOIN
 // -- init.c -- //
 
 void jl_init_types(void) JL_CANSAFEPOINT JL_GC_DISABLED;
-void jl_init_flisp(void) JL_NOTSAFEPOINT;
 void jl_init_common_symbols(void) JL_NOTSAFEPOINT;
 void jl_init_primitives(void) JL_CANSAFEPOINT JL_GC_DISABLED;
 void jl_init_llvm(void) JL_CANSAFEPOINT;
@@ -2505,7 +2509,7 @@ STATIC_INLINE void *jl_get_frame_addr(void) JL_NOTSAFEPOINT
 // julia side. If any of module, group, id, file or line are NULL, these will
 // be passed to the julia side as `nothing`.  If `kwargs` is NULL an empty set
 // of keyword arguments will be passed.
-void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
+JL_DLLEXPORT void jl_log(int level, jl_value_t *module, jl_value_t *group, jl_value_t *id,
             jl_value_t *file, jl_value_t *line, jl_value_t *kwargs,
             jl_value_t *msg) JL_CANSAFEPOINT;
 
@@ -2644,13 +2648,12 @@ void jl_wait_empty_end(void);
 // concurrent reads are permitted, using the same pattern as mtsmall_arraylist
 // it is implemented separately because the API of direct jl_all_tls_states use is already widely prevalent
 void jl_init_thread_scheduler(jl_ptls_t ptls) JL_NOTSAFEPOINT;
-void jl_lisp_prompt(void) JL_CANSAFEPOINT;
 void jl_task_frame_noreturn(jl_task_t *ct) JL_CANSAFEPOINT;
 void scheduler_delete_thread(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void surprise_wakeup(jl_ptls_t ptls) JL_NOTSAFEPOINT;
 void _jl_free_stack(jl_ptls_t ptls, void *stkbuf, size_t bufsz) JL_NOTSAFEPOINT;
-JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
-JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT; // declared also in flisp.h
+JL_DLLEXPORT int jl_id_start_char(uint32_t wc) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_id_char(uint32_t wc) JL_NOTSAFEPOINT;
 jl_value_t *simple_union(jl_value_t *a, jl_value_t *b) JL_CANSAFEPOINT;
 jl_value_t *simple_intersect(jl_value_t *a, jl_value_t *b, int overesi) JL_CANSAFEPOINT;
 int simple_subtype(jl_value_t *a, jl_value_t *b, int hasfree, int isUnion) JL_CANSAFEPOINT;

@@ -5,7 +5,7 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#1#2 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#1#2 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#1#2
 7   (new %₆)
@@ -33,7 +33,7 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#3#4 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#3#4 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#3#4
 7   (new %₆)
@@ -68,7 +68,7 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#5#6 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#5#6 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#5#6
 7   (new %₆)
@@ -92,7 +92,7 @@
 16  (call core.svec)
 17  (call core.svec)
 18  (call core.svec)
-19  (call JuliaLowering.eval_closure_type TestMod :#7#8 %₁₆ %₁₇ %₁₈)
+19  (call core.eval_closure_type TestMod :#7#8 %₁₆ %₁₇ %₁₈)
 20  latestworld
 21  TestMod.#7#8
 22  (new %₂₁)
@@ -126,7 +126,7 @@
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#9#10 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#9#10 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#9#10
 7   (new %₆)
@@ -161,7 +161,7 @@ syntax: all-underscore identifiers are write-only and their values cannot be use
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#11#12 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#11#12 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#11#12
 7   (new %₆)
@@ -198,7 +198,7 @@ syntax: all-underscore identifiers are write-only and their values cannot be use
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#13#14 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#13#14 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#13#14
 7   (new %₆)
@@ -247,14 +247,14 @@ end
 1   (call core.svec)
 2   (call core.svec)
 3   (call core.svec)
-4   (call JuliaLowering.eval_closure_type TestMod :#15#16 %₁ %₂ %₃)
+4   (call core.eval_closure_type TestMod :#15#16 %₁ %₂ %₃)
 5   latestworld
 6   TestMod.#15#16
 7   (new %₆)
 8   (call core.svec)
 9   (call core.svec)
 10  (call core.svec)
-11  (call JuliaLowering.eval_closure_type TestMod :#17#18 %₈ %₉ %₁₀)
+11  (call core.eval_closure_type TestMod :#17#18 %₈ %₉ %₁₀)
 12  latestworld
 13  TestMod.#17#18
 14  (call core.svec %₁₃ core.Any)

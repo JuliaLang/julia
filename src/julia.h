@@ -3,7 +3,7 @@
 #ifndef JULIA_H
 #define JULIA_H
 
-#if defined(JL_LIBRARY_EXPORTS_INTERNAL) || defined(JL_LIBRARY_EXPORTS_CODEGEN)
+#if defined(JL_LIBRARY_EXPORTS_INTERNAL) || defined(JL_LIBRARY_EXPORTS_CODEGEN) || defined(JL_LIBRARY_EXPORTS_FRONTEND)
 #define JL_LIBRARY_EXPORTS
 #endif
 #ifdef JL_LIBRARY_EXPORTS
@@ -2525,6 +2525,17 @@ JL_DLLEXPORT jl_value_t *jl_parse(const char *text, size_t text_len, jl_value_t 
 JL_DLLEXPORT jl_value_t *jl_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
                                   bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
 
+// frontend interface (implemented in libjulia-frontend; when that library is
+// not available these fall back to stubs in libjulia-internal)
+JL_DLLIMPORT void jl_frontend_init(void) JL_NOTSAFEPOINT;
+JL_DLLIMPORT jl_value_t *jl_frontend_parse(const char *text, size_t text_len,
+                                           jl_value_t *filename, size_t lineno,
+                                           size_t offset, jl_value_t *options) JL_CANSAFEPOINT;
+JL_DLLIMPORT jl_value_t *jl_frontend_lower(jl_module_t *inmodule, jl_value_t *expr, size_t world,
+                                           bool_t warn, jl_value_t *loc) JL_CANSAFEPOINT;
+JL_DLLIMPORT jl_value_t *jl_macroexpand(jl_value_t *expr, jl_module_t *inmodule,
+                                        int recursive, int inplace, int expand_scope) JL_CANSAFEPOINT;
+
 // external libraries
 enum JL_RTLD_CONSTANT {
      JL_RTLD_LOCAL=1U,
@@ -2589,11 +2600,26 @@ JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
+// operator queries (ast.c): answered by the loaded JuliaSyntax once Base has
+// registered it with jl_set_operator_queries, and otherwise by the frontend
+// library (jl_frontend_is_operator etc.; their fallback stubs conservatively
+// return 0/false when that library is not available)
 JL_DLLEXPORT int jl_is_operator(const char *sym) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_unary_operator(const char *sym) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym) JL_CANSAFEPOINT;
 JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_CANSAFEPOINT;
+typedef int (*jl_operator_query_t)(const char *sym);
+JL_DLLEXPORT void jl_set_operator_queries(jl_operator_query_t is_operator,
+                                          jl_operator_query_t is_unary_operator,
+                                          jl_operator_query_t is_unary_and_binary_operator,
+                                          jl_operator_query_t is_syntactic_operator,
+                                          jl_operator_query_t operator_precedence) JL_NOTSAFEPOINT;
+JL_DLLIMPORT int jl_frontend_is_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLIMPORT int jl_frontend_is_unary_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLIMPORT int jl_frontend_is_unary_and_binary_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLIMPORT int jl_frontend_is_syntactic_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLIMPORT int jl_frontend_operator_precedence(const char *sym) JL_CANSAFEPOINT;
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

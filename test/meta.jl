@@ -235,7 +235,7 @@ let ex = Meta.parseall("@foo", filename=:bar)
     @test isa(arg2arg2, LineNumberNode) && arg2arg2.file === :bar
 end
 
-_lower(m::Module, ex, world::UInt) = Base.fl_lower(m, ex, world, false, LineNumberNode(0, :none))[1]
+_lower(m::Module, ex, world::UInt) = Core._lower(m, ex, world, false, LineNumberNode(0, :none))[1]
 
 module TestExpandInWorldModule
 macro m() 1 end
@@ -243,7 +243,8 @@ wa = Base.get_world_counter()
 macro m() 2 end
 end
 
-@test _lower(TestExpandInWorldModule, :(@m), TestExpandInWorldModule.wa) == 1
+@test Core.eval(TestExpandInWorldModule,
+                _lower(TestExpandInWorldModule, :(@m), TestExpandInWorldModule.wa)) == 1
 
 f(::T) where {T} = T
 ci = code_lowered(f, Tuple{Int})[1]
@@ -424,9 +425,6 @@ end
         @test err isa Base.Syntax
         @test Base.syntax_to_expr(err) == Expr(:error, extra_token)
     end
-    # the flisp parser reports errors as plain strings
-    fl_parse(args...) = Base.fl_parse(args..., (1, 14))
-    @test_throws Meta.ParseError("\"*\" is not a unary operator") Meta.parse("1 +* 2", 1; _parse=fl_parse)
 end
 
 const escape_test_var = :from_caller

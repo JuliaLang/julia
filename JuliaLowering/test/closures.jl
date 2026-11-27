@@ -1697,6 +1697,6 @@ end
         g() = 2
         g()
     end; f())
-    @test fl_eval(Module(), ex_undef_inner_short) == 2
+    @test fl_eval(Module(), ex_undef_inner_short) == 2 skip=!has_flisp
     @test_broken jl_eval(Module(), ex_undef_inner_short; edition=JL_NEW_EDITION) == 2
 end

@@ -112,3 +112,12 @@ let code = raw"""
     end
     try parseall(Expr, "f(x") catch end
 end
+
+# the runtime's operator queries (see integration/operator_queries.jl)
+for name in ("+", ".+", "+₁", "+=", "&&", "->", "::", "in", "x")
+    operator_info(name)
+end
+for f in (_c_is_operator, _c_is_unary_operator, _c_is_unary_and_binary_operator,
+          _c_is_syntactic_operator, _c_operator_precedence)
+    precompile(f, (Cstring,))
+end

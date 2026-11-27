@@ -1828,13 +1828,6 @@ let exename = Base.julia_cmd()
     @test errors_not_signals(`$exename --startup-file=false`)
 end
 
-# Make sure `julia --lisp` doesn't break
-run(pipeline(devnull, `$(joinpath(Sys.BINDIR, Base.julia_exename())) --lisp`, devnull))
-
-# Test that `julia [some other option] --lisp` is disallowed
-@test readchomperrors(`$(joinpath(Sys.BINDIR, Base.julia_exename())) -Cnative --lisp`) ==
-    (false, "", "ERROR: --lisp must be specified as the first argument")
-
 # backtrace contains line number info (esp. on windows #17179)
 let
     # TODO: Make this safe in the presence of two single-thread threadpools with

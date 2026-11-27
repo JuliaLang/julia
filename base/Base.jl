@@ -304,7 +304,6 @@ include("threadcall.jl")
 
 # Compatibility with when Compiler was in Core
 @eval Core const Compiler = $Base.Compiler
-@eval Compiler const fl_parse = $Base.fl_parse
 
 # code loading
 include("uuid.jl")
@@ -333,6 +332,7 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+JuliaSyntax.register_operator_queries()
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(true; freeze_world_age=false)

@@ -10,19 +10,36 @@ function core_lowering_hook(mod::Module, @nospecialize(code), world::UInt,
         _core_lowering_hook, mod, code, world, warn, loc)
 end
 
-function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc)
+"""
+    portable_lowering_hook(mod, code, world, warn, loc)
+
+As `core_lowering_hook`, but produces output that a runtime can evaluate
+without this JuliaLowering (or Base) loaded, as a frontend serving another
+runtime must (see `DesugaringContext`).
+"""
+function portable_lowering_hook(mod::Module, @nospecialize(code), world::UInt,
+                                warn::Bool, loc::LineNumberNode)
+    return __script_exit_invoke_in_lowering_world(
+        _core_lowering_hook, mod, code, world, warn, loc, true)
+end
+
+function _core_lowering_hook(mod::Module, @nospecialize(code), world, warn, loc,
+                             portable::Bool=false)
     if !(code isa SyntaxTree || code isa Expr)
         return Core.svec(code)
     end
     local st0, st1 = nothing, nothing
     try
         st0 = code isa Expr ? expr_to_est(code, loc) : code
-        if head(st0) in (:toplevel, :module, :error, :incomplete)
+        if head(st0) in (:toplevel, :module, :error, :incomplete) ||
+                (portable && head(st0) in (:export, :public))
+            # forms the runtime evaluates itself (for portable output, these
+            # include toplevel `export` and `public`, as with flisp)
             return Core.svec(code)
         end
         st0 = rebase_layers(st0, mod)
         st1 = expand_forms_1(st0, world, true)
-        ctx2, st2 = expand_forms_2(st1, world)
+        ctx2, st2 = expand_forms_2(st1, world, portable)
         ctx3, st3 = resolve_scopes(ctx2, st2, warn, false)
         ctx4, st4 = convert_closures(ctx3, st3)
         ctx5, st5 = linearize_ir(ctx4, st4)
@@ -65,6 +82,10 @@ function activate!(enable=true; freeze_world_age=true)
     if enable
         Core._setlowerer!(core_lowering_hook)
         Core._set_toplevel_eval!(__script_exit_eval)
+    elseif isdefined(Base, :frontend_lower)
+        # the runtime's frontend library (julia >= 1.15)
+        Core._setlowerer!(Base.frontend_lower)
+        Core._set_toplevel_eval!(Base.frontend_toplevel_eval)
     else
         Core._setlowerer!(Base.fl_lower)
         Core._set_toplevel_eval!(Base.fl_toplevel_eval)

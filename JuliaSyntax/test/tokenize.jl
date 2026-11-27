@@ -880,7 +880,8 @@ function _all_symbolic_operators()
     return unique!(filter(s -> !(s in _NON_SYMBOLIC_OPERATORS), ops))
 end
 
-@testset "dotted and suffixed operators" begin
+# Comparison with the reference flisp parser, in julia versions which have it
+JuliaSyntax._has_flisp && @testset "dotted and suffixed operators" begin
 
 for op in _all_symbolic_operators()
     strs = [

@@ -127,7 +127,7 @@ extern JL_DLLEXPORT ios_t *ios_stdin;
 extern JL_DLLEXPORT ios_t *ios_stdout;
 extern JL_DLLEXPORT ios_t *ios_stderr;
 extern JL_DLLEXPORT ios_t *ios_safe_stderr; // safe for async-signal context
-void ios_init_stdstreams(void);
+void ios_init_stdstreams(void) JL_NOTSAFEPOINT;
 
 /* high-level functions - output */
 JL_DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);

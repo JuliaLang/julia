@@ -110,7 +110,7 @@ COMPILER_SRCS := $(addprefix $(JULIAHOME)/, \
 		base/essentials.jl \
 		base/expr.jl \
 		base/exports.jl \
-		base/flfrontend.jl \
+		base/frontend.jl \
 		base/float.jl \
 		base/gcutils.jl \
 		base/generator.jl \

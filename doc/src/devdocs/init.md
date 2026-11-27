@@ -96,8 +96,9 @@ jl_int32_type = jl_new_primitivetype(jl_symbol("Int32"), core,
                                      jl_any_type, jl_emptysvec, 32);
 ```
 
-Next up is [`jl_init_flisp()`](https://github.com/JuliaLang/julia/blob/master/src/ast.c)
-which loads and initializes a pre-compiled femtolisp image containing the scanner/parser.
+Next up is `jl_frontend_init()`, which initializes the frontend library (`libjulia-frontend`)
+if it is present. The library is only used to build the first system image (see
+`src/frontend/README.md`), and starts its own runtime the first time it is used.
 
 [`jl_init_serializer()`](https://github.com/JuliaLang/julia/blob/master/src/staticdata.c) initializes
 8-bit serialization tags for builtin `jl_value_t` values.

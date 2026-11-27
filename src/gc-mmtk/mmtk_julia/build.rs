@@ -42,7 +42,6 @@ fn main() {
         "julia_version.h",
         "jl_internal_funcs.inc",
         "jl_data_globals_defs.inc",
-        "julia_flisp.boot.inc",
     ];
     for dir in [julia_dir.join("src"), julia_dir.join("src/support")] {
         for entry in std::fs::read_dir(dir).expect("failed to read Julia header directory") {
