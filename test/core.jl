@@ -6685,20 +6685,40 @@ end
 let X = Pair{Vector{z} where z<:Integer, Int16}, Y = Pair{Vector{a} where a<:Integer, Int8}
     @test Base.uniontypes(Union{Y, X}) == Any[X, Y]
 end
-# parameters with a free variable are compared as before: a call binds the variables
-# of the first component that matches, so such components stay as written
+# without free variables the order is total and transitive: `lt[i, j]` says that
+# `ts[i]` comes first in `Union{ts[i], ts[j]}`
+let ts = Any[UnionOrderW{p} for p in Any[
+        Int8, Int16, Union{}, Union{Int8,Int16}, Union{Int8,Int32}, Vector, Vector{Int},
+        Vector{<:Integer}, Vector{<:AbstractFloat}, Vector{T} where T>:Int8,
+        Tuple{Ref{T},Ref{T},Ref{S}} where {T,S}, Type{Int}, Core.TypeEgal{Int},
+        Tuple{Int,Vararg{Int8}}, NTuple{N,Int8} where N, 1, 2, :a, (:a, 1), (0x01, 2),
+        Base, Core, UnionOrderA.Inner, UnionOrderB.Inner]]
+    n = length(ts)
+    lt = [i != j && Base.uniontypes(Union{ts[i], ts[j]})[1] === ts[i] for i in 1:n, j in 1:n]
+    @test all(lt[i, j] != lt[j, i] for i in 1:n, j in 1:n if i != j)
+    @test all(!(lt[i, j] && lt[j, k]) || lt[i, k] for i in 1:n, j in 1:n, k in 1:n)
+end
+# `X` has two components that share `T` but bind it at different positions
+struct UnionOrderW3{A,B,C} end
+let X = Union{UnionOrderW3{Ref{T},Int8,Int}, UnionOrderW3{Ref{T},Int16,S} where S} where T,
+    Y = UnionOrderW3{Ref{U},Float16,V} where {U,V}
+    @test Union{X, Y} === Union{Y, X}
+end
+# The components of a union with a free variable are compared only by kind, name and
+# first three parameters. A method takes its static parameters from the first component
+# of such a union that matches the argument, so comparing more would change them.
 let T = TypeVar(:T), S = TypeVar(:S)
     for (a, b) in Any[(T, S), (Ref{T}, Ref{S}), (Ref{T}, Ref{Int}), (Ref{T}, Ref{Vector{T}}),
                       (Ref{T}, Ref{Union{T,Missing}}), (Ref{Union{T,Missing}}, Ref{Missing}),
-                      (Tuple{T,Int}, Tuple{Int,S})]
+                      (Tuple{T,Int}, Tuple{Int,S}),
+                      (Tuple{Any,Any,Any,Real,Ref{T}}, Tuple{Any,Any,Any,Integer,Ref{Vector{T}}}),
+                      (Tuple{Union{Int8,Int16},Ref{T}}, Tuple{Union{Int8,Int32},Ref{T}})]
         @test Union{a, b}.a === a
         @test Union{b, a}.a === b
     end
 end
-unionorder_tvar1(::Union{Ref{T}, Ref{Vector{T}}}) where {T} = T
-unionorder_tvar2(::Union{Ref{Vector{T}}, Ref{T}}) where {T} = T
-@test unionorder_tvar1(Ref([1])) === Vector{Int}
-@test unionorder_tvar2(Ref([1])) === Int
+unionorder_tvar(::Union{Tuple{Any,Any,Any,Real,Ref{T}}, Tuple{Any,Any,Any,Integer,Ref{Vector{T}}}}) where {T} = T
+@test unionorder_tvar((1, 2, 3, 4, Ref([5]))) === Vector{Int}
 
 # issue 18933
 module GlobalDef18933

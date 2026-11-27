@@ -566,13 +566,6 @@ static int value_param_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
     return value_data_cmp(dt, (const char*)a, (const char*)b);
 }
 
-// Does `p` contain a free type variable, i.e. one that is bound neither by a
-// `where` inside `p` nor by one of the enclosing `where`s listed in `env`?
-STATIC_INLINE int has_free_var(jl_value_t *p, jl_typeenv_t *env) JL_NOTSAFEPOINT
-{
-    return !jl_is_known_closed(p) && free_typevars_walk(p, 0, env, NULL);
-}
-
 // `v` is a type variable bound by one of the enclosing `where`s, which `env`
 // lists from the innermost outwards. Return how many of them come before the
 // `where` that binds `v`: 0 if the innermost one binds `v`, 1 if the next one
@@ -588,6 +581,15 @@ static int bound_var_index(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
     return i;
 }
 
+// `a` and `b` are the same object, so they compare equal, unless `a` contains a
+// variable bound by an enclosing `where`: two components of a union can share
+// such a variable and bind it at different positions, e.g. `T` in
+// `Union{A{T}, B{T,S} where S} where T`.
+STATIC_INLINE int same_param(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeenv_t *envb) JL_NOTSAFEPOINT
+{
+    return a == b && (enva == NULL || envb == NULL || !jl_has_free_typevars(a));
+}
+
 // Order two types `a` and `b`, at least one of which is a UnionAll, in up to
 // three steps:
 // 1. Strip all `where`s from both types and compare what is left; for
@@ -596,13 +598,12 @@ static int bound_var_index(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT
 // 3. Compare the bounds of the type variables, i.e. the `Integer` in
 //    `where T<:Integer`: for each pair of `where`s from the innermost
 //    outwards, first the upper bounds, then the lower bounds.
-// Steps 2 and 3 are skipped if `binders` is zero.
 //
 // A variable of `a` and a variable of `b` are taken to be the same if they are
 // bound by `where`s at the same position. Their names are ignored, because
 // parameters that differ only in the names of their variables are one and
 // the same parameter: `Ref{Vector{T} where T} === Ref{Vector{S} where S}`.
-static int unionall_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeenv_t *envb, int binders) JL_NOTSAFEPOINT
+static int unionall_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeenv_t *envb) JL_NOTSAFEPOINT
 {
     // strip one `where` from each type that has one, keeping its variable
     jl_typeenv_t ea = { NULL, NULL, enva }, eb = { NULL, NULL, envb };
@@ -618,8 +619,8 @@ static int unionall_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typ
     }
     // step 1 happens once no `where` is left on either type
     int cmp = jl_is_unionall(a) || jl_is_unionall(b) ?
-        unionall_cmp(a, b, enva, envb, binders) : param_cmp(a, b, enva, envb);
-    if (cmp != 0 || !binders)
+        unionall_cmp(a, b, enva, envb) : param_cmp(a, b, enva, envb);
+    if (cmp != 0)
         return cmp;
     // step 2: only one of the two types had a `where` left to strip
     if (ea.var == NULL || eb.var == NULL)
@@ -631,46 +632,40 @@ static int unionall_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typ
     return param_cmp(ea.var->lb, eb.var->lb, ea.prev, eb.prev);
 }
 
-// Order two type parameters `a` and `b`: types, type variables, `Vararg`s or
-// values. Returns 0 if they are equal or have no deterministic order.
-// `enva` lists the type variables of the `where`s that enclose `a`, from the
-// innermost outwards, and `envb` those of the `where`s that enclose `b`.
+// Order two type parameters `a` and `b` of union components without free type
+// variables: types, type variables, `Vararg`s or values. Returns 0 if they are
+// equal or have no deterministic order. `enva` lists the type variables of the
+// `where`s that enclose `a`, from the innermost outwards, and `envb` those of
+// the `where`s that enclose `b`.
+//
+// This and the functions it calls compare `a` and `b` key by key and return at
+// the first key that differs. Each key is taken from one of the two alone (its
+// kind, names, module path, number of parameters, the position of a bound
+// variable, the bytes of a value) and compared with `strcmp`, `memcmp` or as
+// integers, so the order is transitive. Two parameters compare equal only if
+// all their keys do: a type and the type that replaced it after a
+// redefinition, or two `TypeEgal{T}` whose `T` differ only in the names of
+// their variables.
 static int param_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeenv_t *envb) JL_NOTSAFEPOINT
 {
-    if (a == b)
+    if (same_param(a, b, enva, envb))
         return 0;
-    int kind = param_kind(a), kindb = param_kind(b);
-    if (kind == PARAM_DATATYPE && kindb == PARAM_DATATYPE)
+    int kind = param_kind(a);
+    int cmp = cmp_(kind, param_kind(b));
+    if (cmp != 0)
+        return cmp;
+    switch (kind) {
+    case PARAM_DATATYPE:
         return datatype_name_cmp(a, b, enva, envb);
-    if (kind == PARAM_VALUE && kindb == PARAM_VALUE)
-        return value_param_cmp(a, b);
-    // `open` is set if `a` or `b` contains a free type variable. That is the
-    // case for the parameters of a union in a method signature, as in
-    //     f(x::Union{Ref{T}, Ref{Vector{T}}}) where T
-    // When `f` is called, the components of the union are tried in order, and
-    // `T` is taken from the first one that matches the argument. So the order
-    // of the components decides which `T` the method gets, and it must stay
-    // as earlier versions of this function left it. Those compared two
-    // datatypes, the `T` of two `Type{T}` and the bodies of two UnionAlls; in
-    // every other case the two parameters tied.
-    int open = has_free_var(a, enva) || has_free_var(b, envb);
-    // two parameters of different kinds
-    if (kind != kindb)
-        return open ? 0 : cmp_(kind, kindb);
-    if (kind == PARAM_UNIONALL)
-        return unionall_cmp(a, b, enva, envb, !open);
-    int cmp;
-    if (kind == PARAM_TYPE_WRAPPER) {
+    case PARAM_TYPE_WRAPPER:
         // compare the `T` of `Type{T}` or `TypeEgal{T}`; if the `T` are
         // equal, `Type{T}` comes before `TypeEgal{T}`
         cmp = param_cmp(jl_some_Type_T(a), jl_some_Type_T(b), enva, envb);
-        if (cmp != 0 || open)
+        if (cmp != 0)
             return cmp;
         return cmp_(jl_is_typeegal(a), jl_is_typeegal(b));
-    }
-    if (open)
-        return 0;
-    switch (kind) {
+    case PARAM_UNIONALL:
+        return unionall_cmp(a, b, enva, envb);
     case PARAM_UNION:
         // a union is a pair of its first component and the rest
         cmp = param_cmp(((jl_uniontype_t*)a)->a, ((jl_uniontype_t*)b)->a, enva, envb);
@@ -678,7 +673,7 @@ static int param_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeen
             return cmp;
         return param_cmp(((jl_uniontype_t*)a)->b, ((jl_uniontype_t*)b)->b, enva, envb);
     case PARAM_TYPEVAR:
-        // neither variable is free here, so each is bound by a `where`
+        // each is bound by one of the enclosing `where`s
         return cmp_(bound_var_index(a, enva), bound_var_index(b, envb));
     case PARAM_VARARG: {
         // `Vararg{T,N}`: compare `T`, then `N`; one without `N` comes first
@@ -690,6 +685,8 @@ static int param_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, jl_typeen
             return cmp_(na != NULL, nb != NULL);
         return param_cmp(na, nb, enva, envb);
     }
+    case PARAM_VALUE:
+        return value_param_cmp(a, b);
     }
     return 0;
 }
@@ -727,7 +724,7 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, j
         jl_value_t *bp = jl_tparam(b, i);
         // Most parameters are the same object in `a` and `b`. `param_cmp`
         // returns 0 for those too; checking here only saves the call.
-        if (ap == bp)
+        if (same_param(ap, bp, enva, envb))
             continue;
         cmp = param_cmp(ap, bp, enva, envb);
         if (cmp != 0)
@@ -736,26 +733,106 @@ static int datatype_name_cmp(jl_value_t *a, jl_value_t *b, jl_typeenv_t *enva, j
     return 0;
 }
 
-// Order two union components `a` and `b` that are not datatypes. Either both
-// are a `Type{T}` or `TypeEgal{T}`, or neither is.
-static int nondatatype_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+STATIC_INLINE int is_value_param(jl_value_t *p) JL_NOTSAFEPOINT
 {
-    // For a `Type{T}` look at `T`; for anything else look at what is left
-    // when all `where`s are stripped, e.g. at `Vector{T}` for
-    // `Vector{T} where T`. If that is a datatype for only one of `a` and `b`,
-    // this component comes first. Earlier versions of this code did the
-    // same. It has to hold even if the other component is or contains a free
-    // type variable, in which case `param_cmp` would return 0.
-    jl_value_t *ta = jl_is_some_Type(a) ? jl_some_Type_T(a) : jl_unwrap_unionall(a);
-    jl_value_t *tb = jl_is_some_Type(b) ? jl_some_Type_T(b) : jl_unwrap_unionall(b);
-    if (jl_is_datatype(ta) != jl_is_datatype(tb))
-        return jl_is_datatype(ta) ? -1 : 1;
-    return param_cmp(a, b, NULL, NULL);
+    return !jl_is_type(p) && !jl_is_typevar(p) && !jl_is_vararg(p);
 }
 
-// sort singletons first, then DataTypes, then UnionAlls,
-// ties broken alphabetically including module name & type parameters
-static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+static int open_datatype_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT;
+
+// order two value type parameters by their type, then by value; 0 if there is
+// no deterministic order
+static int open_value_param_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+{
+    jl_datatype_t *dt = (jl_datatype_t*)jl_typeof(a);
+    if (dt != (jl_datatype_t*)jl_typeof(b))
+        return open_datatype_cmp((jl_value_t*)dt, jl_typeof(b));
+    if (dt == jl_long_type) {
+        // numerically, so e.g. `Val{-1}` prints before `Val{1}`
+        ssize_t x = jl_unbox_long(a), y = jl_unbox_long(b);
+        return x < y ? -1 : x > y;
+    }
+    if (dt == jl_symbol_type)
+        return strcmp(jl_symbol_name((jl_sym_t*)a), jl_symbol_name((jl_sym_t*)b));
+    // padding bytes are undefined, so only padding-free bits values compare by bytes
+    if (dt->isbitstype && !dt->layout->flags.haspadding)
+        return memcmp(a, b, jl_datatype_size(dt));
+    return 0;
+}
+
+// Order two components of a union with a free type variable: by module and
+// type name, number of parameters, and the first three parameters where both
+// are datatypes, UnionAlls or values. Anything else ties, and these ties are
+// not transitive.
+static int open_datatype_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
+{
+    if (!jl_is_datatype(a))
+        return jl_is_datatype(b) ? 1 : 0;
+    if (!jl_is_datatype(b))
+        return -1;
+    int cmp = strcmp(str_(datatype_module_name(a)), str_(datatype_module_name(b)));
+    if (cmp != 0)
+        return cmp;
+    cmp = strcmp(str_(jl_typename_str(a)), str_(jl_typename_str(b)));
+    if (cmp != 0)
+        return cmp;
+    cmp = cmp_(jl_nparams(a), jl_nparams(b));
+    if (cmp != 0)
+        return cmp;
+    // compare up to 3 type parameters
+    for (int i = 0; i < 3 && i < jl_nparams(a); i++) {
+        jl_value_t *ap = jl_tparam(a, i);
+        jl_value_t *bp = jl_tparam(b, i);
+        if (ap == bp) {
+            continue;
+        }
+        else if (jl_is_datatype(ap) && jl_is_datatype(bp)) {
+            cmp = open_datatype_cmp(ap, bp);
+            if (cmp != 0)
+                return cmp;
+        }
+        else if (jl_is_unionall(ap) && jl_is_unionall(bp)) {
+            cmp = open_datatype_cmp(jl_unwrap_unionall(ap), jl_unwrap_unionall(bp));
+            if (cmp != 0)
+                return cmp;
+        }
+        else if (is_value_param(ap) && is_value_param(bp)) {
+            cmp = open_value_param_cmp(ap, bp);
+            if (cmp != 0)
+                return cmp;
+        }
+        else {
+            // give up
+            cmp = 0;
+        }
+    }
+    return cmp;
+}
+
+// order two union components of the same group (see `union_sort_cmp`)
+static int component_cmp(jl_value_t *a, jl_value_t *b, int open) JL_NOTSAFEPOINT
+{
+    if (!open)
+        return param_cmp(a, b, NULL, NULL);
+    // for a `Type{T}` compare `T`, for a UnionAll what is left when all its
+    // `where`s are stripped
+    if (jl_is_some_Type(a))
+        return open_datatype_cmp(jl_some_Type_T(a), jl_some_Type_T(b));
+    return open_datatype_cmp(jl_unwrap_unionall(a), jl_unwrap_unionall(b));
+}
+
+// Order two components of a union: singletons first, then isbits types, other
+// datatypes, `Type{T}`, and the rest. Within these groups, the components of a
+// union without free type variables are ordered by `param_cmp`, a total order,
+// so the union does not depend on the order they are written in.
+//
+// `open` is set for a union with a free type variable, such as the one in
+//     f(x::Union{Ref{T}, Ref{Vector{T}}}) where T
+// It is ordered by `open_datatype_cmp`, which keeps these two components as
+// written. When `f` is called, the components are tried in order and `T` is
+// taken from the first one that matches the argument, so ordering them would
+// change which `T` the method gets.
+static int union_sort_cmp(jl_value_t *a, jl_value_t *b, int open) JL_NOTSAFEPOINT
 {
     if (a == NULL)
         return b == NULL ? 0 : 1;
@@ -766,7 +843,7 @@ static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
             return -1;
         if (jl_is_datatype_singleton((jl_datatype_t*)a)) {
             if (jl_is_datatype_singleton((jl_datatype_t*)b))
-                return datatype_name_cmp(a, b, NULL, NULL);
+                return component_cmp(a, b, open);
             return -1;
         }
         else if (jl_is_datatype_singleton((jl_datatype_t*)b)) {
@@ -774,14 +851,14 @@ static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
         }
         else if (jl_isbits(a)) {
             if (jl_isbits(b))
-                return datatype_name_cmp(a, b, NULL, NULL);
+                return component_cmp(a, b, open);
             return -1;
         }
         else if (jl_isbits(b)) {
             return 1;
         }
         else {
-            return datatype_name_cmp(a, b, NULL, NULL);
+            return component_cmp(a, b, open);
         }
     }
     else {
@@ -798,11 +875,11 @@ static int union_sort_cmp(jl_value_t *a, jl_value_t *b) JL_NOTSAFEPOINT
                 return -1;
             // order two wrappers by their parameters, as the parameter
             // comparison loop used to
-            return nondatatype_cmp(a, b);
+            return component_cmp(a, b, open);
         }
         if (jl_is_some_Type(b))
             return 1;
-        return nondatatype_cmp(a, b);
+        return component_cmp(a, b, open);
     }
 }
 
@@ -856,11 +933,14 @@ static void flatten_type_union(jl_value_t **types, size_t n, jl_value_t **out, s
 static void isort_union(jl_value_t **a, size_t len) JL_NOTSAFEPOINT
 {
     size_t i, j;
+    int open = 0;
+    for (i = 0; i < len && !open; i++)
+        open = a[i] != NULL && jl_has_free_typevars(a[i]);
     for (i = 1; i < len; i++) {
         jl_value_t *x = a[i];
         for (j = i; j > 0; j--) {
             jl_value_t *y = a[j - 1];
-            if (!(union_sort_cmp(x, y) < 0))
+            if (!(union_sort_cmp(x, y, open) < 0))
                 break;
             a[j] = y;
         }
