@@ -273,7 +273,7 @@ x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
             end
         elseif isa(ya, Unindexable)
             xinfos, yinfo = xa.infos, ya.info
-            for i = length(xinfos)
+            for i = 1:length(xinfos)
                 xinfos[i] ⊆ yinfo || return false
             end
         else
