@@ -1682,13 +1682,16 @@ static void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *n
 // wait for all threads to finish sweeping
 static void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 {
-    jl_atomic_store(&gc_allocd_scratch, NULL);
-    // This load must be seq_cst: together with the store above it forms a
-    // store-then-load handshake with `gc_sweep_pool_parallel`, which increments
-    // the counter and then loads `gc_allocd_scratch`. An acquire load may be
-    // satisfied before the store is visible (e.g. `ldapr` on AArch64), letting a
-    // late worker sweep with a stale scratch pointer.
-    while (jl_atomic_load(&gc_n_threads_sweeping_pools) != 0) {
+    // [^store_buffering_sweep]: closing the sweep is a store-then-load handshake with
+    // `gc_sweep_pool_parallel`: we store to `gc_allocd_scratch` and then load
+    // `gc_n_threads_sweeping_pools`, while a worker increments the counter and then loads
+    // `gc_allocd_scratch`. The fences ensure that at least one side observes the other's
+    // store, so that a worker either sees that the sweep is closed or is waited for here.
+    // Without them, a late worker could go on sweeping with a stale scratch pointer.
+    jl_atomic_store_relaxed(&gc_allocd_scratch, NULL);
+    jl_fence(); // [^store_buffering_sweep]
+    // acquire the pages that the workers pushed to the scratch stacks
+    while (jl_atomic_load_acquire(&gc_n_threads_sweeping_pools) != 0) {
         jl_cpu_pause();
     }
 }
@@ -1696,8 +1699,11 @@ static void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 // sweep all pools
 static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, 1);
-    jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
+    jl_atomic_fetch_add_relaxed(&gc_n_threads_sweeping_pools, 1);
+    jl_fence(); // [^store_buffering_sweep]
+    // acquire the state of the sweep that published this (a worker may be here on a
+    // request from an earlier collection)
+    jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load_acquire(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
         gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
         while (1) {
