@@ -1826,7 +1826,7 @@ struct TestCounts
     duration::String
 end
 
-""""
+"""
     get_test_counts(::AbstractTestSet)::TestCounts
 
 Recursive function that counts the number of test results of each
