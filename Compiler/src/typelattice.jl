@@ -558,7 +558,8 @@ end
         end
         return false
     elseif isa(a, PartialTypeVar)
-        return b === TypeVar || a === b
+        isa(b, PartialTypeVar) && return a === b
+        return ⊑(widenlattice(lattice), TypeVar, b)
     elseif isa(b, PartialTypeVar)
         return false
     end
