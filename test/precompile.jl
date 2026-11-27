@@ -2754,6 +2754,31 @@ precompile_test_harness("Issue #52063") do load_path
     end
 end
 
+# a directory dependency whose size changes while its listing does not (ext4 never shrinks a directory)
+precompile_test_harness("directory include_dependency size") do load_path
+    data = joinpath(load_path, "DirDepData")
+    mkpath(data)
+    touch(joinpath(data, "a"))
+    pkgfile = joinpath(load_path, "DirDep.jl")
+    write(pkgfile, """
+        module DirDep
+        include_dependency(joinpath(@__DIR__, "DirDepData"))
+        end
+        """)
+    cachefile, _ = Base.compilecache(Base.PkgId("DirDep"))
+    for i in 1:300
+        touch(joinpath(data, "file_with_a_rather_long_name_$i"))
+    end
+    for i in 1:300
+        rm(joinpath(data, "file_with_a_rather_long_name_$i"))
+    end
+    @test Base.stale_cachefile(pkgfile, cachefile) !== true
+    touch(joinpath(data, "b"))
+    reasons = Dict{Symbol,Int}()
+    @test Base.stale_cachefile(pkgfile, cachefile; reasons) === true
+    @test reasons == Dict(:content_changed => 1)
+end
+
 precompile_test_harness("Binding Unique") do load_path
     write(joinpath(load_path, "UniqueBinding1.jl"),
         """
