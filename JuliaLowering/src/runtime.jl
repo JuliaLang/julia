@@ -61,63 +61,6 @@ end
 end
 
 #--------------------------------------------------
-# Functions called by closure conversion
-function eval_closure_type(mod::Module, closure_type_name::Symbol,
-                           capt_sp, field_names, field_is_box,
-                           field_is_nospec=nothing)
-    type_params = Core.TypeVar[]
-    field_types = []
-    for name in capt_sp
-        push!(type_params, Core.TypeVar(name))
-    end
-    for (i, (name, isbox)) in enumerate(zip(field_names, field_is_box))
-        if isbox
-            push!(field_types, Core.Box)
-        elseif !isnothing(field_is_nospec) && field_is_nospec[i]
-            push!(field_types, Any)
-        else
-            T = Core.TypeVar(Symbol(name, "_type"))
-            push!(type_params, T)
-            push!(field_types, T)
-        end
-    end
-    type = Core._structtype(mod, closure_type_name,
-                            Core.svec(type_params...),
-                            Core.svec(field_names...),
-                            Core.svec(),
-                            false,
-                            length(field_names))
-    Core._setsuper!(type, Core.Function)
-    Core.declare_const(mod, closure_type_name, type)
-    Core._typebody!(type, Core.svec(field_types...))
-    type
-end
-
-# Interpolate captured local variables into the CodeInfo for a global method
-function replace_captured_locals(ci_in::Core.CodeInfo, locals::Core.SimpleVector)
-    ci = copy(ci_in)
-    for (i, ex) in enumerate(ci.code)
-        ci.code[i] = _replace_captured_locals(ex, locals)
-    end
-    ci
-end
-function _replace_captured_locals(@nospecialize(e), locals)
-    if e isa Expr
-        if e.head === :captured_local
-            v = locals[e.args[1]::Int]
-            isa_lowering_ast_node(v) ? QuoteNode(v) : v
-        else
-            # could possibly limit to foreigncall
-            Expr(e.head, Any[_replace_captured_locals(a, locals) for a in e.args]...)
-        end
-    elseif e isa QuoteNode
-        QuoteNode(_replace_captured_locals(e.value, locals))
-    else
-        e
-    end
-end
-
-#--------------------------------------------------
 # Functions which create modules or mutate their bindings
 
 # For partial compatibility with older julia (JETLS)
