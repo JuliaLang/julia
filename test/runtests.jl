@@ -101,12 +101,11 @@ if isempty(tests)
     exit()
 end
 
-const max_worker_rss = if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
-    parse(Int, ENV["JULIA_TEST_MAXRSS_MB"]) * 2^20
+const max_worker_rss = 2^20 * if haskey(ENV, "JULIA_TEST_MAXRSS_MB")
+    parse(Int, ENV["JULIA_TEST_MAXRSS_MB"])
 else
-    typemax(Csize_t)
+    3800
 end
-limited_worker_rss = max_worker_rss != typemax(Csize_t)
 
 # Check all test files exist
 isfiles = isfile.(test_path.(tests) .* ".jl")
@@ -142,10 +141,6 @@ end
 # replaced once they finish. Without workers they run after all other tests instead, in
 # this order (see below)
 const recycle_worker_tests = ["Pkg", "precompile", "threads", "SparseArrays", "SuiteSparse"]
-
-# In a constrained memory environment, run the "distributed" test after all other tests
-# since it starts a lot of workers and can easily exceed the maximum memory
-limited_worker_rss && move_to_node1("Distributed")
 
 # Start the longest tests first, so that they don't end up running alone at the end while
 # the other workers sit idle. Roughly in decreasing order of their duration on CI (Linux,
