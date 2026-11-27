@@ -249,8 +249,6 @@ x::EscapeInfo ⊑ₑ y::EscapeInfo = begin
         return false # return y === ⊤
     elseif x === ⊥
         return true
-    elseif y === ⊥
-        return false # return x === ⊥
     end
     x.Analyzed ≤ y.Analyzed || return false
     x.ReturnEscape ≤ y.ReturnEscape || return false
