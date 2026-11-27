@@ -25,6 +25,7 @@ typedef struct JL_GC_TRACKED_TYPE {
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
     jl_genericmemory_t *sites; // each statement's dispatch cache (see call_sites), or NULL
+    const uint8_t *blocks; // the basic blocks of src and their block-local values (see block_info), or NULL
     size_t nslots, nssa; // the slots and SSA values of src (see frame_set_src)
     size_t world; // the world the frame runs in, which a method body cannot change, or 0
                   // for a top-level thunk, which moves to the latest world as it goes
@@ -185,7 +186,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     // the call expression's arguments identify the call site
     uint32_t callsite = jl_int32hash_fast((uint32_t)((uintptr_t)args >> 3));
     jl_value_t *result;
-    if (s->sites == NULL || s->ip + 1 >= s->sites->length)
+    if (s->sites == NULL || s->ip + 2 >= s->sites->length)
         result = jl_apply_generic_site(argv[0], &argv[1], nargs - 1, callsite);
     else if (argv[0] == BUILTIN(apply_type) && nargs > 1)
         result = apply_type_cached(argv, nargs, s->sites, s->ip);
@@ -628,6 +629,138 @@ STATIC_INLINE size_t eval_phi(jl_array_t *stmts, interpreter_state *s, size_t ns
     return eval_phi_slow(stmts, s, ns, to);
 }
 
+// Block-local SSA values. A frame keeps its SSA values in its GC frame, so each would stay
+// alive until the frame returns, long after compiled code lets it die. But almost every SSA
+// value is used only later in the basic block that defines it, so when the interpreter
+// leaves a block it clears the slots of that block's such values (see leave_block). The
+// rest, used in other blocks or by phis, stay until the frame returns, as do slots.
+// block_info finds them, by a byte for each statement of the code:
+#define SSA_KEPT    1 // the statement's slot is not cleared when its block is left
+#define BLOCK_START 2 // the statement starts a basic block
+#define BLOCK_CLEAR 4 // the statement ends a basic block that has slots to clear
+
+// Mark as kept the SSA values that `e`, in statement u of the block that starts at
+// statement bs, reads but that are not defined earlier in the block (all of them if bs == u).
+static void keep_nonlocal(jl_value_t *e, size_t bs, size_t u, size_t ns, uint8_t *f) JL_NOTSAFEPOINT
+{
+    if (jl_is_ssavalue(e)) {
+        size_t v = ((jl_ssavalue_t*)e)->id - 1;
+        if (v < ns && (v < bs || v >= u))
+            f[v] |= SSA_KEPT;
+    }
+    else if (jl_is_expr(e)) {
+        jl_array_t *args = ((jl_expr_t*)e)->args;
+        int all = ((jl_expr_t*)e)->head == jl_gc_preserve_begin_sym; // preserved until the end
+        for (size_t i = 0; i < jl_array_nrows(args); i++)
+            keep_nonlocal(jl_array_ptr_ref(args, i), all ? u : bs, u, ns, f);
+    }
+    else if (jl_is_pinode(e)) {
+        keep_nonlocal(jl_fieldref_noalloc(e, 0), bs, u, ns, f);
+    }
+}
+
+// The table for leave_block of `src`, a Memory{UInt8} by statement, or NULL to clear nothing.
+// The blocks are those of the compiler (see basic_blocks_starts), except that a block may
+// start with a phi that has an edge from the statement before.
+static jl_genericmemory_t *block_info(jl_code_info_t *src) JL_CANSAFEPOINT
+{
+    jl_array_t *stmts = src->code;
+    size_t ns = jl_array_nrows(stmts);
+    if (ns == 0 || (size_t)jl_source_nssavalues(src) != ns)
+        return NULL;
+    jl_genericmemory_t *table = jl_alloc_genericmemory(jl_memory_uint8_type, ns);
+    uint8_t *f = (uint8_t*)table->ptr;
+    memset(f, 0, ns);
+    jl_value_t **code = jl_array_ptr_data(stmts);
+    f[0] = BLOCK_START;
+    for (size_t i = 0; i < ns; i++) {
+        jl_value_t *st = code[i];
+        size_t dest = 0; // 1-based, or 0 for none
+        if (jl_is_gotonode(st) || jl_is_gotoifnot(st)) {
+            dest = jl_is_gotonode(st) ? jl_gotonode_label(st) : jl_gotoifnot_label(st);
+            if (dest < 1 || dest > ns)
+                return NULL;
+        }
+        else if (jl_is_enternode(st)) {
+            dest = jl_enternode_catch_dest(st);
+            if (dest > ns)
+                return NULL;
+            f[i] |= BLOCK_START;
+        }
+        else if (!jl_is_returnnode(st) && !(jl_is_expr(st) && ((jl_expr_t*)st)->head == jl_leave_sym)) {
+            continue;
+        }
+        if (dest != 0)
+            f[dest - 1] |= BLOCK_START;
+        if (i + 1 < ns)
+            f[i + 1] |= BLOCK_START;
+    }
+    size_t bs = 0;
+    for (size_t u = 0; u < ns; u++) {
+        jl_value_t *st = code[u];
+        if (f[u] & BLOCK_START)
+            bs = u;
+        if (jl_is_gotoifnot(st)) {
+            keep_nonlocal(jl_gotoifnot_cond(st), bs, u, ns, f);
+        }
+        else if (jl_is_returnnode(st)) {
+            if (jl_returnnode_value(st))
+                keep_nonlocal(jl_returnnode_value(st), bs, u, ns, f);
+        }
+        else if (jl_is_upsilonnode(st)) {
+            // its slot holds the PhiC it sets (see eval_body)
+            if (jl_fieldref_noalloc(st, 0))
+                keep_nonlocal(jl_fieldref_noalloc(st, 0), bs, u, ns, f);
+        }
+        else if (jl_is_enternode(st)) {
+            if (jl_enternode_scope(st))
+                keep_nonlocal(jl_enternode_scope(st), bs, u, ns, f);
+        }
+        else if (jl_is_phinode(st) || jl_is_phicnode(st)) {
+            // a phi reads its values as its block is entered, after the last one is left
+            jl_array_t *values = (jl_array_t*)jl_fieldref_noalloc(st, jl_is_phinode(st) ? 1 : 0);
+            for (size_t j = 0; j < jl_array_nrows(values); j++) {
+                jl_value_t *v = jl_array_ptr_ref(values, j);
+                if (v)
+                    keep_nonlocal(v, u, u, ns, f);
+            }
+        }
+        else {
+            keep_nonlocal(st, bs, u, ns, f);
+        }
+        // statements that leave their slot empty or set it from elsewhere
+        if (jl_is_gotonode(st) || jl_is_gotoifnot(st) || jl_is_returnnode(st) ||
+            jl_is_newvarnode(st) || jl_is_linenode(st) || jl_is_upsilonnode(st) ||
+            jl_is_phicnode(st) || jl_is_enternode(st))
+            f[u] |= SSA_KEPT;
+    }
+    int any = 0, anyblock = 0;
+    for (size_t u = 0; u < ns; u++) {
+        if (f[u] & BLOCK_START)
+            any = 0;
+        any |= !(f[u] & SSA_KEPT);
+        if (any && (u + 1 == ns || (f[u + 1] & BLOCK_START))) {
+            f[u] |= BLOCK_CLEAR;
+            anyblock = 1;
+        }
+    }
+    return anyblock ? table : NULL;
+}
+
+// Leave the block that statement ip is in, which control leaves for the start of a block,
+// and clear the slots of the values used only in it.
+static void leave_block(interpreter_state *s, size_t ip) JL_NOTSAFEPOINT
+{
+    const uint8_t *f = s->blocks;
+    jl_value_t **ssa = s->locals + s->nslots;
+    for (size_t i = ip; ; i--) {
+        if (!(f[i] & SSA_KEPT))
+            ssa[i] = NULL;
+        if (f[i] & BLOCK_START)
+            break;
+    }
+}
+
 // Resolve interpreter coverage frames like codegen's append_lineinfo and
 // coverageVisitStmt. Deeply nested expansions may lose innermost frames.
 #define COVERAGE_MAX_FRAMES 12
@@ -819,6 +952,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
             }
             else { // a real exception
                 jl_eh_restore_state(ct, &__eh);
+                if (s->blocks && s->ip < ns)
+                    leave_block(s, s->ip); // the block that threw
                 ip = catch_ip;
                 assert(jl_enternode_catch_dest(stmt) != 0);
                 continue;
@@ -876,6 +1011,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
                     }
                     // leave happens during normal control flow, but we must
                     // longjmp to pop the eval_body call for each enter.
+                    if (s->blocks && (s->blocks[ip] & BLOCK_CLEAR))
+                        leave_block(s, ip);
                     s->continue_at = next_ip;
                     asan_unpoison_task_stack(ct, &eh->eh_ctx);
                     jl_longjmp(eh->eh_ctx, 1);
@@ -952,6 +1089,8 @@ static jl_value_t *eval_body(jl_array_t *stmts, interpreter_state *s, size_t ip,
         else {
             eval_stmt_value(stmt, s);
         }
+        if (s->blocks && (s->blocks[ip] & BLOCK_CLEAR))
+            leave_block(s, ip);
         ip = eval_phi(stmts, s, ns, next_ip);
     }
     abort();
@@ -1022,9 +1161,10 @@ jl_code_info_t *jl_code_for_interpreter(jl_method_instance_t *mi, size_t world)
 }
 
 // Each method body's cache of the dispatch at each of its statements (see
-// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code itself,
-// found by that code. The method remembers the caches it last used, which a frame running
-// the same code finds without the lock. Top-level thunks, which mostly run once, have none.
+// jl_apply_generic_cached), a Memory{Any} by statement index followed by the code's
+// block_info and the code itself, found by that code. The method remembers the caches it
+// last used, which a frame running the same code finds without the lock. Top-level thunks,
+// which mostly run once, have none.
 jl_genericmemory_t *jl_interp_call_sites JL_GLOBALLY_ROOTED = NULL;
 jl_mutex_t jl_interp_call_sites_lock;
 
@@ -1039,8 +1179,11 @@ static jl_genericmemory_t *call_sites(jl_method_t *m, jl_code_info_t *src, size_
     jl_genericmemory_t *sites = (jl_genericmemory_t*)jl_eqtable_get(jl_interp_call_sites, (jl_value_t*)src, NULL);
     if (sites == NULL) {
         JL_GC_PUSH1(&sites);
-        sites = jl_alloc_memory_any(nstmts + 1);
-        jl_genericmemory_ptr_set(sites, nstmts, (jl_value_t*)src);
+        sites = jl_alloc_memory_any(nstmts + 2);
+        jl_genericmemory_ptr_set(sites, nstmts + 1, (jl_value_t*)src);
+        jl_genericmemory_t *blocks = block_info(src);
+        if (blocks != NULL)
+            jl_genericmemory_ptr_set(sites, nstmts, (jl_value_t*)blocks);
         jl_interp_call_sites = jl_eqtable_put(jl_interp_call_sites, (jl_value_t*)src, (jl_value_t*)sites, NULL);
         JL_GC_POP();
     }
@@ -1104,6 +1247,8 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->world = world;
     s->sites = call_sites(jl_is_method(mi->def.value) ? mi->def.method : NULL, src, jl_array_nrows(stmts));
     locals[2] = (jl_value_t*)s->sites;
+    jl_genericmemory_t *blocks = (jl_genericmemory_t*)jl_genericmemory_ptr_ref(s->sites, s->sites->length - 2);
+    s->blocks = blocks ? (uint8_t*)blocks->ptr : NULL;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
@@ -1135,7 +1280,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
         code = jl_uncompress_ir(source, ci, src);
     }
     interpreter_state *s;
-    unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 2;
+    unsigned nroots = jl_source_nslots(code) + jl_source_nssavalues(code) + 3;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = oc->world;
@@ -1145,9 +1290,12 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     // The analyzer has some trouble with this
     locals[1] = (jl_value_t*)code;
     JL_GC_PROMISE_ROOTED(code);
-    locals[2] = (jl_value_t*)oc->captures;
-    s->locals = locals + 2;
+    locals[3] = (jl_value_t*)oc->captures;
+    s->locals = locals + 3;
     frame_set_src(s, code);
+    jl_genericmemory_t *blocks = block_info(code);
+    locals[2] = (jl_value_t*)blocks;
+    s->blocks = blocks ? (uint8_t*)blocks->ptr : NULL;
     s->module = source->module;
     s->sparam_vals = NULL;
     s->preevaluation = 0;
@@ -1178,11 +1326,16 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
 jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
 {
     interpreter_state *s;
-    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
-    JL_GC_PUSHFRAME(s, s->locals, nroots);
+    unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src) + 1;
+    jl_value_t **locals = NULL;
+    JL_GC_PUSHFRAME(s, locals, nroots);
+    s->locals = locals + 1;
     jl_array_t *stmts = src->code;
     assert(jl_typetagis(stmts, jl_array_any_type));
     frame_set_src(s, src);
+    jl_genericmemory_t *blocks = block_info(src);
+    locals[0] = (jl_value_t*)blocks;
+    s->blocks = blocks ? (uint8_t*)blocks->ptr : NULL;
     s->module = m;
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
@@ -1206,6 +1359,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     JL_GC_PUSHFRAME(s, locals, 0);
     (void)locals;
     s->locals = NULL;
+    s->blocks = NULL;
     frame_set_src(s, src);
     s->module = m;
     s->sparam_vals = sparam_vals;
