@@ -2456,6 +2456,20 @@ JL_DLLEXPORT jl_value_t *jl_debug_method_invalidation(int state) JL_CANSAFEPOINT
 
 static void _invalidate_backedges(jl_method_instance_t *replaced_mi, jl_code_instance_t *replaced_ci, size_t max_world, int depth) JL_CANSAFEPOINT;
 
+// Discard the source a callee left to be compiled when first called kept until then (see
+// `keep_deferred_sources!`). Inference discards the source of what is not inlined, so it
+// is only kept otherwise by code from an image, or when the IR is kept on purpose.
+JL_DLLEXPORT int jl_drop_deferred_source(jl_code_instance_t *ci) JL_NOTSAFEPOINT
+{
+    jl_value_t *src = jl_atomic_load_relaxed(&ci->inferred);
+    if (src == NULL || !jl_is_string(src) || ci->owner != jl_nothing ||
+            (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE) ||
+            jl_ir_inlining_cost(src) != UINT16_MAX || jl_generating_output() ||
+            jl_atomic_load_relaxed(&jl_type_infer_preserve_ir))
+        return 0;
+    return jl_atomic_cmpswap(&ci->inferred, &src, jl_nothing);
+}
+
 // recursively invalidate cached methods that had an edge to a replaced method
 static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_world, int depth) JL_CANSAFEPOINT
 {
@@ -2477,6 +2491,8 @@ static void invalidate_code_instance(jl_code_instance_t *replaced, size_t max_wo
     if (replacedmaxworld == ~(size_t)0) {
         assert(jl_atomic_load_relaxed(&replaced->min_world) - 1 <= max_world && "attempting to set illogical world constraints (probable race condition)");
         jl_atomic_store_release(&replaced->max_world, max_world);
+        // it will not be compiled for the worlds it was kept for
+        jl_drop_deferred_source(replaced);
         // recurse to all backedges to update their valid range also
         _invalidate_backedges(replaced_mi, replaced, max_world, depth + 1);
         // TODO: should we visit all forward edges now and delete ourself from all of those lists too?
@@ -5238,8 +5254,10 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
 }
 
 // Kept out of line so that the frame of every dynamic call (`jl_apply_generic`) stays small
+// `deferred`: if not NULL, the CodeInstance whose trampolines to point at the compiled
+// code before calling it (see jl_invoke_deferred)
 static NOINLINE jl_value_t *_jl_invoke_compile(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world,
-   enum internal_compilation_triggers cause) JL_CANSAFEPOINT
+   enum internal_compilation_triggers cause, jl_code_instance_t *deferred) JL_CANSAFEPOINT
 {
     int64_t last_alloc = jl_options.malloc_log ? jl_gc_diff_total_bytes() : 0;
     int last_errno = errno;
@@ -5253,6 +5271,8 @@ static NOINLINE jl_value_t *_jl_invoke_compile(jl_value_t *F, jl_value_t **args,
     errno = last_errno;
     if (jl_options.malloc_log)
         jl_gc_sync_total_bytes(last_alloc); // discard allocation count from compilation
+    if (deferred)
+        jl_jit_link_deferred_stubs(deferred);
     jl_callptr_t invoke = jl_atomic_load_acquire(&codeinst->invoke);
     jl_value_t *res = invoke(F, args, nargs, codeinst);
     return verify_type(res);
@@ -5267,13 +5287,30 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
         jl_value_t *res = invoke(F, args, nargs, codeinst);
         return verify_type(res);
     }
-    return _jl_invoke_compile(F, args, nargs, mfunc, world, cause);
+    return _jl_invoke_compile(F, args, nargs, mfunc, world, cause, NULL);
 }
 
 JL_DLLEXPORT jl_value_t *jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc)
 {
     size_t world = jl_current_task->world_age;
     return _jl_invoke(F, args, nargs, mfunc, world, TRIGGER_FOREIGN);
+}
+
+// A call from compiled code to `codeinst`, which had no code when its caller was linked, as
+// when it was left out of its caller's batch because the call might not run (see
+// `add_codeinsts_to_jit!`), so is made through a trampoline (see linkCallTarget). Compiles
+// the callee if it has no code yet, and points the trampolines for calls to it at its code,
+// so that from then on they go straight there.
+JL_DLLEXPORT jl_value_t *jl_invoke_deferred(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_code_instance_t *codeinst)
+{
+    size_t world = jl_current_task->world_age;
+    jl_method_instance_t *mfunc = jl_get_ci_mi(codeinst);
+    jl_code_instance_t *compiled = NULL;
+    jl_callptr_t invoke = jl_method_compiled_callptr(mfunc, world, &compiled);
+    if (!invoke)
+        return _jl_invoke_compile(F, args, nargs, mfunc, world, TRIGGER_FOREIGN, codeinst);
+    jl_jit_link_deferred_stubs(codeinst);
+    return verify_type(invoke(F, args, nargs, compiled));
 }
 
 jl_value_t *jl_invoke_target(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_value_t *target)

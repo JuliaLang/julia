@@ -534,4 +534,132 @@ end
     end
 end
 
+# Callees called only where they might not run are compiled when first called (see
+# `stmts_sure_to_run` and `add_codeinsts_to_jit!`). These functions must not be called
+# before the tests below.
+@noinline deferred_neg(x) = throw(ArgumentError(string("negative: ", x)))
+@noinline deferred_double(x) = 2x
+@noinline deferred_step(x) = x + 1
+@noinline deferred_pair(x) = (x, string(x)) # returned through return roots
+@noinline deferred_errno() = throw(SystemError("close", Libc.errno()))
+function deferred_caller(x::Int)
+    x < 0 && deferred_neg(x)
+    y = deferred_double(x)
+    for i in 1:x
+        y += deferred_step(i)
+    end
+    return y
+end
+deferred_branch(x::Int) = x > 0 ? deferred_double(x) : deferred_step(x)
+deferred_throws(x::Int) = deferred_neg(deferred_double(x))
+deferred_maybe_pair(x::Int) = x > 100 ? deferred_pair(x) : (x, "")
+@noinline deferred_six(x) = ntuple(i -> (x + i) % UInt8, 6) # returned in memory
+deferred_maybe_six(x::Int) = x > 0 ? deferred_six(x) : nothing
+@noinline deferred_forced(r) = (r[] += 1; nothing)
+deferred_maybe_forced(r::Ref{Int}) = r[] > 0 ? deferred_forced(r) : nothing
+function deferred_close(fd::Cint)
+    ret = ccall(:close, Cint, (Cint,), fd)
+    ret == -1 && deferred_errno()
+    return ret
+end
+
+function is_compiled(f, argtypes)
+    @nospecialize
+    mi = Base.method_instance(f, argtypes)
+    return isdefined(mi, :cache) && mi.cache.invoke != C_NULL
+end
+
+# whether each `:invoke` in the optimized code of `f` is sure to run, by callee name
+function sure_to_run_invokes(f, argtypes)
+    @nospecialize
+    src = only(code_typed(f, argtypes))[1]
+    sure = Base.Compiler.stmts_sure_to_run(src.code)
+    calls = Dict{Symbol,Bool}()
+    for (i, stmt) in enumerate(src.code)
+        Meta.isexpr(stmt, :invoke) || continue
+        target = stmt.args[1]
+        mi = target isa CodeInstance ? target.def : target
+        calls[mi.def.name] = sure[i]
+    end
+    return calls
+end
+
+@testset "statements sure to run" begin
+    # error paths and branches that may not be taken are not; loop bodies are
+    @test sure_to_run_invokes(deferred_caller, (Int,)) ==
+        Dict(:deferred_neg => false, :deferred_double => true, :deferred_step => true)
+    @test sure_to_run_invokes(deferred_branch, (Int,)) ==
+        Dict(:deferred_double => false, :deferred_step => false)
+    # code that always throws runs up to the throw
+    @test sure_to_run_invokes(deferred_throws, (Int,)) ==
+        Dict(:deferred_double => true, :deferred_neg => true)
+end
+
+@testset "callees that might not run are compiled when first called" begin
+    @test deferred_caller(3) == 6 + 2 + 3 + 4
+    @test is_compiled(deferred_double, (Int,))
+    @test is_compiled(deferred_step, (Int,))
+    @test !is_compiled(deferred_neg, (Int,))
+    @test_throws ArgumentError("negative: -1") deferred_caller(-1)
+    @test is_compiled(deferred_neg, (Int,))
+    # the second call goes through the trampoline's GOT entry to the compiled code
+    @test_throws ArgumentError("negative: -2") deferred_caller(-2)
+
+    @test deferred_maybe_pair(1) == (1, "")
+    @test !is_compiled(deferred_pair, (Int,))
+    @test deferred_maybe_pair(101) == (101, "101")
+    @test deferred_maybe_pair(102) == (102, "102")
+    GC.gc()
+    @test deferred_maybe_pair(103) == (103, "103")
+
+    @test deferred_maybe_six(0) === nothing
+    @test deferred_maybe_six(1) == (0x02, 0x03, 0x04, 0x05, 0x06, 0x07)
+    @test deferred_maybe_six(2) == (0x03, 0x04, 0x05, 0x06, 0x07, 0x08)
+
+    # `@allocated` compiles everything before measuring, deferred callees included
+    counter = Ref(1)
+    @test (@allocated deferred_maybe_forced(counter)) == 0
+    @test counter[] == 2
+    @test is_compiled(deferred_forced, (Base.RefValue{Int},))
+
+    # compiling the callee must not change errno before it reads it
+    if !Sys.iswindows()
+        err = try
+            deferred_close(Cint(-1))
+        catch e
+            e
+        end
+        @test err isa SystemError
+        @test err.errnum == Libc.EBADF
+    end
+end
+
+@noinline kept_inner(x) = x * 3
+@noinline kept_outer(x) = kept_inner(x) + 1
+kept_caller(x::Int) = x > 0 ? kept_outer(x) : 0
+@noinline kept_dep() = Base.inferencebarrier(1)::Int
+@noinline kept_uses_dep(x) = x + kept_dep()
+kept_dep_caller(x::Int) = x > 0 ? kept_uses_dep(x) : 0
+code_instance(f, argtypes) = (@nospecialize; Base.method_instance(f, argtypes).cache)
+
+@testset "callees that might not run keep their source until compiled" begin
+    @test kept_caller(0) == 0
+    # inferred along with their caller, and not compiled yet
+    outer, inner = code_instance(kept_outer, (Int,)), code_instance(kept_inner, (Int,))
+    @test !is_compiled(kept_outer, (Int,)) && !is_compiled(kept_inner, (Int,))
+    @test outer.inferred isa String && inner.inferred isa String
+    # compiled from that source rather than inferred again, which then goes
+    @test kept_caller(2) == 7
+    @test code_instance(kept_outer, (Int,)) === outer && code_instance(kept_inner, (Int,)) === inner
+    @test outer.inferred === nothing && inner.inferred === nothing
+
+    # a callee invalidated before it is called no longer needs it
+    @test kept_dep_caller(0) == 0
+    uses = code_instance(kept_uses_dep, (Int,))
+    @test uses.inferred isa String
+    @eval kept_dep() = Base.inferencebarrier(2)::Int
+    @test uses.inferred === nothing
+    @test kept_dep_caller(1) == 3
+end
+
 sleep(5)  # Avoids problems where we don't respond to Distributed.jl fast enough
