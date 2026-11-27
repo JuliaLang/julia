@@ -4720,8 +4720,23 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
     }
 
     // if that didn't work and compilation is off, try running in the interpreter
-    if (compile_option == JL_OPTIONS_COMPILE_OFF ||
-        compile_option == JL_OPTIONS_COMPILE_MIN) {
+    if ((compile_option == JL_OPTIONS_COMPILE_OFF ||
+         compile_option == JL_OPTIONS_COMPILE_MIN) &&
+        jl_is_method(def) && def->is_for_opaque_closure && def->source == NULL) {
+        // An opaque closure made from optimized IR has no uninferred source,
+        // only the inferred code in its cache. Return no code instance, so that
+        // the closure runs that code in jl_interpret_opaque_closure.
+        jl_code_instance_t *ci = jl_atomic_load_relaxed(&mi->cache);
+        jl_value_t *src = ci ? jl_atomic_load_relaxed(&ci->inferred) : NULL;
+        JL_GC_PUSH1(&src); // call can safepoint
+        int interpretable = src && jl_is_code_info(src) &&
+            !jl_code_requires_compiler((jl_code_info_t*)src, 0);
+        JL_GC_POP();
+        if (interpretable)
+            return NULL;
+    }
+    else if (compile_option == JL_OPTIONS_COMPILE_OFF ||
+             compile_option == JL_OPTIONS_COMPILE_MIN) {
         jl_code_info_t *src = jl_code_for_interpreter(mi, world);
         // Root src explicitly: it is reachable as m->source only until a
         // concurrent thread publishes its own uncompressed copy there.
