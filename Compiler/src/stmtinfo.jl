@@ -283,19 +283,36 @@ function add_method_match_proofs!(edges::Vector{Any}, info::MethodMatchInfo,
     return nothing
 end
 
+# Record that adding a method intersecting `atype` may change a lookup. These edges are
+# checked on insertions into any method table.
+function add_missing_edge!(edges::Vector{Any}, @nospecialize(atype))
+    for i in 2:length(edges)
+        if edges[i] === Core.methodtable && edges[i-1] == atype
+            return nothing
+        end
+    end
+    push!(edges, atype)
+    push!(edges, Core.methodtable)
+    return nothing
+end
+
+# Whether adding a method can change the result of a lookup through an overlay table without
+# touching the matched methods: when the lookup fell through to the global table, a new
+# overlay method can take over the call.
+function falls_through_overlay(info::MethodMatchInfo)
+    mt = info.mt
+    mt === Core.methodtable && return false
+    fully_covering(info) || return true
+    for match in info.results
+        m = match.method
+        (isdefined(m, :external_mt) && m.external_mt === mt) || return true
+    end
+    return false
+end
+
 function _add_edges_impl(edges::Vector{Any}, info::MethodMatchInfo, mi_edge::Bool=false)
-    if !fully_covering(info)
-        exists = false
-        for i in 2:length(edges)
-            if edges[i] === Core.methodtable && edges[i-1] == info.atype
-                exists = true
-                break
-            end
-        end
-        if !exists
-            push!(edges, info.atype)
-            push!(edges, Core.methodtable)
-        end
+    if !fully_covering(info) || falls_through_overlay(info)
+        add_missing_edge!(edges, info.atype)
     end
     nmatches = length(info.results)
     possibly_ambiguous = any_ambig(info)
@@ -526,13 +543,19 @@ struct InvokeCallInfo <: CallInfo
     result::Union{Nothing,InferredCallResult}
     atype # ::Type
     needs_mi_edge::Bool # targetless body-derived facts require an invalidation target
+    mt::MethodTable # the overlay table the lookup went through, or the global one
 end
 InvokeCallInfo(edge::Union{Nothing,CodeInstance}, match::MethodMatch,
-               result::Union{Nothing,InferredCallResult}, @nospecialize(atype)) =
-    InvokeCallInfo(edge, match, result, atype, false)
+               result::Union{Nothing,InferredCallResult}, @nospecialize(atype),
+               needs_mi_edge::Bool=false) =
+    InvokeCallInfo(edge, match, result, atype, needs_mi_edge, Core.methodtable)
 add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo) =
     _add_edges_impl(edges, info)
 function _add_edges_impl(edges::Vector{Any}, info::InvokeCallInfo, mi_edge::Bool=false)
+    if info.mt !== Core.methodtable
+        m = info.match.method
+        (isdefined(m, :external_mt) && m.external_mt === info.mt) || add_missing_edge!(edges, info.atype)
+    end
     edge = info.edge
     if edge === nothing
         edge = (mi_edge || info.needs_mi_edge || info.result !== nothing) ?
