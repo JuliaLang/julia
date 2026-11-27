@@ -4149,15 +4149,11 @@ static size_t jl_image_split_ji_objects_end(ios_t *s, size_t size) JL_CANSAFEPOI
 }
 #endif
 
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT;
+static size_t jl_image_read_split_ji(const char *ji_path, const uint32_t *lib_checksum, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT;
 
 // Returns 0, with *dest NULL, if the .ji of a package image was not written with this .so.
-static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
+static size_t jl_image_get_split_ji_for_path(const char *lib_path, const uint32_t *lib_checksum, char **dest, int use_mmap) JL_CANSAFEPOINT
 {
-    const char *lib_path = jl_pathname_for_handle(handle);
-    if (!lib_path)
-        jl_error("unable to find path to native image\n");
-
     // Replace the file extension with ".ji". The "extension" starts at the
     // first '.' after the last path separator, so e.g. "/foo/bar/baz.so.1.2.3"
     // becomes "/foo/bar/baz.ji".
@@ -4177,22 +4173,33 @@ static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_
         abort();
     memcpy(ji_path, lib_path, ji_path_len);
     snprintf(ji_path + ji_path_len, sizeof ji_path - ji_path_len, ".ji");
+    return jl_image_read_split_ji(ji_path, lib_checksum, dest, use_mmap, NULL);
+}
+
+static size_t jl_image_get_split_ji(void *handle, char **dest, int use_mmap) JL_CANSAFEPOINT
+{
+    const char *lib_path = jl_pathname_for_handle(handle);
+    if (!lib_path)
+        jl_error("unable to find path to native image\n");
+    uint32_t *pchecksum;
+    JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
+    size_t size = jl_image_get_split_ji_for_path(lib_path, pchecksum, dest, use_mmap);
 #ifdef _OS_WINDOWS_
     free((char *)lib_path);
 #endif
-    return jl_image_read_split_ji(ji_path, handle, dest, use_mmap, NULL);
+    return size;
 }
 
-// Read the split .ji at `ji_path`. With its native image `handle`, first check that the .ji
+// Read the split .ji at `ji_path`. With its native image's `lib_checksum`, first check that the .ji
 // was written with it; without one, store the checksum from its header in `heap_checksum`.
-static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT
+static size_t jl_image_read_split_ji(const char *ji_path, const uint32_t *lib_checksum, char **dest, int use_mmap, uint32_t *heap_checksum) JL_CANSAFEPOINT
 {
     ios_t s;
     size_t size;
     uint32_t flags = 0, checksum = 0;
     int64_t dataendpos = 0, datastartpos = 0;
     if (!ios_file(&s, ji_path, 1, 0, 0, 0)) {
-        if (!handle) { // let the caller report it
+        if (!lib_checksum) { // let the caller report it
             *dest = NULL;
             return 0;
         }
@@ -4204,16 +4211,14 @@ static size_t jl_image_read_split_ji(const char *ji_path, void *handle, char **d
         if (heap_checksum)
             *heap_checksum = checksum;
         // without a native image, only an image that was written without code can be restored
-        if (!handle && !(flags & JI_FLAG_NO_NATIVE)) {
+        if (!lib_checksum && !(flags & JI_FLAG_NO_NATIVE)) {
             ios_close(&s);
             *dest = NULL;
             return 0;
         }
         // check that the .ji matches the .so before reading all of it
-        if (handle) {
-            uint32_t *pchecksum;
-            JL_IMAGE_SYM(handle, jl_system_image_checksum, &pchecksum);
-            if (checksum != *pchecksum) {
+        if (lib_checksum) {
+            if (checksum != *lib_checksum) {
                 ios_close(&s);
                 if (!(flags & JI_FLAG_PKGIMAGE))
                     jl_error("Image checksum mismatch: the heap image (.ji) was not "
@@ -5276,6 +5281,36 @@ JL_DLLEXPORT void jl_restore_system_image(jl_image_t *image, jl_image_buf_t buf)
     JL_SIGATOMIC_END();
 }
 
+#ifdef _OS_DARWIN_
+// Map the native code of a split package image without dyld.
+// Returns 0 if the image has to be loaded with `dlopen` instead.
+static int jl_macho_image_buf(const char *fname, jl_image_buf_t *buf) JL_CANSAFEPOINT
+{
+    static int use_dlopen = -1;
+    if (use_dlopen == -1) {
+        const char *env = getenv("JULIA_PKGIMAGE_DLOPEN");
+        use_dlopen = env && env[0] && strcmp(env, "0") != 0;
+    }
+    jl_macho_image_info_t info;
+    if (use_dlopen || !jl_macho_map_image(fname, &info))
+        return 0;
+    if (info.unpack != (void*)&jl_image_unpack_split) {
+        jl_macho_unmap_image(info.base);
+        return 0;
+    }
+    buf->kind = JL_IMAGE_KIND_SO;
+    buf->pointers = info.pointers;
+    buf->base = info.base;
+    buf->heap_checksum = *info.checksum;
+    buf->is_split = 1;
+    buf->coverage = info.coverage;
+    buf->size = jl_image_get_split_ji_for_path(fname, info.checksum, (char **)&buf->data, 1);
+    if (buf->data == NULL)
+        jl_macho_unmap_image(info.base);
+    return 1;
+}
+#endif
+
 // `fname` is the native image, or the .ji itself for a package image without code
 JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, jl_array_t *depmods, int completeinfo, const char *pkgname, int ignore_native) JL_CANSAFEPOINT
 {
@@ -5285,16 +5320,21 @@ JL_DLLEXPORT jl_value_t *jl_restore_package_image_from_file(const char *fname, j
     if (len > 3 && strcmp(fname + len - 3, ".ji") == 0) {
         buf.size = jl_image_read_split_ji(fname, NULL, (char **)&buf.data, 1, &buf.heap_checksum);
     }
+#ifdef _OS_DARWIN_
+    else if (jl_macho_image_buf(fname, &buf)) {
+    }
+#endif
     else {
         pkgimg_handle = jl_dlopen_e(fname, JL_RTLD_LAZY);
         buf = get_image_buf(pkgimg_handle, /* is_pkgimage */ 1);
     }
     if (buf.data == NULL) {
-        if (!pkgimg_handle)
+        if (buf.kind == JL_IMAGE_KIND_JI)
             return jl_get_exceptionf(jl_errorexception_type,
                 "Cache file \"%s\" is missing, or has native code it needs to be loaded with.", fname);
         // unload it, so that a recompiled image at the same path is not served this handle
-        jl_dlclose(pkgimg_handle);
+        if (pkgimg_handle)
+            jl_dlclose(pkgimg_handle);
         return jl_get_exceptionf(jl_errorexception_type,
             "Image checksum mismatch: the heap image (.ji) was not "
             "compiled for use with \"%s\".", fname);
