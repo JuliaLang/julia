@@ -28,6 +28,8 @@ function _readkey(stream::IO=stdin)
         esc_a == 'v' && return PAGE_UP  # M-v
         esc_a == '<' && return HOME_KEY # M-<
         esc_a == '>' && return END_KEY  # M->
+        esc_a == 'H' && return HOME_KEY
+        esc_a == 'F' && return END_KEY
 
         bytesavailable(stream) < 1 && return '\x1b'
         esc_b = readbyte(stream)
@@ -57,8 +59,6 @@ function _readkey(stream::IO=stdin)
                 return '\x1b'
             end
         end
-        esc_a == 'H' && return HOME_KEY
-        esc_a == 'F' && return END_KEY
         return '\x1b'
     end
     c == '\x16' && return PAGE_DOWN  # C-v

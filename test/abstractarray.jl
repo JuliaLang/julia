@@ -1186,6 +1186,9 @@ end
     @test get(A, CartesianIndex(2,2,3), :some_default) === :some_default
     @test get(11:15, CartesianIndex(6), nothing) === nothing
     @test get(11:15, CartesianIndex(5), nothing) === 15
+    # out-of-range indices are filled with the default
+    @test get([1, 2, 3], 0:4, -1) == [-1, 1, 2, 3, -1]
+    @test get([1 2; 3 4], 0:5, -1) == [-1, 1, 3, 2, 4, -1]
 end
 
 @testset "IndexStyle for various types" begin

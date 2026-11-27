@@ -42,7 +42,7 @@ ip"192.30.252.154"
 function IPv4(host::Integer)
     if host < 0
         throw(ArgumentError("IPv4 address must be positive"))
-    elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
+    elseif host > typemax(UInt32)
         throw(ArgumentError("IPv4 address must fit within 32 bits"))
     else
         return IPv4(UInt32(host))
@@ -107,7 +107,7 @@ function IPv6(host::Integer)
         throw(ArgumentError("IPv6 address must be positive"))
         # We allow passing bigger integer types, but need to be careful to avoid overflow
         # Let's hope promotion rules are sensible
-    elseif typemax(typeof(host)) > typemax(UInt128) && host > typemax(UInt128)
+    elseif host > typemax(UInt128)
         throw(ArgumentError("IPv6 address must fit within 128 bits"))
     else
         return IPv6(UInt128(host))
