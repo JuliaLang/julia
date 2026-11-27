@@ -170,6 +170,8 @@ JL_DLLEXPORT void jl_write_compiler_output(void)
         // jl_dump_native will close and free s when appropriate
         // this is a horrible abstraction, but
         // this helps reduce live memory significantly
+        // jl_dump_native changes process-wide LLVM options, so it relies on no other
+        // thread compiling at this point (see jl_task_wait_empty above)
         jl_dump_native(native_code, jl_options.outputbc, jl_options.outputunoptbc,
                        jl_options.outputo, jl_options.outputasm, outputji ? NULL : s,
                        checksum, unpack_func, NULL);

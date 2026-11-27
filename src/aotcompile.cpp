@@ -2086,6 +2086,15 @@ static SmallVector<AOTOutputs, 16> add_output(Module &M, TargetMachine &TM, Stri
 
     output_timer.startTimer();
 
+    // The shards read back bitcode that was just written above. Do not run the IR
+    // verifier over each of them to look for outdated debug info. This is a
+    // process-wide LLVM option, so only set it while generating output, where
+    // this runs at exit after all other tasks have finished.
+    if (jl_generating_output()) {
+        if (auto *opt = cl::getRegisteredOptions().lookup("disable-auto-upgrade-debug-info"))
+            static_cast<cl::opt<bool>*>(opt)->setValue(true);
+    }
+
     // Compile the partitions with a pool of worker threads pulling from a
     // shared queue. The partition count fixes the shard layout; the pool size
     // only controls how many compile concurrently. Without a jobserver the pool
