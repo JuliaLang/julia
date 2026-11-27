@@ -914,6 +914,12 @@ end
                 @testset for T in (Float32, Float64), S in (Int32,Int64)
                     @test S(1) == T(1)
                 end
+                @testset for _ in 1:2,  T in (Float32, Float64)
+                    @test 1 == T(1)
+                end
+                @testset for T in (Float32, Float64), __ in 1:2
+                    @test 1 == T(1)
+                end
             end
             @testset "some loops fail" begin
                 @testset for i in 1:5
@@ -940,7 +946,7 @@ end
         total_fail   = tc.fails  + tc.cumulative_fails
         total_error  = tc.errors + tc.cumulative_errors
         total_broken = tc.broken + tc.cumulative_broken
-        @test total_pass   == 24
+        @test total_pass   == 32
         @test total_fail   == 6
         @test total_error  == 6
         @test total_broken == 0
