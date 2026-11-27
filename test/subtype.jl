@@ -2460,7 +2460,7 @@ function equal_envs(env1, env2)
     for i = 1:length(env1)
         a = env1[i]
         b = env2[i]
-        # Unwrap `svec(tvar, constrained)` markers for equality comparison.
+        # Unwrap `svec(tvar, constrained, egal)` markers for equality comparison.
         a isa Core.SimpleVector && (a = a[1])
         b isa Core.SimpleVector && (b = b[1])
         if a isa TypeVar
@@ -3186,6 +3186,286 @@ end
 let e = only(intersection_env(Tuple{Real}, Tuple{T} where T >: Int)[2])
     @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
 end
+# The env must hold for every instance of the left side (each dispatch tuple below
+# it), but it is computed by choosing one alternative of each right-side union for
+# the left side as a whole. An instance chooses another alternative when one that
+# it tries earlier accepts it: `Nothing` matches `Union{Nothing,S}` through
+# `Nothing`, leaving `S` unbound (#63514).
+let unbound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool,
+    bound(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[2]::Bool,
+    # nothing is known about the value: the entry has the bounds of the declared var
+    unknown(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[1].lb === Union{} && e[1].ub === Any
+    for (lhs, rhs) in ((Tuple{Any}, Tuple{Union{Nothing,S}} where S),
+                       (Tuple{Real}, Tuple{Union{Int,S}} where S),
+                       (Tuple{Any,Any}, Tuple{Union{Nothing,S},Any} where S),
+                       (Tuple{Any}, Tuple{Union{Nothing,Ref{S},S}} where S),
+                       # `(1, nothing)` matches the closed alternative
+                       (Tuple{Tuple{Int,Any}}, Tuple{Union{Tuple{Int,Nothing},Tuple{S,Any}}} where S),
+                       # the instances of `DataType` include the `Type{Int}` key
+                       (Tuple{DataType}, Tuple{Union{Type{Int},S}} where S),
+                       # an invariant occurrence pins the var only for the instances that
+                       # choose its alternative; `Vector{Int}` takes the other one, being
+                       # egal to it
+                       (Tuple{AbstractVector{Int}}, Tuple{Union{AbstractVector{S},Vector{Int}}} where S),
+                       (Tuple{AbstractVector{Int},Any}, Tuple{Union{AbstractVector{S},Vector{Int}},Any} where S))
+        @test unbound(only(intersection_env(lhs, rhs)[2]))
+    end
+    # no instance of the left side is accepted by another alternative
+    for (lhs, rhs) in ((Tuple{Real}, Tuple{Union{Nothing,S}} where S),
+                       (Tuple{Number}, Tuple{Union{Missing,Nothing,S}} where S),
+                       (Tuple{Ref}, Tuple{Union{Nothing,Ref{S}}} where S),
+                       # instances of `Integer` are never type objects
+                       (Tuple{Integer}, Tuple{Union{Type{S},S}} where S))
+        @test bound(only(intersection_env(lhs, rhs)[2]))
+    end
+    # a closed alternative rejects every instance that has the exact type it rejected
+    @test intersection_env(Tuple{Any,Int}, Tuple{Any,Union{Nothing,S}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Any,Vector{Any}}, Tuple{Any,Vector{Union{Nothing,S}}} where S)[2] === Core.svec(Any)
+    @test intersection_env(Tuple{Any,Vector{Union{Float64,String}}}, Tuple{Any,Vector{Union{S,String}}} where S)[2] === Core.svec(Float64)
+    @test intersection_env(Tuple{Any,Core.TypeEgal{Int}}, Tuple{Any,Union{Type{String},S}} where S)[2] === Core.svec(DataType)
+    # an occurrence outside the union pins the var for every instance
+    @test intersection_env(Tuple{Vector{Any},Any}, Tuple{Vector{S},Union{Nothing,S}} where S)[2] === Core.svec(Any)
+    @test intersection_env(Tuple{Any,Vector{Int}}, Tuple{Union{Nothing,Vector{S}},Vector{S}} where S)[2] === Core.svec(Int)
+    # a dispatch tuple is its own only instance, so its env stays exact
+    @test intersection_env(Tuple{Tuple{Int,DataType}}, Tuple{Union{Tuple{Int,Type{Int}},Tuple{S,Any}}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Core.TypeEgal{Float64}}, Tuple{Union{Type{Int},Type{S}}} where S)[2] === Core.svec(Float64)
+    @test intersection_env(Tuple{Vector{Int}}, Tuple{Union{AbstractVector{S},Vector{Float64}}} where S)[2] === Core.svec(Int)
+    # An instance that chooses another alternative binds the vars which that one
+    # mentions, to values this match never computed: `("a", 1)` binds `S` to
+    # `String`.
+    let rhs = Tuple{Union{Tuple{S,Int},Tuple{Any,S}}} where S
+        e = only(intersection_env(Tuple{Tuple{String,Integer}}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test intersection_env(Tuple{Tuple{String,Int8}}, rhs)[2] === Core.svec(Int8)
+    end
+    let rhs = Tuple{Union{Type{T},T}} where T
+        # `Int` is a `DataType`, and binds `T` to `Int` through `Type{T}`
+        e = only(intersection_env(Tuple{DataType}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{Type{Int}}, rhs)[2])[1].ub === Int
+        @test intersection_env(Tuple{Float64}, rhs)[2] === Core.svec(Float64)
+    end
+    # ... and with them the outer vars that their declared bounds mention:
+    # `(1, Ref{Any}(1))` binds `T` through the first alternative, and thereby `S`
+    # to `Any`
+    let rhs = Tuple{S,Union{T,U}} where {S,T<:Ref{S},U}
+        e = intersection_env(Tuple{Real,Any}, rhs)[2]
+        @test unknown(e[1]) && e[1][2]
+        @test unbound(e[2]) && unbound(e[3])
+    end
+    # ... unless the var occurs only in argument slots, and every instance binds it
+    # at one of them: an instance that also binds it through the other alternative
+    # makes it diagonal, so it keeps the value it is already bound to
+    let rhs = Tuple{S,Union{S,T}} where {S,T}
+        @test intersection_env(Tuple{Int,Any}, rhs)[2][1] === Int
+        e = intersection_env(Tuple{Integer,Int}, rhs)[2][1]
+        @test bound(e) && e[1].ub === Integer
+        # `(1, Ref{Any}(1))` binds `S` to `Any` through the invariant occurrence
+        e = intersection_env(Tuple{Int,Any}, Tuple{S,Union{Ref{S},T}} where {S,T})[2][1]
+        @test unknown(e) && e[2]
+    end
+    # The same goes for the componentwise match of two unions, which the left side
+    # abandons because of a later conflict: with `U == String` in the second
+    # element, `Union{Int,String} == Union{T,U}` is solved by `T == Int`.
+    let rhs = Tuple{Ref{Union{T,U}},Ref{U}} where {T,U}
+        e = intersection_env(Tuple{Ref{Union{Int,String}},Ref{<:Union{Int,String}}}, rhs)[2]
+        @test unknown(e[1])
+        @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String}}, rhs)[2] === Core.svec(Int, String)
+        @test intersection_env(Tuple{Ref{Union{Int,String}},Ref{String},Any}, Tuple{Ref{Union{T,U}},Ref{U},Any} where {T,U})[2] === Core.svec(Int, String)
+    end
+    # A var that is one alternative of a union in a type parameter is not pinned by
+    # it: `Union{Int,String} == Union{Int,T}` holds for `T == String` and for
+    # `T == Union{Int,String}`, and a call binds the smallest type that its other
+    # lower bounds on `T` allow. `(1, Ref{Union{Int,String}}(1))` binds `T` through
+    # the first alternative of `Union{T,U}`, which rules out `T == String`.
+    let rhs = Tuple{Union{T,U},Ref{Union{Int,T}}} where {T,U},
+        R = Base.RefValue{Union{Int,String}}
+        @test unknown(intersection_env(Tuple{Number,R}, rhs)[2][1])
+        @test intersection_env(Tuple{Int,R}, rhs)[2][1] === Union{Int,String}
+        @test intersection_env(Tuple{Float64,R}, rhs)[2] === Core.svec(String, Float64)
+        # ... also where the union is an element of a tuple that is the parameter
+        e = intersection_env(Tuple{Number,Ref{Tuple{Union{Int,String}}}}, Tuple{Union{T,U},Ref{Tuple{Union{Int,T}}}} where {T,U})[2]
+        @test unknown(e[1])
+        # ... but not if the var is equated with a component of the union before any
+        # alternative mentions it: then that alternative accepts no other type
+        rhs = Tuple{Ref{Union{Int,T}},Union{T,U}} where {T,U}
+        @test intersection_env(Tuple{R,Number}, rhs)[2][1] === String
+        @test intersection_env(Tuple{R,Int}, rhs)[2] === Core.svec(String, Int)
+    end
+    # The same goes for the lower bound of an argument slot, where an instance has
+    # a smaller type than the left side: `("a", Ref{Union{Int,String}}(1))` binds
+    # `T` to `String`, and `(1, Ref{Union{Int,String}}(1))` to `Union{Int,String}`.
+    let rhs = Tuple{T,Ref{Union{Int,T}}} where T, R = Base.RefValue{Union{Int,String}}
+        e = only(intersection_env(Tuple{Union{Int,String},R}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{Int,R}, rhs)[2]) === Union{Int,String}
+        @test only(intersection_env(Tuple{String,R}, rhs)[2]) === String
+        # the join of the left side's lower bounds is an upper bound of the binding
+        e = only(intersection_env(Tuple{Union{Int,String},Ref{Tuple{Union{Int,String}}}}, Tuple{T,Ref{Tuple{Union{Int,T}}}} where T)[2])
+        @test bound(e) && e[1].lb === Union{} && e[1].ub === Union{Int,String}
+        # ... and for the lower bound of a tail element that an instance may lack
+        rhs = Tuple{Ref{Union{Int,T}},Vararg{T}} where T
+        e = only(intersection_env(Tuple{R,Vararg{Int}}, rhs)[2])
+        @test unknown(e) && e[2]
+        @test only(intersection_env(Tuple{R}, rhs)[2]) === String
+        @test only(intersection_env(Tuple{R,Int}, rhs)[2]) === Union{Int,String}
+    end
+    # If nothing else bounds the var, every instance binds it to the same type
+    @test intersection_env(Tuple{Vector{Union{Missing,Int}},Any}, Tuple{Vector{Union{S,Missing}},Any} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Ref{Tuple{Union{Int,String}}},Any}, Tuple{Ref{Tuple{Union{Int,T}}},Any} where T)[2] === Core.svec(String)
+    # A var with no lower bound is bound to `Union{}` if its upper bounds leave
+    # nothing else. Not so if one of them is from a tail element that an instance
+    # may lack: `(Ref(1),)` leaves `S` unbound.
+    let rhs = Tuple{Ref{Union{Int,S}},Vararg{Ref{Union{Nothing,String,S}}}} where S,
+        R = Base.RefValue{Union{Nothing,String}}
+        @test unbound(only(intersection_env(Tuple{Base.RefValue{Int},Vararg{R}}, rhs)[2]))
+        @test unbound(only(intersection_env(Tuple{Base.RefValue{Int}}, rhs)[2]))
+        @test only(intersection_env(Tuple{Base.RefValue{Int},R}, rhs)[2]) === Union{}
+    end
+    # ... and for a union with free typevars of the left side below an invariant
+    # constructor: an instance has a different union there, whose components may
+    # be absorbed (`V = Missing`) or come in another order (`V = Float64`)
+    let rhs = Tuple{Vector{Union{Missing,S}}} where S
+        @test unbound(only(intersection_env(Tuple{Vector{Union{Missing,V}} where V}, rhs)[2]))
+        @test intersection_env(Tuple{Vector{Union{Missing,Int}},Any}, Tuple{Vector{Union{Missing,S}},Any} where S)[2] === Core.svec(Int)
+    end
+    let rhs = Tuple{Ref{Union{T,U}}} where {T,U}
+        e = intersection_env(Tuple{Ref{Union{V,Int}} where V}, rhs)[2]
+        @test unknown(e[1]) && unknown(e[2])
+    end
+    # A union for which an instance may choose differently does not affect later
+    # unions that share no vars with it
+    let rhs = Tuple{Union{Nothing,A},Union{Nothing,B}} where {A,B}
+        e = intersection_env(Tuple{Any,Float64}, rhs)[2]
+        @test unbound(e[1]) && e[2] === Float64
+        e = intersection_env(Tuple{Any,Real}, rhs)[2]
+        @test unbound(e[1]) && bound(e[2])
+    end
+    let rhs = Tuple{Union{Nothing,A},Union{Type{T},T}} where {A,T}
+        @test intersection_env(Tuple{Any,Float64}, rhs)[2][2] === Float64
+        @test intersection_env(Tuple{Any,Core.TypeEgal{Int}}, rhs)[2][2] === Int
+        e = intersection_env(Tuple{Any,Type{Int}}, rhs)[2][2]
+        @test bound(e) && e[1].lb === e[1].ub === Int
+    end
+    # ... unlike one that shares a var with it
+    let rhs = Tuple{Union{Nothing,T},Union{Type{T},T}} where T
+        e = only(intersection_env(Tuple{Any,Type{Int}}, rhs)[2])
+        @test unknown(e) && e[2]
+    end
+end
+# A value assigned by a search attempt that then fails (here to `S2`, before the
+# diagonal rule rejects `S1`) is not a value of the branch that matches
+@test intersection_env(Tuple{Int,Int,Tuple{Int,Int}}, Tuple{S2,S1,Union{Type{S2},S1,S2}} where {S1,S2})[2] ===
+    Core.svec(Int, Union{Int,Tuple{Int,Int}})
+# An argument of type `Type{X}` has a `TypeEgal` key in each instance of the left
+# side, and a covariant occurrence binds the var to the tag of that key: `Int`
+# binds `S` to `DataType`, not to `Type{Int}`
+let bound_by(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && e[2]::Bool && e[1].lb === Union{} && e[1].ub == T
+    @test bound_by(only(intersection_env(Tuple{Type{Int}}, Tuple{S} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{Int},Any}, Tuple{S,Any} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{Int},Type{Int}}, Tuple{S,S} where S)[2]), Union{DataType,UnionAll})
+    @test bound_by(only(intersection_env(Tuple{Type{<:Real}}, Tuple{S} where S)[2]), Core.AnyType)
+    # also when it reaches the var through a var of the left side
+    @test bound_by(only(intersection_env(Tuple{Type{<:Real},Any}, Tuple{S,S} where S)[2]), Core.AnyType)
+    # a single tag covers `Type{Vector}`, and a key widens to the tag of its type
+    @test intersection_env(Tuple{Type{Vector}}, Tuple{S} where S)[2] === Core.svec(UnionAll)
+    @test intersection_env(Tuple{Core.TypeEgal{Int},Any}, Tuple{S,Any} where S)[2] === Core.svec(DataType)
+    @test intersection_env(Tuple{DataType}, Tuple{S} where S)[2] === Core.svec(DataType)
+    # a type parameter is a value, not a key
+    @test intersection_env(Tuple{Ref{Type{Int}}}, Tuple{Ref{S}} where S)[2] === Core.svec(Type{Int})
+    let e = only(intersection_env(Tuple{Type{Int}}, Tuple{Type{S}} where S)[2])
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === e[1].ub === Int
+    end
+    # Where the keys are not widened (two occurrences, which the invariant one in
+    # the signature keeps from being diagonal), a kind stands for the keys of all
+    # types of that kind: `(Int, Float64)` binds `S` to the union of two keys
+    let rhs = Tuple{S,Union{Set{S},S}} where S
+        @test intersection_env(Tuple{Core.TypeEgal{Int},Core.TypeEgal{Float64}}, rhs)[2] ===
+            Core.svec(Union{Core.TypeEgal{Int},Core.TypeEgal{Float64}})
+        @test bound_by(only(intersection_env(Tuple{DataType,Core.TypeEgal{Float64}}, rhs)[2]), DataType)
+    end
+    # ... and so does `Type{X}` for a var that it reaches through a declared bound
+    @test bound_by(intersection_env(Tuple{Type{Int}}, Tuple{Union{Vector{S2},S2,S1}} where {S1,S2<:Union{Nothing,S1}})[2][1], Type{Int})
+    # An instance that lacks one of the occurrences found for the left side widens
+    # its key after all: `(1.0, Float64)` binds `S` to `DataType`
+    @test bound_by(only(intersection_env(Tuple{Number,Core.TypeEgal{Float64}}, Tuple{Union{Float64,S},Union{AbstractVector{S},S}} where S)[2]),
+                   Union{Number,DataType,Core.TypeEgal{Float64}})
+    # a concrete tuple with a kind among its elements is not its own only instance
+    let e = only(intersection_env(Tuple{Int,Vector{Float64},DataType}, Tuple{Real,Union{Ref{S},S},S} where S)[2])
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && e[2] && Core.TypeEgal{Int} <: e[1].ub
+    end
+end
+# An instance of a tuple with a free length may have no elements in its tail, and
+# then makes none of the bindings that matching a tail element records: `()`
+# leaves `S` unbound
+let optional(e, T) = e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]::Bool && e[1].lb === e[1].ub === T
+    @test optional(only(intersection_env(Tuple{Vararg{Int}}, Tuple{Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Vararg{Int,N}} where N, Tuple{Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{String,Vararg{Int}}, Tuple{Any,Vararg{S}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{Tuple{Vararg{S}}} where S)[2]), Int)
+    @test optional(only(intersection_env(Tuple{Vararg{Tuple{Int}}}, Tuple{Vararg{Tuple{S}}} where S)[2]), Int)
+    # also through an invariant occurrence, and through a declared bound
+    @test optional(only(intersection_env(Tuple{Vararg{Vector{Int}}}, Tuple{Vararg{Vector{S}}} where S)[2]), Int)
+    @test optional(intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{T} where {S,T<:Tuple{Vararg{S}}})[2][1], Int)
+    let e = only(intersection_env(Tuple{Vararg{Real}}, Tuple{Vararg{S}} where S)[2])
+        @test e isa Core.SimpleVector && !e[2] && e[1].ub === Real
+    end
+    # an element before the tail is one that every instance has
+    @test intersection_env(Tuple{Int,Vararg{Int}}, Tuple{Vararg{S}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Tuple{Int,Vararg{Int}}}, Tuple{Tuple{Vararg{S}}} where S)[2] === Core.svec(Int)
+    @test intersection_env(Tuple{Int,Int}, Tuple{Vararg{S}} where S)[2] === Core.svec(Int)
+    # below an invariant constructor, every instance has exactly that tuple type
+    @test intersection_env(Tuple{Ref{Tuple{Vararg{Int}}}}, Tuple{Ref{Tuple{Vararg{S}}}} where S)[2] === Core.svec(Int)
+    # ... unless its length is a typevar of the left side, which an instance may
+    # substitute by zero: `Ref{Tuple{}}` leaves `S` unbound
+    let rhs = Tuple{Ref{NTuple{N,S}}} where {S,N}
+        e = intersection_env(Tuple{Ref{NTuple{N,Int}} where N}, rhs)[2][1]
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+        @test intersection_env(Tuple{Ref{NTuple{2,Int}}}, rhs)[2] === Core.svec(Int, 2)
+    end
+    # (such a parameter is compared in both directions, and neither of them pins
+    # a var that occurs invariantly in the tail element)
+    @test optional(intersection_env(Tuple{Ref{NTuple{N,Ref{Int}}} where N}, Tuple{Ref{NTuple{N,Ref{S}}}} where {S,N})[2][1], Int)
+    let e = intersection_env(Tuple{Any,Float64}, Tuple{Ref{NTuple{N,Ref{S}}},Any} where {S,N})[2][1]
+        @test e isa Core.SimpleVector && e[1] isa TypeVar && !e[2]
+    end
+    # `N` is bound in every instance, whatever the length
+    let e = intersection_env(Tuple{Tuple{Vararg{Int}}}, Tuple{Tuple{Vararg{S,N}}} where {S,N})[2]
+        @test optional(e[1], Int) && e[2] === Vararg
+    end
+    # tail elements make the var diagonal, which widens the keys of type arguments
+    # to their tag; the instance without tail elements keeps its key
+    let rhs = Tuple{S2,Vararg{S1}} where {S1,S2<:S1}
+        e = intersection_env(Tuple{Core.TypeEgal{Float64},Vararg{Core.TypeEgal{Float64}}}, rhs)[2][1]
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === Union{} && e[1].ub === DataType
+        @test intersection_env(Tuple{Core.TypeEgal{Float64}}, rhs)[2][1] === Core.TypeEgal{Float64}
+    end
+    # `(1,)` binds `S` to `Int`, so the value that a tail element pins `S` to does
+    # not hold for every instance
+    let e = only(intersection_env(Tuple{Int,Vararg{Vector{Integer}}}, Tuple{S,Vararg{Vector{S}}} where S)[2])
+        @test e isa Core.SimpleVector && e[2] && e[1].lb === Union{} && e[1].ub === Any
+    end
+end
+# The `egal` bit of a pinned env marker says whether each instance that defines the
+# var binds it to that very object, rather than to some `==` spelling of it
+let pinned(e) = e isa Core.SimpleVector && e[1] isa TypeVar && e[1].lb === e[1].ub,
+    egal(e) = pinned(e) && e[3]::Bool
+    # a bare `Type{T}` slot binds the argument itself, which is only `==` to `Int`
+    e = only(intersection_env(Tuple{Type{Int}}, Tuple{Type{T}} where T)[2])
+    @test pinned(e) && !e[3]
+    # the parameter of a type is canonical, even below `Type{...}`
+    @test egal(only(intersection_env(Tuple{Type{Vector{Int}}}, Tuple{Type{Vector{T}}} where T)[2]))
+    # and displaces an `==`-only spelling of the same binding, in either order
+    @test egal(only(intersection_env(Tuple{Type{Int},Type{Vector{Int}}}, Tuple{Type{T},Type{Vector{T}}} where T)[2]))
+    @test egal(only(intersection_env(Tuple{Type{Vector{Int}},Type{Int}}, Tuple{Type{Vector{T}},Type{T}} where T)[2]))
+    # a var bound only by tail elements that an instance may lack, which bind it
+    # to a type tag or to a type parameter
+    @test egal(only(intersection_env(Tuple{Vararg{Int}}, Tuple{Vararg{S}} where S)[2]))
+    @test egal(only(intersection_env(Tuple{Vararg{Vector{Int}}}, Tuple{Vararg{Vector{S}}} where S)[2]))
+    # ... but not by tail elements that are only `==`-known values
+    e = only(intersection_env(Tuple{Vararg{Type{Int}}}, Tuple{Vararg{Type{S}}} where S)[2])
+    @test pinned(e) && !e[3]
+end
 # A fixed tuple prefix before a free vararg length guarantees a matching
 # right-side tuple element exists, but range and maybe-empty tuple tails do not.
 let rhs = Tuple{typeof(intersection_env), Type{<:Tuple{Vararg{E}}}} where E
@@ -3479,7 +3759,7 @@ _typeegal_id(::Type{T}) where {T} = T
     # bound being consistency-checked is a concrete type object, not an
     # argument-slot spelling, so its structural descent keeps identity. An
     # `==`-only `Type`-slotted query must still produce a pinned uncertainty
-    # marker (`svec(tvar, constrained)`).
+    # marker (`svec(tvar, constrained, egal)`).
     let sig = Tuple{Type{<:Type{Val{S}}}, Type{<:Type{Val{f}}}} where {S,f}
         X = Tuple{Tuple{Int}}
         _, E = intersection_env(Tuple{TE{Type{Val{X}}}, TE{Type{Val{:x}}}}, sig)
