@@ -448,6 +448,9 @@ map(f, R::ReshapedArray) = reshape(map(f, parent(R)), size(R))
 iterate(R::ReshapedArray) = iterate(parent(R))
 iterate(R::ReshapedArray, state) = iterate(parent(R), state)
 
+copyto_unaliased!(deststyle::IndexLinear, dest::AbstractArray, ::IndexStyle, src::ReshapedArray) =
+    copyto_unaliased!(deststyle, dest, IndexStyle(parent(src)), parent(src))
+
 mapfoldl_impl(f, op, nt, R::ReshapedArray) = mapfoldl_impl(f, op, nt, parent(R))
 mapfoldr_impl(f, op, nt, R::ReshapedArray) = mapfoldr_impl(f, op, nt, parent(R))
 
