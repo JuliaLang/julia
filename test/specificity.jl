@@ -374,3 +374,20 @@ let root = NTuple
     B = Tuple{Union{UnionAll(N, UnionAll(T, x1)), UnionAll(N, UnionAll(T, x2))}}
     @ccall jl_type_morespecific_no_subtype(A::Any, B::Any)::Cint
 end
+
+# comparing nested unions takes exponential time without memoization
+abstract type AbstractA64635{T,N} end
+struct A64635{T,N} <: AbstractA64635{T,N} end
+for i in 1:32
+    @eval struct $(Symbol(:Wrapper64635_, i)){T,P} end
+end
+const Wrapped64635{T,N,Src,Dst} =
+    Union{Dst, PermutedDimsArray{T,N,<:Any,<:Any,<:Src},
+          (getfield(@__MODULE__, Symbol(:Wrapper64635_, i)){T,<:Dst} for i in 1:32)...}
+const AnyAbstractA64635{T,N} = Wrapped64635{T,N,AbstractA64635,AbstractA64635{T,N}}
+const AnyA64635{T,N} = Wrapped64635{T,N,A64635,A64635{T,N}}
+@test !args_morespecific(Tuple{AnyAbstractA64635{T,1} where T}, Tuple{AnyA64635})
+@test !args_morespecific(Tuple{AnyA64635}, Tuple{AnyAbstractA64635{T,1} where T})
+# a bound `Vararg` is compared as a separate query
+@test !args_morespecific(Tuple{AnyAbstractA64635{T,N}, Vararg{Int,N}} where {T,N}, Tuple{AnyA64635, Int, Int})
+@test !args_morespecific(Tuple{AnyA64635, Int, Int}, Tuple{AnyAbstractA64635{T,N}, Vararg{Int,N}} where {T,N})
