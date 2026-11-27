@@ -4944,6 +4944,10 @@ end
 @test Compiler.typesubtract(Tuple{String,Vararg{Int}}, Tuple{String,Int}, 0) == Tuple{String,Vararg{Int}}
 @test Compiler.typesubtract(NTuple{3, Real}, NTuple{3, Char}, 0) == NTuple{3, Real}
 @test Compiler.typesubtract(NTuple{3, Union{Real, Char}}, NTuple{2, Char}, 0) == NTuple{3, Union{Real, Char}}
+# `T` is diagonal in the first member alone but not in the whole union
+abstract type TypeSubtractAbstract end
+abstract type TypeSubtractParam{T} <: TypeSubtractAbstract end
+@test (Int8(1), 2) isa Compiler.typesubtract(Union{Tuple{T,T}, TypeSubtractParam{T}} where T, TypeSubtractAbstract, 4)
 
 @test Compiler.compatible_vatuple(Tuple{String,Vararg{Int}}, Tuple{String,Vararg{Int}})
 @test !Compiler.compatible_vatuple(Tuple{String,Int}, Tuple{String,Vararg{Int}})

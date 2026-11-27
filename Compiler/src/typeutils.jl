@@ -139,8 +139,11 @@ function typesubtract(@nospecialize(a), @nospecialize(b), max_union_splitting::I
     if isa(ua, Union)
         uua = typesubtract(rewrap_unionall(ua.a, a), b, max_union_splitting)
         uub = typesubtract(rewrap_unionall(ua.b, a), b, max_union_splitting)
-        return Union{valid_as_lattice(uua, true) ? uua : Union{},
-                     valid_as_lattice(uub, true) ? uub : Union{}}
+        ret = Union{valid_as_lattice(uua, true) ? uua : Union{},
+                    valid_as_lattice(uub, true) ? uub : Union{}}
+        # wrapping each member on its own can make a variable diagonal and lose values
+        ua !== a && !(a <: Union{ret, b}) && return a
+        return ret
     elseif a isa DataType
         ub = unwrap_unionall(b)
         if ub isa DataType
