@@ -568,8 +568,13 @@ end
         if is_same_conditionals(typea, typeb)
             thentype = tmerge(widenlattice(lattice), typea.thentype, typeb.thentype)
             elsetype = tmerge(widenlattice(lattice), typea.elsetype, typeb.elsetype)
+            isdefined = typea.isdefined & typeb.isdefined
             if thentype !== elsetype
-                return Conditional(typea.slot, typea.ssadef, thentype, elsetype)
+                return Conditional(typea.slot, typea.ssadef, thentype, elsetype; isdefined)
+            elseif isdefined
+                # an `@isdefined` result still refines the slot when both branches have the same type
+                typea.thentype === thentype && typea.elsetype === elsetype && return typea
+                return Conditional(typea.slot, typea.ssadef, thentype, elsetype; isdefined)
             end
         end
         val = maybe_extract_const_bool(typea)
