@@ -1743,43 +1743,37 @@ end
                            EscapeInfo(NoEscape(), Unindexable())]))
 end
 
-# escape information has to reach every element of an alias set, however the set was merged
+# all elements of an alias set share the same escape information, however the set was merged
 @testset "alias set propagation" begin
     EA = EscapeAnalysis
-    isalltop(estate, idxs) = all(i -> estate.escapes[i] === EA.⊤, idxs)
     let estate = EA.EscapeState(0, 4)
         EA.propagate_changes!(estate, EA.Change[
             EA.AliasChange(1, 2), EA.AliasChange(3, 4), EA.AliasChange(2, 4)])
         @test sort!(EA.getaliases(1, estate)) == 1:4
         @test EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(1, EA.ReturnEscape(1))])
-        @test all(i -> has_return_escape(estate.escapes[i]), 1:4)
-        @test !isalltop(estate, 1:4)
+        @test all(i -> has_return_escape(estate[SSAValue(i)]), 1:4)
         @test EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(4, EA.⊤)])
-        @test isalltop(estate, 1:4)
+        @test all(i -> estate[SSAValue(i)] === EA.⊤, 1:4)
         @test !EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(3, EA.ReturnEscape(2))])
-        @test isalltop(estate, 1:4)
     end
-    let estate = EA.EscapeState(0, 7)
-        EA.propagate_changes!(estate, EA.Change[EA.AliasChange(1, 2), EA.EscapeChange(1, EA.⊤)])
-        EA.propagate_changes!(estate, EA.Change[EA.AliasChange(3, 4), EA.AliasChange(4, 5)])
-        @test isalltop(estate, 1:2) && !any(i -> estate.escapes[i] === EA.⊤, 3:7)
-        @test EA.propagate_changes!(estate, EA.Change[EA.AliasChange(2, 5), EA.AliasChange(5, 6)])
-        @test sort!(EA.getaliases(3, estate)) == 1:6
-        @test isalltop(estate, 1:2) && !any(i -> estate.escapes[i] === EA.⊤, 3:7)
-        @test EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(1, EA.ReturnEscape(1))])
-        @test all(i -> has_return_escape(estate.escapes[i]), 3:6)
-        @test !any(i -> estate.escapes[i] === EA.⊤, 3:6)
-        @test EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(2, EA.⊤)])
-        @test isalltop(estate, 1:6)
-        @test estate.escapes[7] === EA.⊥ && EA.getaliases(7, estate) === nothing
-        EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(7, EA.⊤)])
-        EA.propagate_changes!(estate, EA.Change[EA.AliasChange(7, 1)])
-        @test !EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(7, EA.ReturnEscape(1))])
-        @test isalltop(estate, 1:7)
-        estate[SSAValue(3)] = EA.⊥
-        @test EA.propagate_changes!(estate, EA.Change[EA.EscapeChange(7, EA.ReturnEscape(1))])
-        @test has_return_escape(estate.escapes[3]) && estate.escapes[3] !== EA.⊤
-        @test isalltop(estate, [1, 2, 4, 5, 6, 7])
+    let estate = EA.EscapeState(0, 5)
+        EA.propagate_changes!(estate, EA.Change[
+            EA.AliasChange(1, 2), EA.EscapeChange(1, EA.ReturnEscape(1))])
+        EA.propagate_changes!(estate, EA.Change[
+            EA.AliasChange(3, 4), EA.EscapeChange(4, EA.ThrownEscape(2))])
+        # merging alias sets merges their escape information
+        @test EA.propagate_changes!(estate, EA.Change[EA.AliasChange(2, 3)])
+        @test all(1:4) do i
+            x = estate[SSAValue(i)]
+            return has_return_escape(x) && has_thrown_escape(x, 2)
+        end
+        @test EA.propagate_changes!(estate, EA.Change[EA.LivenessChange(1, 5)])
+        @test all(i -> 5 in estate[SSAValue(i)].Liveness, 1:4)
+        @test estate[SSAValue(5)] === EA.⊥ && EA.getaliases(5, estate) === nothing
+        # `setindex!` sets the escape information of the whole alias set
+        estate[SSAValue(2)] = EA.⊤
+        @test all(i -> estate[SSAValue(i)] === EA.⊤, 1:4)
+        @test estate[SSAValue(5)] === EA.⊥
     end
 end
 

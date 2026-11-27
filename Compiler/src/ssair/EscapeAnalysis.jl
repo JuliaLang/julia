@@ -403,17 +403,16 @@ const AliasSet = IntDisjointSet{Int}
 
 Extended lattice that maps arguments and SSA values to escape information represented as [`EscapeInfo`](@ref).
 Escape information imposed on SSA IR element `x` can be retrieved by `estate[x]`.
+All elements of an alias set share the same escape information.
 """
 struct EscapeState
+    # `escapes[root]` is the escape information of the alias set rooted at `root`,
+    # which all of its elements share: the entries of the other elements are stale
     escapes::Vector{EscapeInfo}
     aliasset::AliasSet
     # The elements of each alias set as a circular linked list: `nextalias[xidx]` is the
     # element that follows `xidx` in its alias set, which is `xidx` itself if it is alone.
     nextalias::Vector{Int}
-    # `nontop[root]`, if not `nothing`, lists the elements of the alias set rooted at
-    # `root` that may not be `⊤` yet: every other element of that alias set is `⊤`.
-    # Joining escape information into `⊤` gives `⊤`, so those need not be visited again.
-    nontop::Vector{Union{Nothing,Vector{Int}}}
     nargs::Int
 end
 function EscapeState(nargs::Int, nstmts::Int)
@@ -422,20 +421,21 @@ function EscapeState(nargs::Int, nstmts::Int)
         1 ≤ i ≤ nargs ? ArgEscape() : ⊥ for i in 1:n]
     aliasset = AliasSet(n)
     nextalias = Int[i for i in 1:n]
-    nontop = Union{Nothing,Vector{Int}}[nothing for _ in 1:n]
-    return EscapeState(escapes, aliasset, nextalias, nontop, nargs)
+    return EscapeState(escapes, aliasset, nextalias, nargs)
 end
+
+# the escape information of the alias set that `xidx` belongs to
+escapeinfo(xidx::Int, estate::EscapeState) = estate.escapes[find_root!(estate.aliasset, xidx)]
+
 function getindex(estate::EscapeState, @nospecialize(x))
     xidx = iridx(x, estate)
-    return xidx === nothing ? nothing : estate.escapes[xidx]
+    return xidx === nothing ? nothing : escapeinfo(xidx, estate)
 end
+# sets the escape information of the whole alias set that `x` belongs to
 function setindex!(estate::EscapeState, v::EscapeInfo, @nospecialize(x))
     xidx = iridx(x, estate)
     if xidx !== nothing
-        estate.escapes[xidx] = v
-        if v !== ⊤
-            estate.nontop[find_root!(estate.aliasset, xidx)] = nothing
-        end
+        estate.escapes[find_root!(estate.aliasset, xidx)] = v
     end
     return estate
 end
@@ -532,7 +532,7 @@ struct ArgEscapeCache
         argescapes = Vector{ArgEscapeInfo}(undef, nargs)
         argaliases = ArgAliasing[]
         for i = 1:nargs
-            info = estate.escapes[i]
+            info = escapeinfo(i, estate)
             @assert info.AliasInfo === true
             argescapes[i] = ArgEscapeInfo(info)
             for j = (i+1):nargs
@@ -725,38 +725,12 @@ end
 @inline function propagate_escape_change!(@specialize(op),
     estate::EscapeState, change::EscapeChange)
     (; xidx, xinfo) = change
+    # the change applies to the escape information shared by the alias set of `xidx`
     root = find_root!(estate.aliasset, xidx)
-    nontop = estate.nontop[root]
-    if op === (⊔ₑ) && nontop !== nothing
-        # every element of the alias set other than these is `⊤`, which the join keeps
-        anychanged = false
-        for aidx in nontop
-            anychanged |= _propagate_escape_change!(op, estate, aidx, xinfo)
-        end
-        xinfo === ⊤ && empty!(nontop)
-        return anychanged
-    end
-    anychanged = _propagate_escape_change!(op, estate, xidx, xinfo)
-    # COMBAK is there a more efficient method of escape information equalization on aliasset?
-    nextalias = estate.nextalias
-    aidx = nextalias[xidx]
-    while aidx ≠ xidx
-        anychanged |= _propagate_escape_change!(op, estate, aidx, xinfo)
-        aidx = nextalias[aidx]
-    end
-    # the whole alias set is `⊤` after joining `⊤` into it, and unknown after anything else
-    # (there is nothing to gain from tracking this for an element without aliases)
-    alltop = op === (⊔ₑ) && xinfo === ⊤ && nextalias[xidx] ≠ xidx
-    estate.nontop[root] = alltop ? Int[] : nothing
-    return anychanged
-end
-
-@inline function _propagate_escape_change!(@specialize(op),
-    estate::EscapeState, xidx::Int, info::EscapeInfo)
-    old = estate.escapes[xidx]
-    new = op(old, info)
+    old = estate.escapes[root]
+    new = op(old, xinfo)
     if old ≠ new
-        estate.escapes[xidx] = new
+        estate.escapes[root] = new
         return true
     end
     return false
@@ -765,7 +739,8 @@ end
 # propagate Liveness changes separately in order to avoid constructing too many BitSet
 @inline function propagate_liveness_change!(estate::EscapeState, change::LivenessChange)
     (; xidx, livepc) = change
-    info = estate.escapes[xidx]
+    root = find_root!(estate.aliasset, xidx)
+    info = estate.escapes[root]
     Liveness = info.Liveness
     Liveness === TOP_LIVENESS && return false
     livepc ∈ Liveness && return false
@@ -773,7 +748,7 @@ end
         # if this Liveness is a constant, we shouldn't modify it and propagate this change as a new EscapeInfo
         Liveness = copy(Liveness)
         push!(Liveness, livepc)
-        estate.escapes[xidx] = EscapeInfo(info; Liveness)
+        estate.escapes[root] = EscapeInfo(info; Liveness)
         return true
     else
         # directly modify Liveness property in order to avoid excessive copies
@@ -788,39 +763,12 @@ end
     xroot = find_root!(aliasset, xidx)
     yroot = find_root!(aliasset, yidx)
     if xroot ≠ yroot
-        nextalias, nontop = estate.nextalias, estate.nontop
-        xnontop, ynontop = nontop[xroot], nontop[yroot]
-        if xnontop === nothing
-            if ynontop !== nothing
-                # nothing is known about the alias set of `x`: all of it may be non-`⊤`
-                aidx = xidx
-                while true
-                    push!(ynontop, aidx)
-                    aidx = nextalias[aidx]
-                    aidx == xidx && break
-                end
-            end
-            merged = ynontop
-        elseif ynontop === nothing
-            aidx = yidx
-            while true
-                push!(xnontop, aidx)
-                aidx = nextalias[aidx]
-                aidx == yidx && break
-            end
-            merged = xnontop
-        else
-            if length(xnontop) < length(ynontop)
-                xnontop, ynontop = ynontop, xnontop
-            end
-            for aidx in ynontop
-                push!(xnontop, aidx)
-            end
-            merged = xnontop
-        end
-        nontop[xroot] = nontop[yroot] = nothing
-        nontop[union!(aliasset, xroot, yroot)] = merged
+        # the merged alias set shares the escape information of both alias sets
+        escapes = estate.escapes
+        info = escapes[xroot] ⊔ₑ escapes[yroot]
+        escapes[root_union!(aliasset, xroot, yroot)] = info
         # merge the circular lists of the two alias sets
+        nextalias = estate.nextalias
         nextalias[xidx], nextalias[yidx] = nextalias[yidx], nextalias[xidx]
         return true
     end
@@ -858,14 +806,9 @@ function add_alias_change!(astate::AnalysisState, @nospecialize(x), @nospecializ
     estate = astate.estate
     xidx = iridx(x, estate)
     yidx = iridx(y, estate)
-    if xidx !== nothing && yidx !== nothing
-        if !isaliased(xidx, yidx, astate.estate)
-            pushfirst!(astate.changes, AliasChange(xidx, yidx))
-        end
-        # add new escape change here so that it's shared among the expanded `aliasset` in `propagate_escape_change!`
-        xinfo = estate.escapes[xidx]
-        yinfo = estate.escapes[yidx]
-        add_escape_change!(astate, x, xinfo ⊔ₑ yinfo, #=force=#true)
+    if xidx !== nothing && yidx !== nothing && !isaliased(xidx, yidx, estate)
+        # `propagate_alias_change!` also merges the escape information of the alias sets
+        pushfirst!(astate.changes, AliasChange(xidx, yidx))
     end
     return nothing
 end
@@ -997,9 +940,8 @@ function escape_exception!(astate::AnalysisState, tryregions::Vector{UnitRange{I
     # excinfo = estate[exc]
     # TODO? set up a special effect bit that checks the existence of `rethrow` and `current_exceptions` and use it here
     excinfo = ⊤
-    escapes = estate.escapes
-    for i in 1:length(escapes)
-        x = escapes[i]
+    for i in 1:length(estate.escapes)
+        x = escapeinfo(i, estate)
         xt = x.ThrownEscape
         xt === TOP_THROWN_ESCAPE && @goto propagate_exception_escape # fast path
         for pc in xt
