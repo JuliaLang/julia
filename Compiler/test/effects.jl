@@ -1399,6 +1399,23 @@ end |> !Compiler.is_noub
     @inbounds getindex_dont_propagate(xs, i)
 end |> Compiler.is_noub
 
+# a repeated bounds check is folded, so `:nothrow` can be refined
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    checkbounds(Bool, xs, i) ? xs[i] : 0
+end |> Compiler.is_nothrow
+@test Base.infer_effects((Vector{Int},Int)) do xs, i
+    checkbounds(Bool, xs, i) || return 0
+    empty!(xs)
+    xs[i]
+end |> !Compiler.is_nothrow
+@test Base.infer_effects((Vector{Float64},)) do xs
+    s = 0.0
+    for x in xs
+        s += x
+    end
+    s
+end |> Compiler.is_nothrow
+
 # refine `:nothrow` when `exct` is known to be `Bottom`
 @test Base.infer_exception_type(getindex, (Vector{Int},Int)) == BoundsError
 function getindex_nothrow(xs::Vector{Int}, i::Int)

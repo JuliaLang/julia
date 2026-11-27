@@ -2142,6 +2142,125 @@ function kill_phi!(compact::IncrementalCompact, phi_uses::Vector{Int},
     end
 end
 
+const BRANCH_KEY_INTRINSICS = Any[
+    Intrinsics.add_int, Intrinsics.sub_int, Intrinsics.mul_int, Intrinsics.neg_int,
+    Intrinsics.and_int, Intrinsics.or_int, Intrinsics.xor_int, Intrinsics.not_int,
+    Intrinsics.shl_int, Intrinsics.lshr_int, Intrinsics.ashr_int, Intrinsics.bitcast,
+    Intrinsics.sext_int, Intrinsics.zext_int, Intrinsics.trunc_int,
+    Intrinsics.slt_int, Intrinsics.sle_int, Intrinsics.ult_int, Intrinsics.ule_int,
+    Intrinsics.eq_int, Intrinsics.ne_int, Intrinsics.lt_float, Intrinsics.le_float,
+    Intrinsics.eq_float, Intrinsics.ne_float]
+
+# a key that is equal for two values computed the same way from the same inputs
+# sets `reads_memory[]` if the computation loads mutable state
+function branch_cond_key(ir::IRCode, @nospecialize(x), reads_memory::RefValue{Bool}, depth::Int=0)
+    if isa(x, SSAValue)
+        stmt = ir[x][:stmt]
+        if depth < 8 && isexpr(stmt, :call)
+            f = singleton_type(argextype(stmt.args[1], ir))
+            nargs = length(stmt.args)
+            if f === getfield && (nargs == 3 || (nargs == 4 && isa(stmt.args[4], Bool)))
+                T = widenconst(argextype(stmt.args[2], ir))
+                (isconcretetype(T) && !ismutabletype(T)) || (reads_memory[] = true)
+            elseif !(f === (===) || any(@nospecialize(g) -> g === f, BRANCH_KEY_INTRINSICS))
+                return x
+            end
+            key = Any[f]
+            for i = 2:nargs
+                push!(key, branch_cond_key(ir, stmt.args[i], reads_memory, depth + 1))
+            end
+            return Tuple(key)
+        end
+    elseif isa(x, GlobalRef)
+        reads_memory[] = true
+    end
+    return x
+end
+
+function may_write_memory(ir::IRCode, bb::Int, pending_writes::BitVector)
+    pending_writes[bb] && return true
+    for idx in ir.cfg.blocks[bb].stmts
+        inst = ir[SSAValue(idx)]
+        stmt = inst[:stmt]
+        (stmt === nothing || isterminator(stmt) || isa(stmt, PhiNode) || isa(stmt, PiNode) ||
+         isexpr(stmt, :boundscheck) || has_flag(inst[:flag], IR_FLAG_EFFECT_FREE)) || return true
+    end
+    return false
+end
+
+"""
+    fold_redundant_branches!(ir::IRCode) -> made_changes::Bool
+
+Replace a branch condition with `true` or `false` when the same condition was already tested on
+every path to the branch. Inlined code often repeats a check its caller just made, such as a
+bounds check right after an iterator tested the same index. Once dead code elimination drops
+the branch not taken, the `throw` it guarded is gone and `:nothrow` can be proven.
+
+Only chains of single-predecessor blocks are followed, so the earlier test always dominates the
+later one. A condition that reads mutable memory is reused only if nothing on the chain may write
+memory.
+"""
+function fold_redundant_branches!(ir::IRCode)
+    blocks = ir.cfg.blocks
+    nblocks = length(blocks)
+    keys = Vector{Any}(nothing, nblocks)
+    reads = falses(nblocks)
+    nbranches = 0
+    for bb = 1:nblocks
+        term = ir[SSAValue(last(blocks[bb].stmts))][:stmt]
+        (isa(term, GotoIfNot) && term.dest != bb + 1) || continue
+        reads_memory = RefValue(false)
+        keys[bb] = branch_cond_key(ir, term.cond, reads_memory)
+        reads[bb] = reads_memory[]
+        nbranches += 1
+    end
+    nbranches < 2 && return false
+    # pending inserted nodes are not in the block ranges yet
+    pending_writes = falses(nblocks)
+    for (i, info) in enumerate(ir.new_nodes.info)
+        has_flag(ir.new_nodes.stmts[i][:flag], IR_FLAG_EFFECT_FREE) && continue
+        pending_writes[block_for_inst(ir.cfg, info.pos)] = true
+    end
+    made_changes = false
+    for bb = 1:nblocks
+        key = keys[bb]
+        key === nothing && continue
+        outcome = known_branch_outcome(ir, keys, reads, pending_writes, bb)
+        outcome === nothing && continue
+        term = ir[SSAValue(last(blocks[bb].stmts))][:stmt]::GotoIfNot
+        ir[SSAValue(last(blocks[bb].stmts))][:stmt] = GotoIfNot(outcome, term.dest)
+        made_changes = true
+    end
+    return made_changes
+end
+
+function known_branch_outcome(ir::IRCode, keys::Vector{Any}, reads::BitVector, pending_writes::BitVector, bb::Int)
+    blocks = ir.cfg.blocks
+    key = keys[bb]
+    # if the condition reads memory, nothing between the two tests may write to it
+    nowrites = !reads[bb] || !may_write_memory(ir, bb, pending_writes)
+    cur = bb
+    for _ = 1:32
+        nowrites || return nothing
+        preds = blocks[cur].preds
+        length(preds) == 1 || return nothing
+        p = preds[1]
+        p == 0 && return nothing # function entry
+        reads[bb] && (nowrites = !may_write_memory(ir, p, pending_writes))
+        pkey = keys[p]
+        if nowrites && pkey !== nothing
+            taken = cur == p + 1 # falls through when the condition is true
+            pkey === key && return taken
+            (is_not_of(pkey, key) || is_not_of(key, pkey)) && return !taken
+        end
+        cur = p
+    end
+    return nothing
+end
+
+is_not_of(@nospecialize(a), @nospecialize(b)) =
+    isa(a, Tuple) && length(a) == 2 && a[1] === Intrinsics.not_int && a[2] === b
+
 """
     adce_pass!(ir::IRCode) -> newir::IRCode
 

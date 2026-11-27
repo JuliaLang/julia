@@ -2363,6 +2363,8 @@ end
             @test Base.Compiler.is_noub(effects)
             @test Base.Compiler.is_nonoverlayed(effects)
             @test Base.Compiler.is_nortcall(effects)
+            # elements of a non-isbits array may be unassigned
+            isbitstype(El) && @test Base.Compiler.is_nothrow(effects)
         end
     end
 end
