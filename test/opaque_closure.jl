@@ -467,6 +467,40 @@ let ir = first(only(Base.code_ircode(sin, (Int,))))
     @test oc(1) == sin(1)
 end
 
+# Interpreting optimized IR runs the Upsilons placed before an `:enter`, whose
+# values a PhiC in the catch block sees when the `try` throws right away
+@noinline maythrow_upsilon(x) = x > 0 ? error("boom") : x
+function upsilon_before_enter(x)
+    y = 1
+    try
+        y = maythrow_upsilon(x)
+    catch
+    end
+    return y
+end
+function upsilon_before_enter_loop(n)
+    s = 0
+    for i in 1:n
+        y = i
+        try
+            y = maythrow_upsilon(isodd(i) ? 1 : -i)
+        catch
+            s += 10y
+        end
+        s += y
+    end
+    return s
+end
+for (f, args) in ((upsilon_before_enter, (1, -5)), (upsilon_before_enter_loop, (0, 1, 4)))
+    ir = first(only(Base.code_ircode(f, (Int,))))
+    @test any(x -> x isa Core.UpsilonNode, ir.stmts.stmt)
+    ir.argtypes[1] = Tuple{}
+    oc = Core.OpaqueClosure(ir; do_compile=false)
+    for x in args
+        @test oc(x) === f(x)
+    end
+end
+
 function typed_add54236(::Type{T}) where T
     return @opaque (x::Int)->T(x) + T(1)
 end
