@@ -17,6 +17,10 @@ debug_method_invalidation(onoff::Bool) =
 # The linkage blob owning `v`, or typemax(UInt) if it is in no image.
 external_blob_index(@nospecialize(v)) = ccall(:jl_external_blob_index, Csize_t, (Any,), v)
 
+# Check whether `image` and its dependencies have no replaced bindings, allowing
+# fast validation. For an unknown image, check all images.
+image_deps_unreplaced(image::UInt) = ccall(:jl_linkage_blob_deps_replaced, Cint, (Csize_t,), image) == 0
+
 struct VerifyMethodInitialState
     codeinst::CodeInstance
     mi::MethodInstance
@@ -119,8 +123,18 @@ end
 function insert_backedges(internal_methods::Vector{Any})
     # determine which CodeInstance objects are still valid in our image
     # to enable any applicable new codes
-    backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-    scan_new_methods!(internal_methods, get_world_counter(), backedges_only)
+    isempty(internal_methods) && return nothing
+    image = external_blob_index(internal_methods[1])
+    # Read the world before checking for replacements. Replacements are recorded
+    # before their world is published, so the check covers all replacements in `world`.
+    world = get_world_counter()
+    backedges_only = image_deps_unreplaced(image)
+    if backedges_only && !generating_output()
+        defer_image_scans!(internal_methods, image, world)
+    else
+        # Install backedges before serializing an image.
+        scan_new_methods!(internal_methods, world, backedges_only)
+    end
     scan_new_code!(internal_methods, VerifyMethodWorkspace())
     nothing
 end
@@ -262,8 +276,7 @@ function verify_method(codeinst::CodeInstance, validation_world::UInt, workspace
 
             # Check for invalidation of GlobalRef edges
             if (initial.def.did_scan_source & 0x1) == 0x0
-                backedges_only = unsafe_load(cglobal(:jl_first_image_replacement_world, UInt)) == typemax(UInt)
-                scan_new_method!(initial.def, validation_world, backedges_only)
+                scan_new_method!(initial.def, validation_world, image_deps_unreplaced(initial.image))
             end
             if (initial.def.did_scan_source & 0x4) != 0x0
                 maxworld = 0

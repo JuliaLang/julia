@@ -105,6 +105,7 @@ function invalidate_code_for_globalref!(b::Core.Binding, invalidated_bpart::Core
     invalidated_any = false
     queued_bindings = Tuple{Core.Binding, Core.BindingPartition, Core.BindingPartition}[]    # defer handling these to keep the logging coherent
     if need_to_invalidate_code
+        scan_pending_images!(b)
         if (b.flags & BINDING_FLAG_ANY_IMPLICIT_EDGES) != 0
             nmethods = ccall(:jl_module_scanned_methods_length, Csize_t, (Any,), gr.mod)
             for i = 1:nmethods
@@ -178,6 +179,122 @@ function scan_new_method!(method::Method, world::UInt, image_backedges_only::Boo
     if image_backedges_only && !has_image_globalref(method)
         return
     end
+    _scan_method_source!(method, world, image_backedges_only)
+end
+
+# Methods awaiting image binding backedges. While `image_deps_unreplaced` holds,
+# these backedges are unused. `scan_pending_images!` installs them when a binding
+# in a dependency image is replaced.
+mutable struct PendingImageScan
+    const image::UInt # linkage blob
+    const world::UInt
+    const methods::Vector{Method}
+    next::Union{PendingImageScan,Nothing}
+end
+mutable struct PendingImageScans
+    @atomic head::Union{PendingImageScan,Nothing}
+end
+const PENDING_IMAGE_SCANS = PendingImageScans(nothing)
+
+image_depends_on(image::UInt, blob::UInt) =
+    ccall(:jl_linkage_blob_dep_world, Csize_t, (Csize_t, Csize_t), image, blob) != 0
+
+# All images depend on `Main`. Scan methods that reference it at load time,
+# since changes to its bindings do not trigger image scans.
+names_main(method::Method) = method.module === Core.Main || !isa(method.source, String) ||
+    ccall(:jl_method_has_root, Cint, (Any, Any), method, Core.Main) != 0
+
+# Return whether the scan can be deferred, scanning methods that reference `Main` now.
+function defers_image_scan(method::Method, world::UInt)
+    isdefined(method, :source) || return false
+    isa(method.source, MaybeCompressed) || return false
+    has_image_globalref(method) || return false
+    names_main(method) || return true
+    _scan_method_source!(method, world, true)
+    return false
+end
+
+# Defer scans for this image's methods and methods from earlier images with code in this image.
+# Publish the pending scans before validating code or marking methods as scanned,
+# so binding replacement finds them. Recheck for replacements after publishing;
+# if a replacement already occurred, scan in full.
+function defer_image_scans!(internal_methods::Vector{Any}, image::UInt, world::UInt)
+    deferred = Method[]
+    for item in internal_methods
+        if item isa Method && defers_image_scan(item, world)
+            push!(deferred, item)
+        end
+    end
+    earlier = nothing
+    for item in internal_methods
+        item isa CodeInstance || continue
+        method = get_ci_mi(item).def
+        method isa Method || continue
+        (method.did_scan_source & 0x1) == 0x0 || continue
+        external_blob_index(method) == image && continue
+        defers_image_scan(method, world) || continue
+        earlier === nothing && (earlier = IdSet{Method}())
+        method in earlier && continue
+        push!(earlier, method)
+        push!(deferred, method)
+    end
+    isempty(deferred) && return
+    push_pending_image_scan!(PendingImageScan(image, world, deferred, nothing))
+    for method in deferred
+        @atomic method.did_scan_source |= 0x1
+    end
+    ccall(:jl_linkage_blob_deps_replaced_locked, Cint, (Csize_t,), image) == 0 && return
+    world = get_world_counter()
+    for method in deferred
+        _scan_method_source!(method, world, false)
+    end
+    scan_new_methods!(internal_methods, world, false)
+    nothing
+end
+
+function push_pending_image_scan!(pending::PendingImageScan)
+    old = @atomic PENDING_IMAGE_SCANS.head
+    while true
+        pending.next = old
+        old, ok = @atomicreplace PENDING_IMAGE_SCANS.head old => pending
+        ok && break
+    end
+    nothing
+end
+
+# Install backedges for images that depend on the image containing `b`.
+# Called only by `invalidate_code_for_globalref!` under `world_counter_lock`.
+# Concurrent loads may enqueue scans after the drain; these remain pending until
+# the next invalidation.
+function scan_pending_images!(b::Core.Binding)
+    (@atomic PENDING_IMAGE_SCANS.head) === nothing && return
+    mod = b.globalref.mod
+    mod === Core.Main && return
+    blob = external_blob_index(mod)
+    blob == typemax(UInt) && return # no image was built against this module
+    pending = @atomicswap PENDING_IMAGE_SCANS.head = nothing
+    unrelated = nothing
+    while pending !== nothing
+        next = pending.next
+        if image_depends_on(pending.image, blob)
+            for method in pending.methods
+                _scan_method_source!(method, pending.world, true)
+            end
+        else
+            pending.next = unrelated
+            unrelated = pending
+        end
+        pending = next
+    end
+    while unrelated !== nothing
+        next = unrelated.next
+        push_pending_image_scan!(unrelated)
+        unrelated = next
+    end
+    nothing
+end
+
+function _scan_method_source!(method::Method, world::UInt, image_backedges_only::Bool)
     src = _uncompressed_ir(method)
     foreachgr(src) do gr::GlobalRef
         b = convert(Core.Binding, gr)

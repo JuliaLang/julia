@@ -1478,6 +1478,23 @@ JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_
     JL_GC_POP();
 }
 
+// Whether `root` is among the roots of `m`
+JL_DLLEXPORT int jl_method_has_root(jl_method_t *m, jl_value_t *root)
+{
+    int found = 0;
+    JL_LOCK(&m->writelock); // protect the roots array
+    if (m->roots) {
+        for (size_t i = 0, l = jl_array_nrows(m->roots); i < l; i++) {
+            if (jl_array_ptr_ref(m->roots, i) == root) {
+                found = 1;
+                break;
+            }
+        }
+    }
+    JL_UNLOCK(&m->writelock);
+    return found;
+}
+
 // Add a list of roots with key `modid` to a method
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots)
 {

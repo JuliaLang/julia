@@ -922,6 +922,7 @@ void push_edge(jl_array_t *list, jl_value_t *invokesig, jl_code_instance_t *call
 void jl_mi_done_backedges(jl_method_instance_t *mi JL_PROPAGATES_ROOT, uint8_t old_flags);
 
 JL_DLLEXPORT void jl_add_method_root(jl_method_t *m, jl_module_t *mod, jl_value_t* root) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_method_has_root(jl_method_t *m, jl_value_t *root) JL_CANSAFEPOINT;
 void jl_append_method_roots(jl_method_t *m, uint64_t modid, jl_array_t* roots) JL_CANSAFEPOINT;
 int get_root_reference(rle_reference *rr, jl_method_t *m, size_t i) JL_NOTSAFEPOINT;
 jl_value_t *lookup_root(jl_method_t *m, uint64_t key, int index) JL_NOTSAFEPOINT;
@@ -1831,6 +1832,9 @@ extern uintptr_t jl_sysimage_size;
 JL_DLLEXPORT size_t jl_external_blob_index(jl_value_t *v) JL_NOTSAFEPOINT;
 // The world in which `blob` activated its methods if it is `image`, the sysimage, or a dependency of `image`, else 0.
 JL_DLLEXPORT size_t jl_linkage_blob_dep_world(size_t image, size_t blob) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_linkage_blob_deps_replaced(size_t image) JL_NOTSAFEPOINT;
+JL_DLLEXPORT int jl_linkage_blob_deps_replaced_locked(size_t image) JL_CANSAFEPOINT;
+int jl_image_binding_replaced(jl_module_t *m, size_t new_world) JL_NOTSAFEPOINT;
 // The world since which every method on the typenames of `sig` in `mt` came from `image` or one of its dependencies, else 0.
 JL_DLLEXPORT size_t jl_sig_contributors_world(jl_value_t *sig, jl_methtable_t *mt, size_t image) JL_CANSAFEPOINT;
 void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array_t *record, size_t image, jl_array_t *deferred) JL_CANSAFEPOINT;
