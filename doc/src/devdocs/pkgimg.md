@@ -90,8 +90,11 @@ the images they produce are instrumented as usual, but switching between
 `@<path>` and other selectors can rebuild dependents that were built against
 different dependency images.
 Instrumented package images also work with an ordinary system image. Reports
-include zero counts for instrumented lines that were not executed; precompilation
-workloads do not contribute hits.
+include zero counts for instrumented lines that were not executed. Precompilation
+workloads contribute hits only for code from images already loaded, such as the
+system image and dependencies, since the code a worker compiles itself is not
+instrumented. A worker writes these hits only when the collecting process writes
+an LCOV tracefile whose name contains `%p`.
 
 Without coverage, ordinary builds reject instrumented package images. A build
 with an instrumented system image also accepts package images with the same
