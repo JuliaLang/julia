@@ -891,10 +891,18 @@ static void sweep_malloced_memory_ptls(jl_ptls_t ptls2, size_t *freed, size_t *n
     size_t n = 0;
     size_t l = ptls2->gc_tls_common.heap.mallocarrays.len;
     void **lst = ptls2->gc_tls_common.heap.mallocarrays.items;
+    int upgrade = jl_atomic_load_relaxed(&jl_hugepage_upgrades);
     // filter without preserving order
     while (n < l) {
-        jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~1);
+        jl_genericmemory_t *m = (jl_genericmemory_t*)((uintptr_t)lst[n] & ~(uintptr_t)3);
         if (gc_marked(jl_astaggedvalue(m)->bits.gc)) {
+            // once written, asking cannot stall; the second bit records it
+            if (upgrade && ((uintptr_t)lst[n] & 3) == 1) {
+                size_t nbytes = jl_genericmemory_nbytes(m);
+                if (nbytes >= 1u<<18u)
+                    jl_hugepage_upgrade(m->ptr, nbytes);
+                lst[n] = (void*)((uintptr_t)lst[n] | 2);
+            }
             n++;
         }
         else {
@@ -1549,6 +1557,9 @@ static void gc_sweep_stack_pools(jl_ptls_t ptls, int force) JL_NOTSAFEPOINT
     gc_sweep_wake_all_per_thread(ptls);
     sweep_per_thread_loop();
     gc_sweep_wait_for_all_per_thread();
+    int upgrades = jl_atomic_load_relaxed(&jl_hugepage_upgrades);
+    if (upgrades > 0)
+        jl_atomic_store_relaxed(&jl_hugepage_upgrades, upgrades - 1);
     if (gc_trim_stack_pools)
         gc_trim_shared_free_stacks();
     sweep_mtarraylist_buffers();
@@ -4595,7 +4606,7 @@ JL_DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
             if (jl_hugepage_size > 0) {
                 size_t leftover = jl_hugepage_size - (allocsz % jl_hugepage_size);
                 if ((leftover <= allocsz / 4) || (leftover == jl_hugepage_size))  // limit fragmentation
-                    madvise(b, allocsz, MADV_HUGEPAGE);
+                    jl_hugepage_request(b, allocsz);
             }
         }
         else {
