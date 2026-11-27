@@ -314,7 +314,7 @@ function _show_cmd_word(io::IO, word::AbstractString, underline::Bool)
             print_shell_word(io, word, special)
         end
     end
-    print(io, replace(s, '`' => "\\`"))
+    escape_raw_string(io, s, '`')
 end
 
 # Print `cmd` as one backtick literal if it can be written that way, returning whether it was.
