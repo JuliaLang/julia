@@ -767,6 +767,25 @@ end
 # state management #
 ####################
 
+# If the referenced `ssadef` lost dominance, renumber to the effective phi node
+# where sound or otherwise drop the wrapper. This effectively checks the slotwrapper
+# validity at the CFG join point, where dominance was lost.
+@nospecializeinfer function renumber_slotwrapper(@nospecialize(typ), from::VarTable, to::VarTable, join_pc::Int)
+    w = ignorelimited(typ)
+    (isa(w, Conditional) || isa(w, MustAlias)) || return typ
+    w.ssadef == 0 && return typ # the initial value of an argument is never redefined
+    ssadef = from[w.slot].ssadef
+    w.ssadef == ssadef == to[w.slot].ssadef && return typ
+    if w.ssadef != ssadef
+        w = widenslotwrapper(w)
+    elseif isa(w, Conditional)
+        w = Conditional(w.slot, join_pc, w.thentype, w.elsetype; w.isdefined)
+    else
+        w = MustAlias(w.slot, join_pc, w.vartyp, w.fldidx, w.fldtyp)
+    end
+    return isa(typ, LimitedAccuracy) ? LimitedAccuracy(w, typ.causes) : w
+end
+
 function smerge(lattice::AbstractLattice, sa::Union{NotFound,VarState}, sb::Union{NotFound,VarState}, join_pc::Int)
     sa === sb && return sa
     sa === NOT_FOUND && return sb
@@ -784,6 +803,14 @@ end
 
 function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable, join_pc::Int)
     changed = false
+    for i = 1:length(state) # before any `ssadef` in `state` is merged
+        oldtype = state[i]
+        oldtyp = renumber_slotwrapper(oldtype.typ, state, changes, join_pc)
+        if oldtyp !== oldtype.typ
+            state[i] = VarState(oldtyp, oldtype.ssadef, oldtype.undef)
+            changed = true
+        end
+    end
     for i = 1:length(state)
         newtype = changes[i]
         oldtype = state[i]
@@ -792,6 +819,10 @@ function stupdate!(lattice::AbstractLattice, state::VarTable, changes::VarTable,
         # that would exist at the beginning of the BasicBlock.
         #
         # This effectively applies the "path-convergence criterion" for SSA construction.
+        #
+        # A slot wrapper follows the definition of its slot through the merge.
+        newtyp = renumber_slotwrapper(newtype.typ, changes, state, join_pc)
+        newtyp === newtype.typ || (newtype = VarState(newtyp, newtype.ssadef, newtype.undef))
         if schanged(lattice, newtype, oldtype, join_pc)
             state[i] = smerge(lattice, oldtype, newtype, join_pc)
             changed = true
