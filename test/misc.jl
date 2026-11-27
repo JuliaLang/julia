@@ -1738,7 +1738,8 @@ end
     end
     nocodegen = Base.Linking.runtime_libraries(; optional_components=())
     @test issubset(nocodegen, libs)
-    @test !any(p -> startswith(basename(p), "libLLVM") || startswith(basename(p), "libjulia-codegen"), nocodegen)
+    @test !any(p -> startswith(basename(p), "libLLVM") || startswith(basename(p), "libjulia-codegen") ||
+                    startswith(basename(p), "libjulia-frontend"), nocodegen)
     # unknown components are rejected
     @test_throws ArgumentError Base.Linking.runtime_libraries(; optional_components=(:codgen,))
 

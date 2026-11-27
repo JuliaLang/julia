@@ -6512,11 +6512,9 @@ f_isdefined_unionvar(y, t) = (t > 0 && (x = (t == 1 ? 1 : y)); @isdefined x)
 @test !f_isdefined_unionvar(1, 0)
 f_isdefined_splat(x...) = @isdefined x
 @test f_isdefined_splat(1, 2, 3)
-let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end,
-    __source__ = LineNumberNode(@__LINE__() - 1, Symbol(@__FILE__))
-    e::MethodError
-    @test e.f === getfield(@__MODULE__, Symbol("@isdefined"))
-    @test e.args === (__source__, @__MODULE__, :(:x))
+let e = try; @macroexpand @isdefined :x; false; catch ex; ex; end
+    @test e isa Base.JuliaLowering.MacroExpansionError
+    @test occursin("expected a variable name", sprint(showerror, e))
 end
 f_isdefined_cl_1(y) = (local x; for i = 1:y; x = 2; end; () -> x; @isdefined x)
 f_isdefined_cl_2(y) = (local x; for i = 1:y; x = 2; end; () -> @isdefined x)

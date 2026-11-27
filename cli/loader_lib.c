@@ -46,7 +46,18 @@ void jl_loader_print_stderr3(const char * msg1, const char * msg2, const char * 
 /* If allow_basename, then any library already loaded with the same basename is treated
  * as a duplicate and a handle to the loaded library is returned. Otherwise already-loaded
  * libraries are detected by full filepath / inode. */
-static void *load_library(const char * rel_path, const char * src_dir, int allow_basename, int err) {
+/* If own_symbols, the library prefers its own symbol definitions over the process's
+ * (RTLD_DEEPBIND): such a plugin may carry private copies of runtime components, up to
+ * and including a complete second julia runtime in the case of a standalone frontend
+ * library. The sanitizer runtimes reject RTLD_DEEPBIND, so it is not used under them. */
+#if !defined(_OS_WINDOWS_)
+#if defined(RTLD_DEEPBIND) && !defined(_COMPILER_ASAN_ENABLED_) && !defined(_COMPILER_TSAN_ENABLED_) && !defined(_COMPILER_MSAN_ENABLED_)
+#define OWN_SYMBOLS_DLOPEN_FLAGS RTLD_DEEPBIND
+#else
+#define OWN_SYMBOLS_DLOPEN_FLAGS 0
+#endif
+#endif
+static void *load_library(const char * rel_path, const char * src_dir, int allow_basename, int err, int own_symbols) {
     void * handle = NULL;
     if (allow_basename) {
         // See if a handle is already open to the basename
@@ -61,7 +72,8 @@ static void *load_library(const char * rel_path, const char * src_dir, int allow
         SetLastError(0);
 #else
         // if err == 0 the library is optional, so don't allow global lookups to see it
-        if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL))))
+        if ((handle = dlopen(basename, RTLD_NOLOAD | RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL) |
+                             (own_symbols ? OWN_SYMBOLS_DLOPEN_FLAGS : 0))))
             return handle;
         (void) dlerror();
 #endif
@@ -82,7 +94,7 @@ static void *load_library(const char * rel_path, const char * src_dir, int allow
     handle = (void *)LoadLibraryExW(wpath, NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
 #else
 #define PATH_EXISTS() !access(path, F_OK)
-    handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL));
+    handle = dlopen(path, RTLD_NOW | (err ? RTLD_GLOBAL : RTLD_LOCAL) | (own_symbols ? OWN_SYMBOLS_DLOPEN_FLAGS : 0));
 #endif
     if (handle != NULL) {
 #if defined(_OS_WINDOWS_)
@@ -288,6 +300,7 @@ static const char *libstdcxxprobe(void)
 
 void *libjulia_internal = NULL;
 void *libjulia_codegen = NULL;
+void *libjulia_frontend = NULL;
 __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 #if defined(_OS_LINUX_)
     // Julia uses `sigwait()` to handle signals, and all threads are required
@@ -317,7 +330,8 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     //   libstdc++
     //   libjulia-internal
     //   libjulia-codegen
-    const int NUM_SPECIAL_LIBRARIES = 3;
+    //   libjulia-frontend
+    const int NUM_SPECIAL_LIBRARIES = 4;
     int special_idx = 0;
     while (1) {
         // try to find next colon character; if we can't, break out
@@ -397,26 +411,29 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
 # ifdef RT_STATIC_LIBSTDCXX
                     // If we have a statically-linked libstdc++, it is ok for
                     // this to fail.
-                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 0);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 0, /* own_symbols */ 0);
 # else
-                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
+                    load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1, /* own_symbols */ 0);
 # endif
                 }
 #endif
             } else if (special_idx == 1) {
                 // This special library is `libjulia-internal`
-                libjulia_internal = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 1);
+                libjulia_internal = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 1, /* own_symbols */ 0);
             } else if (special_idx == 2) {
                 // This special library is `libjulia-codegen`
                 int load_codegen = 1;
                 env_var_bool("JULIA_LOAD_CODEGEN_LIB", &load_codegen);
                 if (load_codegen)
-                    libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0);
+                    libjulia_codegen = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0, /* own_symbols */ 0);
+            } else if (special_idx == 3) {
+                // This special library is `libjulia-frontend`
+                libjulia_frontend = load_library(curr_dep, lib_dir, /* allow_basename */ 0, /* err */ 0, /* own_symbols */ 1);
             }
             special_idx++;
         } else {
             // Otherwise, just load it as "normal"
-            load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1);
+            load_library(curr_dep, lib_dir, /* allow_basename */ 1, /* err */ 1, /* own_symbols */ 0);
         }
 
         // Skip ahead to next dependency
@@ -434,6 +451,19 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
     else {
         codegen_func_names = jl_codegen_exported_func_names;
         codegen_liberr = " from libjulia-codegen\n";
+    }
+
+    const char * const * frontend_func_names;
+    const char *frontend_liberr;
+    if (libjulia_frontend == NULL) {
+        // if the frontend is not available, use fallback implementation in libjulia-internal
+        libjulia_frontend = libjulia_internal;
+        frontend_func_names = jl_frontend_fallback_func_names;
+        frontend_liberr = " from libjulia-internal\n";
+    }
+    else {
+        frontend_func_names = jl_frontend_exported_func_names;
+        frontend_liberr = " from libjulia-frontend\n";
     }
 
     // Once we have libjulia-internal loaded, re-export its symbols:
@@ -456,6 +486,21 @@ __attribute__((constructor)) void jl_load_libjulia_internal(void) {
             exit(1);
         }
         (*jl_codegen_exported_func_addrs[symbol_idx]) = addr;
+    }
+    unsigned int frontend_func_count = 0;
+    while (frontend_func_names[frontend_func_count] != NULL)
+        frontend_func_count++;
+    for (unsigned int symbol_idx=0; frontend_func_names[symbol_idx] != NULL; ++symbol_idx) {
+        void *addr = lookup_symbol(libjulia_frontend, frontend_func_names[symbol_idx]);
+        if (addr == NULL && symbol_idx >= frontend_func_count - jl_frontend_optional_func_count) {
+            // an optional entry point that this frontend does not provide
+            addr = lookup_symbol(libjulia_internal, jl_frontend_fallback_func_names[symbol_idx]);
+        }
+        if (addr == NULL) {
+            jl_loader_print_stderr3("ERROR: Unable to load ", frontend_func_names[symbol_idx], frontend_liberr);
+            exit(1);
+        }
+        (*jl_frontend_exported_func_addrs[symbol_idx]) = addr;
     }
     // Next, if we're on Linux/FreeBSD, set up fast TLS.
 #if !defined(_OS_WINDOWS_) && !defined(_OS_DARWIN_) && !defined(_OS_OPENBSD_)

@@ -608,7 +608,7 @@ static NOINLINE void _finish_jl_init_(jl_image_buf_t sysimage, jl_ptls_t ptls, j
     }
     jl_image_restored = 1;
 
-    jl_init_flisp();
+    jl_frontend_init();
     jl_init_serializer();
 
     if (sysimage.kind == JL_IMAGE_KIND_NONE) {

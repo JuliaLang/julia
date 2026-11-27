@@ -300,7 +300,6 @@
     XX(jl_lower) \
     XX(jl_lseek) \
     XX(jl_lstat) \
-    XX(jl_macroexpand) \
     XX(jl_malloc) \
     XX(jl_malloc_stack) \
     XX(jl_matching_methods) \
@@ -587,6 +586,29 @@
     YY(JLJITGetGlobalPrefix) \
     YY(JLJITGetDataLayoutString) \
     YY(JLJITGetIRCompileLayer) \
+
+
+// use YY instead of XX to avoid jl -> ijl renaming in libjulia-frontend
+#define JL_FRONTEND_EXPORTED_FUNCS(YY) \
+    YY(jl_frontend_init) \
+    YY(jl_frontend_parse) \
+    YY(jl_frontend_lower) \
+    YY(jl_macroexpand) \
+    YY(jl_frontend_is_operator) \
+    YY(jl_frontend_is_unary_operator) \
+    YY(jl_frontend_is_unary_and_binary_operator) \
+    YY(jl_frontend_is_syntactic_operator) \
+    YY(jl_frontend_operator_precedence) \
+    JL_FRONTEND_OPTIONAL_FUNCS(YY) \
+
+// The entries of the frontend interface that a frontend library may leave out,
+// in which case the runtime uses their fallbacks: the REPL and profiler of the
+// flisp frontend. They must come last in JL_FRONTEND_EXPORTED_FUNCS.
+#define JL_FRONTEND_OPTIONAL_FUNCS(YY) \
+    YY(jl_lisp_prompt) \
+    YY(fl_profile) \
+    YY(fl_show_profile) \
+    YY(fl_clear_profile) \
 
 
 // end of file

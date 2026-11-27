@@ -1,6 +1,7 @@
 # This file is a part of Julia. License is MIT: https://julialang.org/license
 
-# Call Julia's builtin flisp-based parser. `offset` is 0-based offset into the
+# Call Julia's builtin frontend (the flisp-based reference frontend,
+# in libjulia-frontend). `offset` is 0-based offset into the
 # byte buffer or string.
 function fl_parse(text::Union{Core.SimpleVector,String},
                   filename::String, lineno, offset, options, edition)
@@ -13,7 +14,7 @@ function fl_parse(text::Union{Core.SimpleVector,String},
     else
         text_len = sizeof(text)
     end
-    ccall(:jl_fl_parse, Any, (Ptr{UInt8}, Csize_t, Any, Csize_t, Csize_t, Any),
+    ccall(:jl_frontend_parse, Any, (Ptr{UInt8}, Csize_t, Any, Csize_t, Csize_t, Any),
           text, text_len, filename, lineno, offset, options)
 end
 
@@ -24,7 +25,7 @@ end
 
 function fl_lower(mod::Module, @nospecialize(ex), world::UInt, warn::Bool,
                   loc::LineNumberNode)
-    ccall(:jl_fl_lower, Any, (Any, Any, Csize_t, Cint, Any),
+    ccall(:jl_frontend_lower, Any, (Any, Any, Csize_t, Cint, Any),
           mod, ex, world, warn, loc)
 end
 

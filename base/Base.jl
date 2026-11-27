@@ -333,6 +333,7 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+JuliaSyntax.register_operator_queries()
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(true; freeze_world_age=false)
