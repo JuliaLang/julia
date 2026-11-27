@@ -1510,12 +1510,17 @@ static void share_idle_stacks(jl_ptls_t ptls2) JL_NOTSAFEPOINT
 static void sweep_per_thread_loop(void) JL_NOTSAFEPOINT
 {
     size_t freed_bytes = 0, nfreed = 0;
-    int sweep_big_serially = gc_sweep_big_serially();
     jl_atomic_fetch_add(&gc_n_threads_sweeping_per_thread, 1);
     while (1) {
-        int i = jl_atomic_fetch_add_relaxed(&gc_ptls_sweep_idx, -1);
+        // A collector thread may get here late, on a request from an earlier
+        // collection, and claim work from the current one. Claiming an index is
+        // then its only synchronization with the thread that set up this sweep,
+        // so this must not be a relaxed operation, and nothing that depends on
+        // the current collection may be read before an index has been claimed.
+        int i = jl_atomic_fetch_add(&gc_ptls_sweep_idx, -1);
         if (i < 0)
             break;
+        int sweep_big_serially = gc_sweep_big_serially();
         jl_ptls_t ptls2 = gc_all_tls_states[i];
         if (ptls2 == NULL)
             continue;
