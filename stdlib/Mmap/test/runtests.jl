@@ -4,7 +4,7 @@ using Mmap, Random, Test
 
 @test isempty(Test.detect_closure_boxes(Mmap))
 
-file = tempname()
+file = joinpath(mktempdir(), "data")
 write(file, "Hello World\n")
 t = b"Hello World"
 @test mmap(file, Array{UInt8,3}, (11,1,1)) == reshape(t,(11,1,1))
@@ -50,7 +50,7 @@ close(s)
 @test_throws ArgumentError mmap(file, Vector{Ref}) # must be bit-type
 GC.gc(); GC.gc()
 
-file = tempname() # new name to reduce chance of issues due slow windows fs
+file = joinpath(mktempdir(), "data")
 s = open(f->f,file,"w")
 @test mmap(file) == Vector{UInt8}() # requested len=0 on empty file
 @test mmap(file,Vector{UInt8},0) == Vector{UInt8}()
@@ -198,7 +198,7 @@ m = mmap(file,Vector{UInt8},2,6)
 @test_throws BoundsError m[3]
 finalize(m); m = nothing; GC.gc()
 
-file = tempname() # new name to reduce chance of issues due slow windows fs
+file = joinpath(mktempdir(), "data")
 s = open(file, "w")
 write(s, [0xffffffffffffffff,
           0xffffffffffffffff,
@@ -265,7 +265,7 @@ rm(file)
 
 # mmap with an offset
 A = rand(1:20, 500, 300)
-fname = tempname()
+fname = joinpath(mktempdir(), "data")
 s = open(fname, "w+")
 write(s, size(A,1))
 write(s, size(A,2))
@@ -337,7 +337,7 @@ finalize(m); m = nothing; GC.gc()
 
 # Regression test: offset addition overflowing must also raise ArgumentError, not InexactError,
 # even when the byte-count computation alone does not overflow.
-let file = tempname()
+let file = joinpath(mktempdir(), "data")
     write(file, UInt8(0))
     s = open(file, "r+")
     @test_throws ArgumentError mmap(s, Vector{UInt8}, (100,), typemax(Int) - 10)
@@ -601,7 +601,7 @@ end
 
 @testset "munmap!" begin
     # File-backed Array: mapping is visible before munmap!, gone after
-    file = tempname()
+    file = joinpath(mktempdir(), "data")
     write(file, fill(0x01, 100))
     m = mmap(file)
     @test m[1] == 0x01
@@ -615,7 +615,7 @@ end
     rm(file)
 
     # File-backed BitArray
-    file = tempname()
+    file = joinpath(mktempdir(), "data")
     write(file, rand(UInt8, 16))
     b = mmap(file, BitArray, 128)
     @static if Sys.islinux()
@@ -635,7 +635,7 @@ end
 end
 
 if Sys.isunix()
-    file = tempname()
+    file = joinpath(mktempdir(), "data")
     write(file, rand(Float64, 20))
     A = mmap(file, Vector{Float64}, 20)
     @test Mmap.madvise!(A, Mmap.MADV_WILLNEED) === nothing # checking for no error
@@ -649,7 +649,7 @@ if Sys.isunix()
 end
 
 # test #14885
-file = tempname()
+file = joinpath(mktempdir(), "data")
 touch(file)
 open(file, "r+") do s
     A = mmap(s, Vector{UInt8}, (10,), 0)
@@ -663,7 +663,7 @@ GC.gc()
 rm(file)
 
 # test #30537
-file = tempname()
+file = joinpath(mktempdir(), "data")
 rdat = [fill(0x00, 8); fill(typemax(UInt8), 8); 0x00]
 open(f->write(f, rdat), file, "w+")
 for T in (Int32, UInt32, UInt64, Int64)
@@ -676,7 +676,7 @@ GC.gc()
 rm(file)
 
 # test for #58982 - mmap with primitive types
-file = tempname()
+file = joinpath(mktempdir(), "data")
 primitive type PrimType9Bytes 9*8 end
 arr = Vector{PrimType9Bytes}(undef, 2)
 write(file, arr)

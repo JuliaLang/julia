@@ -622,7 +622,7 @@ let io = IOBuffer()
 end
 
 # using a filename; #30151
-let f = tempname(), x = [rand(2,2), :x, "hello"]
+let f = joinpath(mktempdir(), "data"), x = [rand(2,2), :x, "hello"]
     serialize(f, x)
     @test deserialize(f) == x
     rm(f)
