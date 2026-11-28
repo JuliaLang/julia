@@ -248,6 +248,16 @@ let g61242(::Type{T}) where T = T
     @test g61242(Vector) === Vector
     @test g61242(Vector.body) === Vector.body
 end
+# a cache entry for a type with a free TypeVar must not catch other type arguments
+let T = TypeVar(:T)
+    f_freekey(@nospecialize a) = 0
+    f_freekey(::DataType) = 1
+    f_freekey(::Core.TypeEq) = 2
+    g_freekey(x) = f_freekey(Base.inferencebarrier(x))
+    @test g_freekey(Type{Type{T}}) == 2
+    @test g_freekey(Core.TypeEq) == 1
+    @test g_freekey(Type{Type{T}}) == 2
+end
 # re-specializing an unspecialized MethodInstance for arguments it does not match
 let
     f_unspec(@nospecialize a) = 0

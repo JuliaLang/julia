@@ -184,7 +184,8 @@ static int sig_match_by_type_simple(jl_value_t **types, size_t n, jl_tupletype_t
             jl_value_t *tp0 = jl_typeeq_T(decl);
             // either query wrapper matches by type equality (egal implies equal)
             if (jl_is_some_Type(a)) {
-                if (!jl_types_equal(jl_some_Type_T(a), tp0))
+                jl_value_t *ta = jl_some_Type_T(a);
+                if (jl_has_free_typevars(tp0) ? !jl_egal(ta, tp0) : !jl_types_equal(ta, tp0))
                     return 0;
             }
             else {
@@ -278,6 +279,9 @@ STATIC_INLINE int sig_match_slot(jl_value_t *decl, jl_value_t *a) JL_CANSAFEPOIN
         jl_value_t *tp0 = jl_typeeq_T(decl);
         if (a == tp0)
             return 1;
+        // subtyping does not reliably compare types with free typevars
+        if (jl_has_free_typevars(tp0))
+            return jl_egal(a, tp0);
         jl_datatype_t *da = (jl_datatype_t*)jl_unwrap_unionall(a);
         jl_datatype_t *dt = (jl_datatype_t*)jl_unwrap_unionall(tp0);
         if (jl_is_datatype(da) && jl_is_datatype(dt) && da->name != dt->name)
