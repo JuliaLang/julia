@@ -3194,8 +3194,40 @@ static int typemap_search(jl_typemap_entry_t *entry, void *closure)
     return 1;
 }
 
+struct typemap_search_env {
+    struct typemap_intersection_env match;
+    jl_method_t *method;
+    jl_typemap_entry_t *found;
+};
+
+static int typemap_search_intersecting(jl_typemap_entry_t *entry, struct typemap_intersection_env *closure0) JL_NOTSAFEPOINT
+{
+    struct typemap_search_env *closure = container_of(closure0, struct typemap_search_env, match);
+    if (entry->func.method == closure->method) {
+        closure->found = entry;
+        return 0;
+    }
+    return 1;
+}
+
 static jl_typemap_entry_t *do_typemap_search(jl_methtable_t *mt JL_PROPAGATES_ROOT, jl_method_t *method) JL_CANSAFEPOINT
 {
+    // look only where entries intersecting the signature are (any world), then everywhere
+    jl_value_t *type = method->sig;
+    jl_value_t *ttypes = jl_unwrap_unionall(type);
+    size_t l = jl_nparams(ttypes);
+    jl_value_t *va = l > 0 ? jl_tparam(ttypes, l - 1) : NULL;
+    va = va && jl_is_vararg(va) ? jl_unwrap_vararg(va) : NULL;
+    struct typemap_search_env env = {{typemap_search_intersecting, type, va, /* .search_bottom = */ 0,
+            /* .min_valid = */ 0, /* .max_valid = */ ~(size_t)0,
+            /* .ti = */ NULL, /* .env = */ NULL, /* .issubty = */ 0,
+            /* .emptiness_only = */ 1, /* .entry_filter = */ NULL},
+        method, NULL};
+    JL_GC_PUSH2(&env.match.env, &env.match.ti);
+    jl_typemap_intersection_visitor(jl_atomic_load_relaxed(&mt->defs), 0, &env.match);
+    JL_GC_POP();
+    if (env.found)
+        return env.found;
     jl_value_t *closure = (jl_value_t*)(method);
     if (jl_typemap_visitor(jl_atomic_load_relaxed(&mt->defs), typemap_search, &closure))
         jl_error("method not in method table");
@@ -3322,17 +3354,17 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
     if (jl_options.incremental && jl_generating_output())
         jl_error("Method deletion is not possible during Module precompile.");
     jl_methtable_t *mt = jl_method_get_table(method);
-    jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))
         jl_error("Method changes have been disabled via a call to disable_new_worlds.");
+    // the entry stays in the table while we hold world_counter_lock (see jl_method_table_activate_with_record)
+    jl_typemap_entry_t *methodentry = do_typemap_search(mt, method);
     int enabled = jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0;
     if (enabled) {
         // Narrow the world age on the method to make it uncallable
         size_t world = jl_atomic_load_relaxed(&jl_world_counter);
         assert(method == methodentry->func.method);
         jl_atomic_store_relaxed(&method->dispatch_status, 0);
-        assert(jl_atomic_load_relaxed(&methodentry->max_world) == ~(size_t)0);
         jl_atomic_store_relaxed(&methodentry->max_world, world);
         jl_method_table_invalidate(method, world, methodentry);
         contributor_tag_method(mt, method, -1); // a deletion is a contributor of no image
@@ -3343,26 +3375,13 @@ JL_DLLEXPORT void jl_method_table_disable(jl_method_t *method) JL_CANSAFEPOINT
         jl_errorf("Method of %s already disabled", jl_symbol_name(method->name));
 }
 
-jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method)
+// The method table entry for `method`, which jl_method_table_activate puts in the table
+jl_typemap_entry_t *jl_method_table_new_entry(jl_method_t *method)
 {
-    JL_TIMING(ADD_METHOD, ADD_METHOD);
     assert(jl_is_method(method));
-    assert(jl_is_mtable(mt));
-    jl_timing_show_method(method, JL_TIMING_DEFAULT_BLOCK);
-    jl_typemap_entry_t *newentry = NULL;
-    JL_GC_PUSH1(&newentry);
-    // add our new entry
     assert(jl_atomic_load_relaxed(&method->primary_world) == ~(size_t)0); // min-world
     assert((jl_atomic_load_relaxed(&method->dispatch_status) & METHOD_SIG_LATEST_WHICH) == 0);
-    JL_LOCK(&mt->cache->writelock);
-    newentry = jl_typemap_alloc((jl_tupletype_t*)method->sig, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
-    jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
-
-    if (mt == jl_method_table)
-        update_max_args(method->sig);
-    JL_UNLOCK(&mt->cache->writelock);
-    JL_GC_POP();
-    return newentry;
+    return jl_typemap_alloc((jl_tupletype_t*)method->sig, jl_emptysvec, (jl_value_t*)method, ~(size_t)0, 1);
 }
 
 static int has_key(jl_genericmemory_t *keys, jl_value_t *key)
@@ -3890,7 +3909,7 @@ static jl_genericmemory_t *activate_against_methods(struct activate_env *env, jl
 static int collect_intersect_visitor(jl_typemap_entry_t *oldentry, struct typemap_intersection_env *closure0) JL_CANSAFEPOINT
 {
     struct matches_env *closure = container_of(closure0, struct matches_env, match);
-    if (oldentry != closure->newentry) {
+    if (oldentry->func.method != closure->newentry->func.method) {
         if (closure->shadowed == NULL)
             closure->shadowed = (jl_value_t*)jl_alloc_vec_any(0);
         jl_array_ptr_1d_push((jl_array_t*)closure->shadowed, (jl_value_t*)oldentry->func.method);
@@ -4139,6 +4158,15 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
         jl_array_ptr_1d_push(_jl_debug_method_invalidation, loctag);
     }
     jl_atomic_store_relaxed(&newentry->max_world, ~(size_t)0);
+    // published only now, complete: a list conversion copies definitions, so changes made
+    // through `newentry` after this would be lost (see jl_method_convert_list_to_cache).
+    // Live method tables' `defs` change only under world_counter_lock (insertions, and so
+    // conversions, here; narrowing by jl_method_table_disable).
+    JL_LOCK(&mt->cache->writelock);
+    jl_typemap_insert(&mt->defs, (jl_value_t*)mt, newentry, 0);
+    if (mt == jl_method_table)
+        update_max_args(method->sig);
+    JL_UNLOCK(&mt->cache->writelock);
     jl_atomic_store_relaxed(&method->dispatch_status, env.dispatch_bits); // TODO: this should be sequenced fully after the world counter store
     jl_gc_write_atomic(method, method->interferences, jl_genericmemory_t, interferences, release);
     if (newrecord != NULL)
@@ -4148,7 +4176,8 @@ void jl_method_table_activate_with_record(jl_typemap_entry_t *newentry, jl_array
 
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method)
 {
-    jl_typemap_entry_t *newentry = jl_method_table_add(mt, method);
+    assert(mt == jl_method_get_table(method)); (void)mt; // activation inserts it there
+    jl_typemap_entry_t *newentry = jl_method_table_new_entry(method);
     JL_GC_PUSH1(&newentry);
     JL_LOCK(&world_counter_lock);
     if (!jl_atomic_load_relaxed(&allow_new_worlds))

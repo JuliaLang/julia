@@ -979,7 +979,7 @@ jl_tupletype_t *jl_lookup_arg_tuple_type(jl_value_t *arg1 JL_PROPAGATES_ROOT, jl
 JL_DLLEXPORT void jl_method_table_insert(jl_methtable_t *mt, jl_method_t *method) JL_CANSAFEPOINT;
 void jl_method_table_activate(jl_typemap_entry_t *newentry) JL_CANSAFEPOINT;
 void jl_method_table_invalidate_deferred(jl_array_t *deferred, size_t max_world) JL_CANSAFEPOINT;
-jl_typemap_entry_t *jl_method_table_add(jl_methtable_t *mt, jl_method_t *method) JL_CANSAFEPOINT;
+jl_typemap_entry_t *jl_method_table_new_entry(jl_method_t *method) JL_CANSAFEPOINT;
 jl_method_t *jl_mk_builtin_func(jl_datatype_t *dt, jl_sym_t *name, jl_fptr_args_t fptr) JL_CANSAFEPOINT JL_GC_DISABLED;
 int jl_obviously_unequal(jl_value_t *a, jl_value_t *b);
 int jl_has_bound_typevars(jl_value_t *v, jl_typeenv_t *env) JL_NOTSAFEPOINT;

@@ -815,8 +815,9 @@ static int64_t write_dependency_list(ios_t *s, jl_array_t* worklist, jl_array_t 
 
 // Deserialization
 
-// Add methods to external (non-worklist-owned) functions
+// Make the method table entries of methods of external (non-worklist-owned) functions,
 // mutating external to point at the new methodtable entry instead of the new method
+// (jl_activate_methods puts them in their tables)
 static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
 {
     size_t i, l = jl_array_nrows(external);
@@ -824,9 +825,8 @@ static void jl_add_methods(jl_array_t *external) JL_CANSAFEPOINT
         jl_method_t *meth = (jl_method_t*)jl_array_ptr_ref(external, i);
         assert(jl_is_method(meth));
         assert(!meth->is_for_opaque_closure);
-        jl_methtable_t *mt = jl_method_get_table(meth);
-        assert((jl_value_t*)mt != jl_nothing);
-        jl_typemap_entry_t *entry = jl_method_table_add(mt, meth);
+        assert((jl_value_t*)jl_method_get_table(meth) != jl_nothing);
+        jl_typemap_entry_t *entry = jl_method_table_new_entry(meth);
         jl_array_ptr_set(external, i, entry);
     }
 }
