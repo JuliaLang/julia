@@ -137,6 +137,7 @@ T jl_atomic_fetch_add_explicit(std::atomic<T> *ptr, S val, std::memory_order ord
      return std::atomic_fetch_add_explicit<T>(ptr, val, order);
 }
 #define jl_atomic_fetch_add_relaxed(ptr, val) jl_atomic_fetch_add_explicit(ptr, val, memory_order_relaxed)
+#define jl_atomic_fetch_add_release(ptr, val) jl_atomic_fetch_add_explicit(ptr, val, memory_order_release)
 template<class T, class S>
 T jl_atomic_fetch_and(std::atomic<T> *ptr, S val)
 {
@@ -198,6 +199,8 @@ extern "C" {
 
 #  define jl_atomic_fetch_add_relaxed(obj, arg)         \
     atomic_fetch_add_explicit(obj, arg, memory_order_relaxed)
+#  define jl_atomic_fetch_add_release(obj, arg)         \
+    atomic_fetch_add_explicit(obj, arg, memory_order_release)
 #  define jl_atomic_fetch_add(obj, arg)                 \
     atomic_fetch_add(obj, arg)
 #  define jl_atomic_fetch_and_relaxed(obj, arg)         \
@@ -321,6 +324,7 @@ extern "C" {
 #undef jl_atomic_fetch_and
 #undef jl_atomic_fetch_or
 #undef jl_atomic_fetch_add_relaxed
+#undef jl_atomic_fetch_add_release
 #undef jl_atomic_fetch_and_relaxed
 #undef jl_atomic_fetch_or_relaxed
 #define jl_atomic_fetch_add(obj, val) \
@@ -345,6 +349,7 @@ extern "C" {
             temp__analyzer__; \
         }))
 #define jl_atomic_fetch_add_relaxed jl_atomic_fetch_add
+#define jl_atomic_fetch_add_release jl_atomic_fetch_add
 #define jl_atomic_fetch_and_relaxed jl_atomic_fetch_and
 #define jl_atomic_fetch_or_relaxed jl_atomic_fetch_or
 

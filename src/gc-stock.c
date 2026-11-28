@@ -1648,7 +1648,7 @@ static void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *n
 {
     int parallel_sweep_worthwhile = gc_sweep_prescan(ptls, new_gc_allocd_scratch);
     if (parallel_sweep_worthwhile && !page_profile_enabled) {
-        jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
+        jl_atomic_store_release(&gc_allocd_scratch, new_gc_allocd_scratch);
         uv_mutex_lock(&gc_threads_lock);
         int first = gc_first_parallel_collector_thread_id();
         int last = gc_last_parallel_collector_thread_id();
@@ -1676,13 +1676,21 @@ static void gc_sweep_wake_all_pages(jl_ptls_t ptls, jl_gc_padded_page_stack_t *n
             }
         }
     }
-    jl_atomic_store(&gc_allocd_scratch, new_gc_allocd_scratch);
+    jl_atomic_store_release(&gc_allocd_scratch, new_gc_allocd_scratch);
 }
 
 // wait for all threads to finish sweeping
 static void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 {
-    jl_atomic_store(&gc_allocd_scratch, NULL);
+    // [^store_buffering_sweep]: closing the sweep is a store-then-load handshake with
+    // `gc_sweep_pool_parallel`: we store to `gc_allocd_scratch` and then load
+    // `gc_n_threads_sweeping_pools`, while a worker increments the counter and then loads
+    // `gc_allocd_scratch`. The fences ensure that at least one side observes the other's
+    // store, so that a worker either sees that the sweep is closed or is waited for here.
+    // Without them, a late worker could go on sweeping with a stale scratch pointer.
+    jl_atomic_store_relaxed(&gc_allocd_scratch, NULL);
+    jl_fence(); // [^store_buffering_sweep]
+    // acquire the pages that the workers pushed to the scratch stacks
     while (jl_atomic_load_acquire(&gc_n_threads_sweeping_pools) != 0) {
         jl_cpu_pause();
     }
@@ -1691,8 +1699,11 @@ static void gc_sweep_wait_for_all_pages(void) JL_NOTSAFEPOINT
 // sweep all pools
 static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
 {
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, 1);
-    jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load(&gc_allocd_scratch);
+    jl_atomic_fetch_add_relaxed(&gc_n_threads_sweeping_pools, 1);
+    jl_fence(); // [^store_buffering_sweep]
+    // acquire the state of the sweep that published this (a worker may be here on a
+    // request from an earlier collection)
+    jl_gc_padded_page_stack_t *allocd_scratch = jl_atomic_load_acquire(&gc_allocd_scratch);
     if (allocd_scratch != NULL) {
         gc_page_profiler_serializer_t serializer = gc_page_serializer_create();
         while (1) {
@@ -1738,7 +1749,8 @@ static void gc_sweep_pool_parallel(jl_ptls_t ptls) JL_NOTSAFEPOINT
         }
         gc_page_serializer_destroy(&serializer);
     }
-    jl_atomic_fetch_add(&gc_n_threads_sweeping_pools, -1);
+    // release the pages pushed to the scratch stacks to `gc_sweep_wait_for_all_pages`
+    jl_atomic_fetch_add_release(&gc_n_threads_sweeping_pools, -1);
 }
 
 // Number of lazily freed pages to keep mapped, set by each sweep for the
