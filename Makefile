@@ -466,8 +466,10 @@ endif
 	# that `-ljulia-internal` finds, so linkers keep preferring that library.
 ifeq ($(JULIA_BUILD_MODE),release)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(if $(filter 1,$(SPLIT_SYSIMAGE)),$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir))
 else ifeq ($(JULIA_BUILD_MODE),debug)
 	$(INSTALL_M) $(build_private_libdir)/sys-debug.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	$(if $(filter 1,$(SPLIT_SYSIMAGE)),$(INSTALL_F) $(build_private_libdir)/sys-debug.ji $(DESTDIR)$(private_libdir))
 endif
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_libdir)/$(JL_STATIC_RUNTIME) $(DESTDIR)$(libdir)
@@ -775,8 +777,9 @@ test: check-whitespace $(JULIA_BUILD_MODE)
 .PHONY: testall
 testall: check-whitespace $(JULIA_BUILD_MODE)
 	cp $(JULIA_SYSIMG) $(BUILDROOT)/local.$(SHLIB_EXT)
+	$(if $(filter 1,$(SPLIT_SYSIMAGE)),cp $(JULIA_SYSIMG:.$(SHLIB_EXT)=.ji) $(BUILDROOT)/local.ji)
 	$(call spawn,$(JULIA_EXECUTABLE) -J $(call cygpath_w,$(BUILDROOT)/local.$(SHLIB_EXT)) -e 'true')
-	rm $(BUILDROOT)/local.$(SHLIB_EXT)
+	rm $(BUILDROOT)/local.$(SHLIB_EXT) $(if $(filter 1,$(SPLIT_SYSIMAGE)),$(BUILDROOT)/local.ji)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/test all JULIA_BUILD_MODE=$(JULIA_BUILD_MODE)
 
 .PHONY: testall1

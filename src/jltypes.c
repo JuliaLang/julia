@@ -2147,57 +2147,40 @@ void jl_typecache_region_end(jl_deferred_typecache_t *r, int publish)
 }
 
 // For the image loader, inside the region it holds (`jl_typecache_region_begin`):
-// return the type with the key of the image object `dt` (whose name and parameters
-// are already unique), cached or waiting in the region, else a fresh copy of `dt`,
-// reported through `isnew`, which waits in the region at level 0 until the loader
-// publishes it, with whatever is built meanwhile that mentions it. The copy gets
-// the `instance` of `dt` (allocated here once the copy is new, if the image left
-// `jl_nothing`: none until then, so the sentinel is never seen). It
-// carries no `types` except for tuples (the caller sets them once the image is
-// relocated); `super` is unset in the image until the loader publishes the stored
-// one, or is computed lazily before that. The lookup compares keys by subtyping,
-// which may compute a lazy supertype that instantiates this very key: the copy
-// stands for it on the instantiation stack meanwhile, as a type of level 0, so
-// that instantiation adopts the copy instead of creating the type
-jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt, int *isnew)
+// return the type with the key of `dt` (a complete type whose name and parameters
+// are already unique), cached or waiting in the region, else `dt` itself, which
+// waits in the region at level 0 until the loader publishes it, with whatever is
+// built meanwhile that mentions it. The lookup compares keys by subtyping, which
+// may compute a lazy supertype that instantiates this very key: `dt` stands for it
+// on the instantiation stack meanwhile, as a type of level 0, so that
+// instantiation adopts `dt` instead of creating the type
+jl_datatype_t *jl_lookup_or_defer_type_(jl_datatype_t *dt)
 {
     jl_deferred_typecache_t *r = typecache_region_held();
     assert(r != NULL && r->dirty == 0);
-    jl_datatype_t *newdt = jl_new_uninitialized_datatype();
-    JL_GC_PUSH1(&newdt);
-    jl_astaggedvalue(newdt)->bits.gc = GC_OLD;
-    *newdt = *dt;
-    if (dt->instance == jl_nothing)
-        newdt->instance = NULL;
-    if (dt->name != jl_tuple_typename && dt->name != jl_namedtuple_typename)
-        newdt->types = NULL;
-    jl_svec_t *p = newdt->parameters;
-    ptrhash_put(&r->pending, newdt, region_encode(0));
+    jl_svec_t *p = dt->parameters;
+    ptrhash_put(&r->pending, dt, region_encode(0));
     jl_typestack_t *saved = typecache_stack;
-    jl_typestack_t top = { newdt, saved };
+    jl_typestack_t top = { dt, saved };
     typecache_stack = &top;
     jl_datatype_t *lkup = NULL;
     JL_TRY {
-        lkup = jl_lookup_cache_type_(newdt);
+        lkup = jl_lookup_cache_type_(dt);
         if (lkup == NULL)
-            lkup = (jl_datatype_t*)lookup_deferred_type(r, newdt->name, jl_svec_data(p), jl_svec_len(p));
+            lkup = (jl_datatype_t*)lookup_deferred_type(r, dt->name, jl_svec_data(p), jl_svec_len(p));
         if (lkup == NULL) {
-            region_defer(r, (jl_value_t*)newdt, 0);
-            lkup = newdt;
+            region_defer(r, (jl_value_t*)dt, 0);
+            lkup = dt;
         }
     }
     JL_CATCH {
         typecache_stack = saved;
-        ptrhash_remove(&r->pending, newdt);
+        ptrhash_remove(&r->pending, dt);
         jl_rethrow();
     }
     typecache_stack = saved;
-    *isnew = lkup == newdt;
-    if (*isnew && dt->instance == jl_nothing)
-        newdt->instance = dt->instance = jl_gc_permobj(jl_current_task->ptls, 0, newdt, 0);
-    if (!*isnew) // nothing adopted it: the lookups that missed this key found it nowhere either
-        ptrhash_remove(&r->pending, newdt);
-    JL_GC_POP();
+    if (lkup != dt) // nothing adopted it: the lookups that missed this key found it nowhere either
+        ptrhash_remove(&r->pending, dt);
     return lkup;
 }
 
@@ -4106,6 +4089,10 @@ static jl_tvar_t *tvar(const char *name) JL_CANSAFEPOINT
 
 void export_jl_small_typeof(void)
 {
+#define XX(name) \
+    ijl_small_typeof[(jl_##name##_tag << 4) / sizeof(*ijl_small_typeof)] = jl_##name##_type;
+    JL_SMALL_TYPEOF(XX)
+#undef XX
     memcpy(&jl_small_typeof, &ijl_small_typeof, sizeof(jl_small_typeof));
 }
 
