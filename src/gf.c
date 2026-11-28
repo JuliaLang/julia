@@ -4672,10 +4672,21 @@ static jl_code_instance_t *jl_compile_method_very_internal(jl_method_instance_t 
         if (F) {
             jl_tupletype_t *tt = arg_type_tuple(F, args, nargs + 1);
             jl_svec_t *env = NULL;
-            JL_GC_PUSH2(&tt, &env);
+            jl_method_match_t *matc = NULL;
+            JL_GC_PUSH3(&tt, &env, &matc);
             // this just calls jl_subtype_env (since we know that `tt <: def->sig`)
             jl_value_t *ti = jl_type_intersection_env((jl_value_t*)tt, (jl_value_t*)def->sig, &env);
-            assert(ti != jl_bottom_type); (void)ti;
+            if (ti == jl_bottom_type) {
+                // a bad cache entry chose a method that does not match the arguments
+                size_t min_valid = 0;
+                size_t max_valid = ~(size_t)0;
+                matc = _gf_invoke_lookup((jl_value_t*)tt, jl_method_table, world, 0, &min_valid, &max_valid);
+                if (matc == NULL)
+                    jl_method_error(F, args, nargs + 1, world);
+                def = matc->method;
+                JL_GC_PROMISE_ROOTED(def); // by the method table
+                env = matc->sparams;
+            }
             mi = jl_specializations_get_linfo(def, (jl_value_t*)tt, env);
             JL_GC_POP();
         }

@@ -248,6 +248,15 @@ let g61242(::Type{T}) where T = T
     @test g61242(Vector) === Vector
     @test g61242(Vector.body) === Vector.body
 end
+# re-specializing an unspecialized MethodInstance for arguments it does not match
+let
+    f_unspec(@nospecialize a) = 0
+    f_unspec(::DataType) = 1
+    f_unspec(::Core.TypeEq) = 2
+    mi = ccall(:jl_get_unspecialized, Any, (Any,), which(f_unspec, Tuple{Core.TypeEq}))
+    args = Any[Core.TypeEq]
+    @test ccall(:jl_invoke, Any, (Any, Ptr{Any}, UInt32, Any), f_unspec, args, 1, mi) == 1
+end
 
 # sparam definedness must agree across `==`-equal representations of a type
 # argument (#61323): a closed `==`-keyed callsite may fold `@isdefined`, an
