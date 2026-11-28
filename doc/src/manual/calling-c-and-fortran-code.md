@@ -1157,7 +1157,9 @@ The arguments to [`ccall`](@ref) are:
     - Dot expressions, such as `A.B().c`, will be executed at method definition
       time up to the final `c`. The first part must resolve to a Module, and the
       second part to a quoted symbol. The value of that global will be resolved at
-      runtime when the `ccall` is first executed.
+      runtime when the `ccall` is first executed. If the first part is a path of module
+      bindings and one of them is undefined, the method is still defined, and the
+      `UndefVarError` is thrown when the `ccall` executes.
 
 A table of translations between the macro and function interfaces is given below.
 
