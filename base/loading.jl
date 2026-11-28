@@ -5040,7 +5040,8 @@ function any_includes_stale(includes::Vector{CacheHeaderIncludes}, cachefile::St
             end
         else
             fsize = filesize(fstat)
-            if fsize != fsize_req
+            # a directory's size depends on the file system, not on its listing
+            if !isdir(fstat) && fsize != fsize_req
                 @debug "Rejecting stale cache file $cachefile because file size of $f has changed (file size $fsize, before $fsize_req)"
                 record_reason(reasons, :fsize_changed)
                 return true
