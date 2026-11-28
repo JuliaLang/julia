@@ -244,7 +244,8 @@ function node_to_expr(cursor, source, txtbuf::Vector{UInt8}, txtbuf_offset::UInt
                 macname = val isa Int128  ? Symbol("@int128_str")  :
                         val isa UInt128 ? Symbol("@uint128_str") :
                         Symbol("@big_str")
-                return Expr(:macrocall, GlobalRef(Core, macname), nothing, str)
+                loc = source_location(LineNumberNode, source, first(srcrange))
+                return Expr(:macrocall, GlobalRef(Core, macname), loc, str)
             elseif is_identifier(k)
                 return lower_identifier_name(val, k)
             else

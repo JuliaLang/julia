@@ -65,7 +65,6 @@ let
         "const",
         "global",
         "local",
-        "macrocall",
         "quote",
         "inert",
         "syntaxinert",

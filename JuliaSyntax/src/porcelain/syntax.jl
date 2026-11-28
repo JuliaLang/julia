@@ -191,13 +191,13 @@ function _green_to_est(parent::Syntax, parent_i::Int,
             name = lower_identifier_name(syntax_name(st), k)
             symleaf(name)
         elseif (v = st.value; v isa Union{Int128,UInt128,BigInt})
-            # syntax TODO: likely unnecessary; this is just to match RGN->Expr,
-            # which added this to match flisp parsing text->Expr.
+            # could theoretically remove given that the parser is written in
+            # julia, but it would make the AST less serializable
             macname = v isa Int128 ? "@int128_str" :
                 v isa UInt128 ? "@uint128_str" : "@big_str"
             mac = core_globalref(macname)
             arg = valleaf(replace(sourcetext(st), '_'=>""))
-            ret_cids = SyntaxList(mac, valleaf(nothing), arg)
+            ret_cids = SyntaxList(mac, arg)
             @mknode(;source=st, context, head=:macrocall, children=ret_cids)
         elseif k === :identifier || k === :value
             st
@@ -218,11 +218,10 @@ function _green_to_est(parent::Syntax, parent_i::Int,
     if k === :string && n_cs > 0
         return _string_to_est(st, cs; unwrap_literal=true)
     elseif k === :cmdstring && n_cs > 0
-        # (cmdstring _...) => (macrocall Core.@cmd lno joined_str)
+        # (cmdstring _...) => (macrocall Core.@cmd joined_str)
         cmd_arg = _string_to_est(st, cs; unwrap_literal=true)
-        loc_st = valleaf(first_linenode(st))
         return @mknode(;source=st, context, head=:macrocall,
-                       children=SyntaxList(core_globalref("@cmd"), loc_st, cmd_arg))
+                       children=SyntaxList(core_globalref("@cmd"), cmd_arg))
     elseif k === :macro_name && n_cs === 1
         # "M.@x" => (. M (macro_name x)) => (. M @x)
         # "@M.x" => (macro_name (. M x)) => (. M @x)
@@ -269,23 +268,19 @@ function _green_to_est(parent::Syntax, parent_i::Int,
         # `..`/`...` used as an ordinary identifier (eg the `..` operator)
         return symleaf(repeat('.', numeric_flags(st)))
     elseif k === :macrocall && n_cs > 0
-        # LineNumberNodes are not usually added to the tree as they are in Expr,
-        # but this specifically inserts the macrocall child for compatibility
-        insert!(cs, 2, valleaf(first_linenode(st)))
         # foo`x` parses to (macrocall foo::cmdmacroname (cmdstring ::cmdstring))
         # so we need to unwrap the cmdstring literal or else we get two macrocalls
         if n_cs >= 2 && head(cs[1]) === :cmdmacroname
             ret_cs = _map_green_to_est(st, cs)
-            ret_cs[3] = ret_cs[3][3] # node leak
+            ret_cs[2] = ret_cs[2][2]
             return @mknode(st; children=ret_cs)
         end
         do_ex = head(cs[end]) === :do ? pop!(cs) : nothing
-        _reorder_parameters!(cs, 3)
+        _reorder_parameters!(cs, 2)
         !isnothing(do_ex) && return _make_do_expression(st, cs, do_ex)
     elseif k === :doc
-        # (doc str obj) => (macrocall Core.@doc lno str obj)
+        # (doc str obj) => (macrocall Core.@doc str obj)
         ret_k = :macrocall
-        pushfirst!(cs, valleaf(first_linenode(st)))
         pushfirst!(cs, core_globalref("@doc"))
     elseif k === :dotcall || k === :call && n_cs > 0
         if is_infix_op_call(st) || is_postfix_op_call(st)

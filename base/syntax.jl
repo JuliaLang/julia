@@ -585,9 +585,9 @@ first_linenode(lnn::LineNumberNode) = lnn
 # operates on arbitrary heads and arguments throughout macro expansion, not
 # well-formed syntax after expansion is done.  Most of the complexity here is
 # LineNumberNode absorption logic: linenodes are always considered provenance if
-# unquoted, then removed in certain forms.  If `src` is not an linenode, it is
+# unquoted, then removed in certain forms.  If `src` is not a linenode, it is
 # assumed to be a better provenance source, so linenodes in `e` are not used for
-# provenance (but still removed).
+# provenance, but still removed (exception: macrocall's linenode takes priority).
 
 function _first_linenode(e::Expr)
     if e.head === :macrocall
@@ -665,7 +665,6 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
             error("expr heads :value and :identifier are reserved")
         end
         src = old_src = src isa LineNumberNode ? _get_inner_lnn(e, src) : src
-        h === :macrocall && (old_src = something(_first_linenode(e), old_src))
         cs = Syntax[]
         rm_linenodes = h in (:block, :toplevel)
         quoted |= h in (:quote, :inert)
@@ -678,7 +677,13 @@ function _expr_to_syntax(@nospecialize(e), context::SyntaxContext,
                 push!(cs, cid)
             end
         end
-        @mknode(;head=h, source=old_src, children=cs, context)
+        if h === :macrocall
+            length(cs) >= 2 || error("macrocall Expr requires a name and location around $(_first_linenode(e))")
+            @mknode(;head=h, source=something(_first_linenode(e), old_src),
+                    children=deleteat!(cs, 2), context)
+        else
+            @mknode(;head=h, source=old_src, children=cs, context)
+        end
     elseif (e isa Core.SSAValue || e isa Core.SlotNumber) && !quoted
         error("SSAValue and SlotNumber objects should not occur in an AST")
     elseif e isa GlobalRef
@@ -785,6 +790,8 @@ function syntax_to_expr(s::Syntax, suppress_linenodes=false)
                     push_lno!(b, last_lno)
                 end
             end
+        elseif h === :macrocall && length(out.args) > 0
+            insert!(out.args, 2, first_linenode(s))
         end
         out
     end

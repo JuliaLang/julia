@@ -73,7 +73,7 @@ end
     end
     function roundtrip_eq(str)
         e_ref = try
-            JuliaSyntax.parseall(Expr, str)
+            JuliaSyntax.parseall(Expr, str; filename="filename")
         catch _
             nothing
         end
@@ -278,6 +278,14 @@ end
         @test jl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1)))) ==
             fl_eval(test_mod, Expr(:block, QuoteNode(Core.SlotNumber(1))))
     end
+
+    @testset "macrocall" begin
+        local e
+        e = Expr(:macrocall, Symbol("@foo"), LineNumberNode(1, :file))
+        @test e == roundtrip(e)
+        e = Expr(:macrocall, var"@test", LineNumberNode(1, :file), :(1 === 1))
+        @test e == roundtrip(e)
+    end
 end
 
 # taken from JuliaSyntax expr.jl
@@ -450,12 +458,12 @@ test_toplevel_programs = [
     function test_est(str; rule=:all, test_validator=true)
         parse = rule === :all ? JS.parseall : JS.parsestmt
         e_ref = try
-            parse(Expr, str)
+            parse(Expr, str; filename="filename")
         catch _
             nothing
         end
         isnothing(e_ref) && return 0
-        est_test = parse(SyntaxTree, str)
+        est_test = parse(SyntaxTree, str; filename="filename")
         e_test = JL.est_to_expr(est_test)
         pass = expr_equal_forgiving(e_test, e_ref)
         @test pass
@@ -724,4 +732,9 @@ end
         test_mod, Expr(Symbol("hygienic-scope"), :x); edition=JL_NEW_EDITION)
     @test_throws LoweringError jl_eval(
         test_mod, Expr(Symbol("hygienic-scope"), :x, :y, :z); edition=JL_NEW_EDITION)
+
+    @test_throws "macrocall Expr requires a name and location" jl_eval(
+        test_mod, Expr(:macrocall); edition=JL_NEW_EDITION)
+    @test_throws "macrocall Expr requires a name and location" jl_eval(
+        test_mod, Expr(:macrocall, :foo); edition=JL_NEW_EDITION)
 end

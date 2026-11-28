@@ -209,13 +209,13 @@ end
 
 function expand_macro(ctx::MacroExpansionContext, st::SyntaxTree)
     @jl_assert head(st) === :macrocall st
-    numchildren(st) >= 2 || throw(LoweringError(
-        st, "`macrocall` requires a macro name and source location"))
+    numchildren(st) >= 1 ||
+        throw(LoweringError(st, "`macrocall` requires a macro name"))
     sc_in = st.context
     macname = st[1]
     mctx = MacroContext(st)
     macfunc = eval_macro_name(ctx, mctx, macname)
-    raw_args = st[3:end]
+    raw_args = st[2:end]
 
     # `ctx.world === typemax(UInt)` is our sentinel for "latest world"
     macro_world = ctx.world === typemax(UInt) ? Base.get_world_counter() : ctx.world
@@ -358,9 +358,8 @@ function expand_forms_1(ctx::MacroExpansionContext, st::SyntaxTree)
         mac_ex = @ast ctx st [
             :macrocall
             st[1][1] # mac name
-            st[1][2] # loc
             st[2]    # do-lambda
-            children(st[1])[3:end]...
+            children(st[1])[2:end]...
         ]
         expand_macro(ctx, mac_ex)
     elseif k === :inert || k === :syntaxinert || k === :toplevel || k === :module
