@@ -822,6 +822,9 @@ function reinterpret(::Type{Out}, x) where {Out}
     return _reinterpret(Out, x)
 end
 
+# Avoid unintentional specialization for widened `x::Function`.
+reinterpret(::Type{Int32}, x::Core.IntrinsicFunction) = bitcast(Int32, x)
+
 """
     sizeof(T::DataType)
     sizeof(obj)
