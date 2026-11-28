@@ -2548,7 +2548,8 @@ thread_entry(arg::Ptr{Cvoid}) = (unsafe_store!(Ptr{Int}(arg), unsafe_load(Ptr{In
     try
         before = ngc[]
         GC.gc(); GC.gc(false)
-        @test ngc[] >= before + 2
+        # (only the stock GC runs pre-GC callbacks)
+        @test ngc[] >= before + 2 skip=!Base.USING_STOCK_GC
     finally
         ccall(:jl_gc_set_cb_pre_gc, Cvoid, (Ptr{Cvoid}, Cint), cb, 0)
     end
