@@ -293,8 +293,11 @@ Parameters that control abstract interpretation-based type inference operation.
   annotation basis.
 ---
 - `inf_params.max_union_splitting::Int = 4`\\
-  Specifies the maximum number of union-tuples to swap or expand before computing the set of
-  matching methods or conditional types.
+  Specifies the maximum cost of splitting the union-typed arguments of a call before computing
+  the set of matching methods or conditional types. The cost is the product of the numbers of
+  members of those unions, with the largest union counted as having 2 members. So a call with
+  a single union argument costs 2 however many members it has, and a call with a 3-member and
+  a 2-member union argument costs 4 although it splits into 6 signatures.
 ---
 - `inf_params.max_apply_union_enum::Int = 8`\\
   Specifies the maximum number of union-tuples to swap or expand when inferring a call to

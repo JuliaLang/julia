@@ -1743,6 +1743,13 @@ end
                            EscapeInfo(NoEscape(), Unindexable())]))
 end
 
+@testset "⊑ₑ respects ==" begin
+    ⊑ₑ, ⊥ = EscapeAnalysis.:⊑ₑ, EscapeAnalysis.⊥
+    x = ignore_argescape(⊥)
+    @test x == ⊥ && x !== ⊥
+    @test x ⊑ₑ ⊥
+end
+
 # escape information has to reach every element of an alias set, however the set was merged
 @testset "alias set propagation" begin
     EA = EscapeAnalysis

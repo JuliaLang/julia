@@ -109,4 +109,9 @@ end
     check_lattice_properties(𝕃, elements)
 end
 
+@testset "optimizer lattice" begin
+    𝕃 = Compiler.optimizer_lattice(Compiler.NativeInterpreter())
+    check_lattice_properties(𝕃, plain_elements())
+end
+
 end # module lattice
