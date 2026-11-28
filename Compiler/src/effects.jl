@@ -229,16 +229,12 @@ function is_better_effects(new::Effects, old::Effects)
     any_improved = false
     if new.consistent == ALWAYS_TRUE
         any_improved |= old.consistent != ALWAYS_TRUE
+    elseif old.consistent == ALWAYS_FALSE
+        any_improved |= new.consistent != ALWAYS_FALSE
+    elseif !iszero(new.consistent & ~old.consistent)
+        return false
     else
-        if !iszero(new.consistent & CONSISTENT_IF_NOTRETURNED)
-            old.consistent == ALWAYS_TRUE && return false
-            any_improved |= iszero(old.consistent & CONSISTENT_IF_NOTRETURNED)
-        elseif !iszero(new.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
-            old.consistent == ALWAYS_TRUE && return false
-            any_improved |= iszero(old.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
-        else
-            return false
-        end
+        any_improved |= new.consistent != old.consistent
     end
     if new.effect_free == ALWAYS_TRUE
         any_improved |= old.effect_free != ALWAYS_TRUE
@@ -362,7 +358,7 @@ is_finalizer_inlineable(effects::Effects) =
 is_consistent_if_notreturned(effects::Effects)         = !iszero(effects.consistent & CONSISTENT_IF_NOTRETURNED)
 is_consistent_if_inaccessiblememonly(effects::Effects) = !iszero(effects.consistent & CONSISTENT_IF_INACCESSIBLEMEMONLY)
 
-is_effect_free_if_inaccessiblememonly(effects::Effects) = !iszero(effects.effect_free & EFFECT_FREE_IF_INACCESSIBLEMEMONLY)
+is_effect_free_if_inaccessiblememonly(effects::Effects) = effects.effect_free === EFFECT_FREE_IF_INACCESSIBLEMEMONLY
 
 is_reset_safe_if_inaccessiblememonly(effects::Effects) = !iszero(effects.reset_safe & RESET_SAFE_IF_INACCESSIBLEMEMONLY)
 

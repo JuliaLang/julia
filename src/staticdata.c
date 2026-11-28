@@ -700,10 +700,12 @@ static uintptr_t jl_fptr_id(void *fptr)
 static int effects_foldable(uint32_t effects)
 {
     // N.B.: This needs to be kept in sync with Core.Compiler.is_foldable(effects, true)
+    uint32_t noub = (effects >> 10) & 0x03;
     return ((effects & 0x7) == 0) && // is_consistent(effects)
-           (((effects >> 10) & 0x03) == 0) && // is_noub(effects)
+           (noub == 0 || noub == 2) && // is_noub(effects) || is_noub_if_noinbounds(effects)
            (((effects >> 3) & 0x03) == 0) && // is_effect_free(effects)
-           ((effects >> 6) & 0x01); // is_terminates(effects)
+           ((effects >> 6) & 0x01) && // is_terminates(effects)
+           ((effects >> 14) & 0x01); // is_nortcall(effects)
 }
 
 

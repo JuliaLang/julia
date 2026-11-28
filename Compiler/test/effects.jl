@@ -1828,3 +1828,21 @@ relocatable_ptr(m) = m.ptr
 @test !any(get_code(c -> getfield(c ? relocatable_refs[1] : relocatable_refs[2], :ptr_or_offset), (Bool,))) do x
     x isa PhiNode && any(v -> v isa Ptr, x.values)
 end
+
+# comparing effects whose `:consistent` conditions differ
+let c(v) = Compiler.Effects(Compiler.EFFECTS_TOTAL; consistent=v)
+    NR = Compiler.CONSISTENT_IF_NOTRETURNED
+    IM = Compiler.CONSISTENT_IF_INACCESSIBLEMEMONLY
+    AF = Compiler.ALWAYS_FALSE
+    @test !Compiler.is_better_effects(c(NR), c(IM))
+    @test !Compiler.is_better_effects(c(IM), c(NR))
+    @test !Compiler.is_better_effects(c(NR | IM), c(IM))
+    @test Compiler.is_better_effects(c(NR), c(NR | IM))
+    @test Compiler.is_better_effects(c(AF), Compiler.Effects(c(AF); nothrow=false))
+end
+
+# `GC.@preserve` markers are effect-free globally, not effect-free if inaccessiblememonly
+let src = code_typed1(x -> GC.@preserve(x, 1), (Vector{Int},); optimize=false)
+    i = findfirst(x -> isexpr(x, :gc_preserve_begin), src.code)::Int
+    @test iszero(src.ssaflags[i] & Compiler.IR_FLAG_EFIIMO)
+end
