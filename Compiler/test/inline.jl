@@ -2375,6 +2375,27 @@ let src = code_typed1((Union{DataType,UnionAll},); interp=NoCompileSigInvokes())
     end == 1
 end
 
+# `exact_concrete_invokes` keeps the compilation signature for `@nospecialize`d arguments
+# that are not functions
+@newinterp ExactConcreteInvokes
+Compiler.OptimizationParams(::ExactConcreteInvokes) =
+    Compiler.OptimizationParams(; exact_concrete_invokes=true)
+const exact_concrete_invokes_ref = Ref{Any}()
+@noinline exact_concrete_invokes_data(@nospecialize(x), y) = (exact_concrete_invokes_ref[] = (x, y); nothing)
+@noinline exact_concrete_invokes_varargs(@nospecialize(xs...)) = (exact_concrete_invokes_ref[] = xs; nothing)
+@noinline exact_concrete_invokes_function(@nospecialize(f), x) = (exact_concrete_invokes_ref[] = f(x); nothing)
+function invoked_signature(f, argtypes)
+    src = code_typed1(f, argtypes; interp=ExactConcreteInvokes())
+    edge = only(filter(@nospecialize(x) -> isexpr(x, :invoke), src.code)).args[1]
+    return (edge isa Core.CodeInstance ? edge.def : edge::Core.MethodInstance).specTypes
+end
+@test invoked_signature(x -> exact_concrete_invokes_data(x, 2.0), (Int,)) ==
+    Tuple{typeof(exact_concrete_invokes_data),Any,Float64}
+@test invoked_signature(x -> exact_concrete_invokes_varargs(x, 2.0), (Int,)) ==
+    Tuple{typeof(exact_concrete_invokes_varargs),Any,Vararg}
+@test invoked_signature(x -> exact_concrete_invokes_function(sin, x), (Int,)) ==
+    Tuple{typeof(exact_concrete_invokes_function),typeof(sin),Int}
+
 # https://github.com/JuliaLang/julia/issues/50612
 f50612(x) = UInt32(x)
 @test all(!isinvoke(:UInt32),get_code(f50612,Tuple{Char}))

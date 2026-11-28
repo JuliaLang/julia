@@ -220,6 +220,35 @@ end
     return s
 end
 
+# `lock(f, l)` passes `f` on to its keyword body without calling it, so it is specialized
+# on `f` only where the call is inlined, which a call inside a recursion is not.
+const depth_lock = ReentrantLock()
+function locked_depth(n::Int)
+    lock(depth_lock) do
+        n <= 0 ? 0 : 1 + locked_depth(n - 1)
+    end
+end
+
+# `mktemp(f)`, `mktempdir(f)` and `open(f, path)` pass `f` on in the same way
+function mktemp_depth(n::Int)
+    mktemp() do path, io
+        n <= 0 ? 0 : 1 + mktemp_depth(n - 1)
+    end
+end
+function mktempdir_depth(n::Int)
+    mktempdir() do dir
+        n <= 0 ? 0 : 1 + mktempdir_depth(n - 1)
+    end
+end
+function open_depth(path::String, n::Int)
+    open(path, "w") do io
+        n <= 0 ? 0 : 1 + open_depth(path, n - 1)
+    end
+end
+
+# A `Type` that is passed on without being called is not specialized on
+@noinline typed_zeros(T, n::Int) = zeros(T, n)
+
 function _test_threads()
     v = zeros(Int, 64)
     Threads.@threads for i in eachindex(v)
@@ -291,6 +320,15 @@ function @main(args::Vector{String})::Cint
     lazy_library_ccall()
     println(Core.stdout, "symbols: ", repr(:sym), " ", repr(Symbol("a b")), " ", repr(:(::)))
     _test_dates()
+    # `printstyled` does not specialize on the function that prints the message
+    printstyled(Core.stdout, "styled: ", locked_depth(3), "\n"; bold = true)
+    path = tempname()
+    println(Core.stdout, "do blocks: ", mktemp_depth(2), " ", mktempdir_depth(2), " ", open_depth(path, 2))
+    rm(path)
+    println(Core.stdout, "type argument: ", sum(typed_zeros(Float64, 2)), " ", length(typed_zeros(Int, 3)))
+    # more arguments than `print` and `string` specialize on
+    println(Core.stdout, "many arguments: ", 1, " ", 2.0, " ", 'c', " ", :sym, " ", 0x01, " ", length(args))
+    println(Core.stdout, string("many arguments: ", 1, " ", 2.0, " ", 'c', " ", :sym, " ", 0x01, " ", length(args)))
 
     Base.donotdelete(reshape([1,2,3],:,1,1))
 
