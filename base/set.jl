@@ -728,7 +728,8 @@ _similar_or_copy(x::Any) = similar(x)
 _similar_or_copy(x::Any, ::Type{T}) where {T} = similar(x, T)
 # Make a copy on construction since it is faster than inserting elements separately
 _similar_or_copy(x::Union{AbstractDict,AbstractSet}) = copy(x)
-_similar_or_copy(x::Union{AbstractDict,AbstractSet}, ::Type{T}) where {T} = _copy_oftype(x, T)
+_similar_or_copy(x::AbstractDict, ::Type{T}) where {T} = _copy_oftype(x, T)
+_similar_or_copy(x::AbstractSet, ::Type{T}) where {T} = empty(x, T)
 
 # to make replace/replace! work for a new container type Cont, only
 # _replace!(new::Callable, res::Cont, A::Cont, count::Int)
@@ -763,6 +764,38 @@ replace!(A, old_new::Pair...; count::Integer=typemax(Int)) =
     replace_pairs!(A, A, check_count(count), old_new)
 
 function replace_pairs!(res, A, count::Int, old_new::Tuple{Vararg{Pair}})
+    @inline function new(x)
+        for o_n in old_new
+            isequal(first(o_n), x) && return last(o_n)
+        end
+        return x # no replace
+    end
+    _replace!(new, res, A, count)
+end
+
+function replace_pairs!(res::AbstractSet, A::AbstractSet, count::Int, old_new::Tuple{Vararg{Pair}})
+    if res !== A
+        count == 0 && (union!(res, A); return res)
+        haslength(A) && sizehint!(res, length(A))
+        c = 0
+        for x in A
+            if c < count
+                replaced = false
+                for o_n in old_new
+                    if isequal(first(o_n), x)
+                        push!(res, last(o_n))
+                        c += 1
+                        replaced = true
+                        break
+                    end
+                end
+                !replaced && push!(res, x)
+            else
+                push!(res, x)
+            end
+        end
+        return res
+    end
     @inline function new(x)
         for o_n in old_new
             isequal(first(o_n), x) && return last(o_n)
