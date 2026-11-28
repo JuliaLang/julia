@@ -751,6 +751,11 @@ end
         op += 1
         op > length(stmt.args) && return nothing
         return (UseRef(it, op), op)
+    elseif op == 0
+        isa(stmt, GotoIfNot) && return (UseRef(it, 1), 1)
+        isa(stmt, ReturnNode) && return isdefined(stmt, :val) ? (UseRef(it, 1), 1) : nothing
+    elseif !(isa(stmt, PhiNode) || isa(stmt, PhiCNode) || isa(stmt, Expr))
+        return nothing # every other node has at most one operand
     end
     op = _advance(stmt, op)
     op === nothing && return nothing
