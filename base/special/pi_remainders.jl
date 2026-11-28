@@ -9,14 +9,6 @@ const INV_PIO16 = 0x1.45f306dc9c883p+2
 const PIO16_HI = 0x1.921fb54442d18p-3
 const PIO16_LO = 0x1.1a62633145c07p-57
 
-# round(a*c) as a float and as an Int64, for |a*c| < 2^51 (Float64) or 2^21 (Float32), using
-# MAGIC_ROUND_CONST: the integer is then also the low bits of the sum, which avoids separate round
-# and float-to-int instructions.
-@inline function roundmul(a::T, c::T) where T<:Union{Float32, Float64}
-    t = muladd(a, c, MAGIC_ROUND_CONST(T))
-    return t - MAGIC_ROUND_CONST(T), Int64(reinterpret(Signed, t) - reinterpret(Signed, MAGIC_ROUND_CONST(T)))
-end
-
 ## Payne-Hanek
 
 # Bits of 1/2π, after a zero word that lets paynehanek read the word before the first one
