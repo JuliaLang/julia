@@ -168,7 +168,7 @@ function finish!(interp::AbstractInterpreter, caller::InferenceState, validation
                     resize!(inferred_result.slottypes::Vector{Any}, nslots)
                     resize!(inferred_result.slotnames, nslots)
                 end
-                inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result)
+                inferred_result = maybe_compress_codeinfo(interp, mi, inferred_result, result.ipo_effects)
             elseif ci.owner === nothing
                 # The global cache can only handle objects that codegen understands (nothing or CodeInfo)
                 inferred_result = nothing
@@ -632,27 +632,30 @@ end
 function discard_optimized_result(interp::AbstractInterpreter, mi::MethodInstance, inlining_cost::InlineCostType)
     may_discard_trees(interp) || return false
     inlining_cost == MAX_INLINE_COST || return false
-    precompile_keep_ir(interp) && return false
     keep_source_for_output(mi) && return false
     return true
 end
 
-# A cache without native code needs the source of every compileable signature, or
-# loading it means inferring them all again. Caches with native code drop it on save.
+# The source of every compileable signature is kept while generating output, so that
+# collecting the code for the image does not infer it again. A cache without native
+# code stores it, or loading it means inferring them all again. Caches with native
+# code drop it on save (see should_store_source in staticdata.c).
 keep_source_for_output(mi::MethodInstance) =
     ccall(:jl_generating_output, Cint, ()) != 0 && isa_compileable_sig(mi)
 
-function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo)
+function maybe_compress_codeinfo(interp::AbstractInterpreter, mi::MethodInstance, ci::CodeInfo,
+                                 ipo_effects::Effects)
     def = mi.def
     isa(def, Method) || return ci # don't compress toplevel code
     can_discard_trees = may_discard_trees(interp)
     inlineable = is_inlineable(ci)
     if can_discard_trees && !inlineable
-        # Precompile-keep-ir mode: retain non-inlineable IR as raw CodeInfo so
-        # irgen's typeinf_ext can reuse it instead of re-inferring.
-        # The image leaves it out.
-        precompile_keep_ir(interp) && return ci
         keep_source_for_output(mi) || return nothing
+        # Compressing adds roots to the method, which the image keeps even if it drops
+        # the source, so keep source that it drops uncompressed.
+        cache_owner(interp) === nothing &&
+            ccall(:jl_image_drops_source, Cint, (Any, UInt32), def, encode_effects(ipo_effects)) != 0 &&
+            return ci
     end
     # TODO: do we want to augment edges here with any :invoke targets that we got from inlining (such that we didn't have a direct edge to it already)?
     may_compress(interp) && return ccall(:jl_compress_ir, String, (Any, Any), def, ci)
@@ -2489,7 +2492,7 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
     # (see jl_rewrite_mi_caches in staticdata.c).
     #
     # First the compiled entries, in compilation order: every entry paired with a
-    # CodeInfo in `codeinfos` is inferred and about to be compiled, so it lands in
+    # CodeInfo in `codeinfos` is inferred and selected for compilation, so it lands in
     # the single invoke+inferred group that jl_mi_cache_insert (gf.c) keeps at the
     # front, and the compilation order already lists higher-`max_world` entries
     # first (worlds are processed newest-first).

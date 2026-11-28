@@ -497,7 +497,7 @@ extern jl_array_t *_jl_debug_method_invalidation JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_page_size;
 extern JL_DLLEXPORT size_t jl_hugepage_size;
 extern JL_DLLEXPORT jl_value_t *jl_typeinf_func JL_GLOBALLY_ROOTED;
-extern JL_DLLEXPORT jl_value_t *jl_compile_and_emit_func JL_GLOBALLY_ROOTED;
+extern JL_DLLEXPORT jl_value_t *jl_collect_and_infer_func JL_GLOBALLY_ROOTED;
 extern JL_DLLEXPORT size_t jl_typeinf_world;
 extern JL_DLLEXPORT jl_value_t *jl_libdl_dlopen_func JL_GLOBALLY_ROOTED;
 extern _Atomic(jl_typemap_entry_t*) call_cache[N_CALL_CACHE] JL_GLOBALLY_ROOTED;
@@ -817,8 +817,7 @@ JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src)
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode) JL_CANSAFEPOINT;
 JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void);
 JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v);
-JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void);
-JL_DLLEXPORT void jl_set_precompile_keep_ir(int8_t v);
+JL_DLLEXPORT int jl_image_drops_source(jl_method_t *def, uint32_t ipo_effects);
 JL_DLLEXPORT jl_code_info_t *jl_gdbcodetyped1(jl_method_instance_t *mi, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *meth JL_PROPAGATES_ROOT, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT jl_code_instance_t *jl_get_method_uninferred(
@@ -2780,8 +2779,11 @@ JL_DLLIMPORT jl_value_t *jl_dump_function_ir(jl_llvmf_dump_t *dump, char strip_i
 JL_DLLIMPORT jl_value_t *jl_dump_function_asm(jl_llvmf_dump_t *dump, char emit_mc, const char* asm_variant, const char *debuginfo, char binary, char raw) JL_CANSAFEPOINT;
 
 typedef jl_value_t *(*jl_codeinstance_lookup_t)(jl_method_instance_t *mi JL_PROPAGATES_ROOT, size_t min_world, size_t max_world);
-JL_DLLIMPORT void *jl_create_native(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int cache, size_t world, jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) JL_CANSAFEPOINT;
-JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
+jl_value_t *jl_collect_and_infer_code(int trim, int external_linkage, size_t world,
+                                      jl_array_t *mod_array, jl_array_t *worklist, int all,
+                                      jl_array_t *module_init_order, jl_array_t *ext_foreign_cis) JL_CANSAFEPOINT;
+JL_DLLIMPORT void *jl_create_native(jl_array_t *codeinfos, int external_linkage) JL_CANSAFEPOINT;
+JL_DLLIMPORT void *jl_emit_native(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int _external_linkage) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_dump_native(void *native_code,
         const char *bc_fname, const char *unopt_bc_fname, const char *obj_fname, const char *asm_fname,
         ios_t *z, uint32_t checksum, const char *unpack_func, jl_emission_params_t *params);
@@ -2797,8 +2799,6 @@ JL_DLLIMPORT void jl_register_fptrs(uint64_t image_base, const struct _jl_image_
                                     jl_code_instance_t **linfos, size_t n);
 JL_DLLIMPORT void jl_get_llvm_cis(void *native_code, size_t *num_els,
                                   jl_code_instance_t **CIs);
-JL_DLLIMPORT void jl_get_llvm_mi_cache_order(void *native_code, size_t *num_els,
-                                             jl_code_instance_t **CIs);
 JL_DLLIMPORT void jl_init_codegen(void) JL_CANSAFEPOINT;
 JL_DLLIMPORT void jl_teardown_codegen(void) JL_NOTSAFEPOINT;
 JL_DLLIMPORT void jl_decorate_llvm_module(LLVMModuleRef m) JL_NOTSAFEPOINT;

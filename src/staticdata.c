@@ -173,7 +173,7 @@ static void get_tags(jl_value_t **tags[NUM_TAGS])
 #define INSERT_TAG(sym) tags[i++] = (jl_value_t**)&(sym)
     INSERT_TAG(jl_method_table);
     INSERT_TAG(jl_typeinf_func);
-    INSERT_TAG(jl_compile_and_emit_func);
+    INSERT_TAG(jl_collect_and_infer_func);
     INSERT_TAG(jl_libdl_dlopen_func);
     // n.b. must update NUM_TAGS when you add something here
 #undef INSERT_TAG
@@ -356,6 +356,7 @@ JL_DLLEXPORT int jl_codeinst_coverage_compatible(jl_code_instance_t *ci) JL_NOTS
 static htable_t fptr_to_id;
 
 void *native_functions;   // opaque jl_native_code_desc_t blob used for fetching data from LLVM
+static jl_value_t *image_code; // svec(codeinfos, ci_order) collected for the image (see jl_collect_and_infer_code), or NULL to save the method caches as they are
 
 // table of struct field addresses to rewrite during saving
 static htable_t object_replace;
@@ -640,7 +641,7 @@ static jl_value_t *get_replaceable_field(jl_value_t **addr, int mutabl) JL_CANSA
 
 // Rewrite the `cache` field of each MethodInstance (and the `next` chain of the
 // CodeInstances it points to) so the image stores exactly the ordered list of
-// CodeInstances `cis` that codegen produced, converted to a linked list via the
+// CodeInstances `cis` collected for the image, converted to a linked list via the
 // `next` field, instead of whatever the live runtime cache happened to contain.
 // CodeInstances are grouped by their owning MethodInstance, preserving the order
 // in which they appear in `cis`. These changes are recorded through the normal
@@ -770,6 +771,49 @@ static int codeinst_may_be_runnable(jl_code_instance_t *ci, int incremental) {
     return jl_atomic_load_relaxed(&ci->min_world) <= jl_typeinf_world && jl_typeinf_world <= max_world;
 }
 
+static int should_store_source(jl_code_instance_t *ci, jl_value_t *inferred, int incremental, int has_native) JL_CANSAFEPOINT
+{
+    jl_method_instance_t *mi = jl_get_ci_mi(ci);
+    jl_method_t *def = mi->def.method;
+    int is_relocatable = !incremental || jl_is_code_info(inferred) ||
+        (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
+    int may_discard_trees = !jl_get_type_infer_preserve_ir();
+    if (!is_relocatable)
+        return 0;
+    if (def->source == NULL && def->generator == NULL)
+        return 1; // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
+    if (!may_discard_trees) // if allowed to delete
+        return 1;
+    if (!codeinst_may_be_runnable(ci, incremental)) // delete all code that cannot run
+        return 0;
+    if (jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return) // delete all code that just returns a constant
+        return 0;
+    if (jl_ir_inlining_cost(inferred) != UINT16_MAX) // don't delete inlineable code
+        return 1;
+    if (has_native) {
+        if (ci->owner != jl_nothing && ci->owner != (jl_value_t*)jl_trim_sym) // don't delete code for external interpreters
+            return 1;
+        // delete the code now: if we thought it was worth keeping, it would have been converted to object code
+        return effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)); // don't delete code we may want for irinterp
+    }
+    if (ci->owner != jl_nothing)
+        return 1;
+    return jl_isa_compileable_sig((jl_tupletype_t*)mi->specTypes, mi->sparam_vals, def);
+}
+
+// Whether the image being generated will drop the source of a non-inlineable
+// CodeInstance of `def` with effects `ipo_effects`, cached by the native interpreter
+// (a case of should_store_source that inference can decide).
+JL_DLLEXPORT int jl_image_drops_source(jl_method_t *def, uint32_t ipo_effects)
+{
+    int has_native = jl_options.outputo || jl_options.outputbc || jl_options.outputunoptbc || jl_options.outputasm;
+    if (!has_native || jl_get_type_infer_preserve_ir())
+        return 0;
+    if (def->source == NULL && def->generator == NULL)
+        return 0;
+    return !effects_foldable(ipo_effects);
+}
+
 // Anything that requires uniquing or fixing during deserialization needs to be "toplevel"
 // in serialization (i.e., have its own entry in `serialization_order`). Consequently,
 // objects that act as containers for other potentially-"problematic" objects must add such "children"
@@ -864,7 +908,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         // chosen ordering for those MethodInstances. Any MethodInstance whose
         // cache was not rewritten gets an empty cache here, rather than leaking
         // whatever the live runtime cache happened to contain. Builtin functions
-        // are an exception: their cache is not part of the codegen ordering and
+        // are an exception: their cache is not part of the collected ordering and
         // is not repopulated at load, so keep it. Builtin-like functions are
         //  recognized by their method having neither source nor a generator
         // (cf. the jl_is_builtinfunc computation).
@@ -872,7 +916,7 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         int is_builtin = jl_is_method(midef) &&
             ((jl_method_t*)midef)->source == NULL &&
             ((jl_method_t*)midef)->generator == NULL;
-        if (native_functions && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
+        if (image_code && !is_builtin && !has_field_change((jl_value_t**)&mi->cache))
             record_field_change((jl_value_t*)mi, (jl_value_t**)&mi->cache, NULL);
         // don't recurse into all backedges memory (yet)
         // pruned once queueing is done
@@ -1009,37 +1053,11 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
         if (inferred && inferred != jl_nothing && !jl_is_uint8(inferred)) { // disregard if there is nothing here to delete (e.g. builtins, unspecialized)
             jl_method_t *def = mi->def.method;
             if (jl_is_method(def)) { // don't delete toplevel code
-                int is_relocatable = !s->incremental || jl_is_code_info(inferred) ||
-                    (jl_is_string(inferred) && jl_string_len(inferred) > 0 && jl_string_data(inferred)[jl_string_len(inferred) - 1]);
-                int may_discard_trees = !jl_get_type_infer_preserve_ir();
-                int discard = 0;
-                if (may_discard_trees && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
-                    (def->source != NULL || def->generator != NULL) &&
-                    jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
-                    // Drop IR retained only to generate native code (see jl_precompile_keep_ir).
-                    // Optimized opaque closures keep theirs, since it can't be rebuilt.
-                    record_field_change((jl_value_t*)ci, (jl_value_t**)&ci->inferred, jl_nothing);
-                }
-                else if (!is_relocatable) {
-                    discard = 1;
-                }
-                else if (def->source == NULL) {
-                    // don't delete code from optimized opaque closures that can't be reconstructed (and builtins)
-                }
-                else if (may_discard_trees && // if allowed to delete
-                         (!codeinst_may_be_runnable(ci, s->incremental) || // delete all code that cannot run
-                          jl_atomic_load_relaxed(&ci->invoke) == jl_fptr_const_return)) { // delete all code that just returns a constant
-                    discard = 1;
-                }
-                else if (may_discard_trees &&
-                         native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) && // don't delete code for external interpreters
-                         !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
-                         jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
-                    // delete the code now: if we thought it was worth keeping, it would have been converted to object code
-                    discard = 1;
-                }
+                int discard = !should_store_source(ci, inferred, s->incremental, native_functions != NULL);
+                // inference compresses the source that an image with native code stores (see jl_image_drops_source)
+                assert(discard || !native_functions || !jl_is_code_info(inferred) || ci->owner != jl_nothing ||
+                       (def->source == NULL && def->generator == NULL) || jl_get_type_infer_preserve_ir() ||
+                       jl_ir_inlining_cost(inferred) != UINT16_MAX);
                 if (discard) {
                     // keep only the inlining cost, so inference can later decide if it is worth getting the source back
                     if (jl_is_string(inferred) || jl_is_code_info(inferred))
@@ -3385,17 +3403,13 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         }
     }
 
-    if (native_functions) {
+    if (image_code) {
         // Rewrite each MethodInstance's cache to the ordered list of
-        // CodeInstances codegen emitted for this image (see jl_rewrite_mi_caches).
-        size_t num_ci_order = 0;
-        jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, NULL);
-        if (num_ci_order) {
-            jl_code_instance_t **ci_order = (jl_code_instance_t**)malloc_s(num_ci_order * sizeof(jl_code_instance_t*));
-            jl_get_llvm_mi_cache_order(native_functions, &num_ci_order, ci_order);
-            jl_rewrite_mi_caches(ci_order, num_ci_order);
-            free(ci_order);
-        }
+        // CodeInstances selected for this image (see jl_rewrite_mi_caches).
+        jl_array_t *ci_order = (jl_array_t*)jl_svecref(image_code, 1);
+        jl_rewrite_mi_caches(jl_array_data(ci_order, jl_code_instance_t*), jl_array_nrows(ci_order));
+    }
+    if (native_functions) {
         size_t num_gvars, num_external_fns;
         jl_get_llvm_gv_inits(native_functions, &num_gvars, NULL);
         arraylist_grow(&gvars, num_gvars);
@@ -3405,15 +3419,12 @@ static void jl_save_system_image_to_stream(ios_t *f, jl_array_t *mod_array,
         jl_get_llvm_external_fns(native_functions, &num_external_fns,
                                  (jl_code_instance_t *)external_fns.items);
         if (jl_options.trim) {
-            size_t num_mis;
-            jl_get_llvm_cis(native_functions, &num_mis, NULL);
-            arraylist_grow(&MIs, num_mis);
-
-            // Record MethodInstances for user-provided code (as reported by codegen)
-            jl_get_llvm_cis(native_functions, &num_mis, (jl_code_instance_t**)MIs.items);
-            for (size_t i = 0; i < num_mis; i++) {
-                jl_code_instance_t *ci = (jl_code_instance_t*)MIs.items[i];
-                MIs.items[i] = (void*)jl_get_ci_mi(ci);
+            // Record MethodInstances for user-provided code
+            jl_array_t *codeinfos = (jl_array_t*)jl_svecref(image_code, 0);
+            for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
+                jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+                if (jl_is_code_instance(item))
+                    arraylist_push(&MIs, jl_get_ci_mi((jl_code_instance_t*)item));
             }
 
             // Record MethodInstances for built-ins (used when dynamically dispatching to a
@@ -3823,32 +3834,49 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     jl_array_t *mod_array = NULL, *extext_methods = NULL, *extext_records = NULL, *new_ext = NULL, *ext_foreign_cis = NULL;
     int64_t datastartpos = 0;
-    JL_GC_PUSH5(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis);
+    jl_value_t *collected = NULL; // svec(codeinfos, ci_order), see jl_collect_and_infer_code
+    JL_GC_PUSH6(&mod_array, &extext_methods, &extext_records, &new_ext, &ext_foreign_cis, &collected);
 
     ext_foreign_cis = jl_alloc_vec_any(0);
 
     mod_array = jl_get_loaded_modules();  // __toplevel__ modules loaded in this session (from Base.loaded_modules_array)
+    // Collect and infer the code to store in the image.
+    // A sysimage is inferred when its native code is emitted, a package image always.
+    int external_linkage = worklist != NULL; // package images link to the code of other images
+    if (worklist || _native_data != NULL) {
+        int trim = 0, all = 0;
+        jl_array_t *newmodules = NULL, *allmodules = NULL;
+        if (worklist) {
+            if (suppress_precompile)
+                newly_inferred = NULL;
+            newmodules = suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist;
+        }
+        else {
+            trim = jl_options.trim;
+            all = jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL;
+            allmodules = mod_array;
+        }
+        collected = jl_collect_and_infer_code(trim, external_linkage, jl_atomic_load_acquire(&jl_world_counter),
+                                              allmodules, newmodules, all, module_init_order, ext_foreign_cis);
+        image_code = collected;
+    }
+    if (_native_data != NULL)
+        *_native_data = jl_create_native((jl_array_t*)jl_svecref(collected, 0), external_linkage);
+
     int64_t checksumpos;
     if (worklist) {
         uint32_t flags = JI_FLAG_PKGIMAGE | (emit_split ? JI_FLAG_SPLIT : 0);
-        if (_native_data != NULL) {
-            if (suppress_precompile)
-                newly_inferred = NULL;
-            *_native_data = jl_create_native(NULL, 0, 1, jl_atomic_load_acquire(&jl_world_counter), NULL, suppress_precompile ? (jl_array_t*)jl_an_empty_vec_any : worklist, 0, module_init_order, ext_foreign_cis);
-            // an image without code gets no shared library, so loading it does not open one,
-            // and its .ji is left uncompressed so that it can be mapped like any other
-            if (emit_split && jl_native_code_is_empty(*_native_data)) {
-                flags |= JI_FLAG_NO_NATIVE;
-                compress = 0;
-            }
+        // an image without code gets no shared library, so loading it does not open one,
+        // and its .ji is left uncompressed so that it can be mapped like any other .ji
+        if (_native_data != NULL && emit_split && jl_native_code_is_empty(*_native_data)) {
+            flags |= JI_FLAG_NO_NATIVE;
+            compress = 0;
         }
         checksumpos = write_header(f, flags);
         jl_write_header_for_incremental(f, worklist, mod_array, udeps, srctextpos);
     }
     else {
         checksumpos = write_header(f, emit_split ? JI_FLAG_SPLIT : 0);
-        if (_native_data != NULL)
-            *_native_data = jl_create_native(NULL, jl_options.trim, 0, jl_atomic_load_acquire(&jl_world_counter), mod_array, NULL, jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL, module_init_order, ext_foreign_cis);
     }
     if (_native_data != NULL)
         native_functions = *_native_data;
@@ -3863,24 +3891,21 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
     if (worklist) {
         // new_exts: [code_instances, ...], anything to add to the image just for side-effects
         // Save the inferred code from newly inferred, external methods
-        arraylist_t CIs;
-        arraylist_new(&CIs, 0);
-        if (native_functions) {
-            size_t num_cis = 0;
-            jl_get_llvm_cis(native_functions, &num_cis, NULL);
-            arraylist_grow(&CIs, num_cis);
-            jl_get_llvm_cis(native_functions, &num_cis, (jl_code_instance_t**)CIs.items);
-        }
-        // Create a filtered list of the compiled code instances that are
-        // possibly not referenced via any other way but valid for the
-        // Method cache field of an external method
+        // Keep the collected code instances that are possibly not referenced
+        // via any other way but valid for the Method cache field of an external method
         new_ext = jl_alloc_vec_any(0);
-        for (size_t i = 0; i < CIs.len; i++) {
-            jl_code_instance_t *ci = (jl_code_instance_t*)CIs.items[i];
+        jl_array_t *codeinfos = (jl_array_t*)jl_svecref(collected, 0);
+        for (size_t i = 0; i < jl_array_nrows(codeinfos); i++) {
+            jl_value_t *item = jl_array_ptr_ref(codeinfos, i);
+            if (!jl_is_code_instance(item))
+                continue;
+            jl_code_instance_t *ci = (jl_code_instance_t*)item;
+            // code from another image stays there
+            if (jl_atomic_load_relaxed(&ci->flags) & JL_CI_FLAGS_FROM_IMAGE)
+                continue;
             if (ci_not_internal_cache(ci))
-                jl_array_ptr_1d_push(new_ext, (jl_value_t*)ci);
+                jl_array_ptr_1d_push(new_ext, item);
         }
-        arraylist_free(&CIs);
         // Merge foreign & external CIs
         size_t n_ext = jl_array_nrows(ext_foreign_cis);
         for (size_t i = 0; i < n_ext; i++)
@@ -3910,11 +3935,10 @@ JL_DLLEXPORT uint32_t jl_create_system_image(void **_native_data, jl_array_t *wo
 
     jl_query_cache query_cache;
     init_query_cache(&query_cache);
-    // IR retained only to generate native code is not serialized (see jl_queue_for_serialization)
-    jl_set_precompile_keep_ir(0);
     jl_save_system_image_to_stream(f, mod_array, module_init_order, worklist, extext_methods, extext_records, new_ext, &query_cache);
     if (_native_data != NULL)
         native_functions = NULL;
+    image_code = NULL;
     // make sure we don't run any Julia code concurrently before this point
     // Re-enable running julia code for postoutput hooks, atexit, etc.
     jl_gc_enable_finalizers(ct, 1);

@@ -169,7 +169,6 @@ typedef struct {
     // ordered list of CodeInstances emitted for this image, in the order they
     // were presented in `codeinfos`; consumed by staticdata.c to rewrite each
     // MethodInstance's `cache` field into a `next`-linked list
-    SmallVector<jl_code_instance_t*, 0> jl_ci_order;
     // coverage counters emitted into the image: (file, line, flags, symbol),
     // serialized as the `jl_image_coverage` table
     SmallVector<std::tuple<std::string, int32_t, uint32_t, std::string>, 0> jl_coverage_entries;
@@ -205,24 +204,6 @@ jl_get_llvm_cis_impl(void *native_code, size_t *num_elements, jl_code_instance_t
     for (auto &ci : map) {
         data[i++] = ci.first;
     }
-}
-
-// get the ordered list of CodeInstances that were emitted for this image, in
-// the order they appeared in `codeinfos`. staticdata.c uses this to rewrite the
-// `cache` field of each MethodInstance into a `next`-linked list.
-extern "C" JL_DLLEXPORT_CODEGEN void
-jl_get_llvm_mi_cache_order_impl(void *native_code, size_t *num_elements, jl_code_instance_t **data)
-{
-    jl_native_code_desc_t *desc = (jl_native_code_desc_t *)native_code;
-    auto &order = desc->jl_ci_order;
-
-    if (data == NULL) {
-        *num_elements = order.size();
-        return;
-    }
-
-    assert(*num_elements == order.size());
-    memcpy(data, order.data(), *num_elements * sizeof(jl_code_instance_t *));
 }
 
 // get the list of global variables managed by the compiler
@@ -667,61 +648,10 @@ static bool canPartition(const Function &F)
 // this builds the object file portion of the sysimage files for fast startup
 // `external_linkage` create linkages between pkgimages.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int external_linkage, size_t world,
-                           jl_array_t *mod_array, jl_array_t *worklist, int all, jl_array_t *module_init_order, jl_array_t *ext_foreign_cis)
+void *jl_create_native_impl(jl_array_t *codeinfos, int external_linkage)
 {
-    JL_TIMING(INFERENCE, INFERENCE);
-    auto ct = jl_current_task;
-    if (!jl_compile_and_emit_func) {
-        jl_error("inference not available for generating compiled output");
-    }
-    bool timed = (ct->reentrant_timing & 1) == 0;
-    if (timed)
-        ct->reentrant_timing |= 1;
-    uint64_t compiler_start_time = 0;
-    uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
-    if (measure_compile_time_enabled)
-        compiler_start_time = jl_hrtime();
-
-    jl_value_t **fargs;
-    JL_GC_PUSHARGS(fargs, 9);
-#ifdef _P64
-    jl_value_t *jl_array_ulong_type = jl_array_uint64_type;
-#else
-    jl_value_t *jl_array_ulong_type = jl_array_uint32_type;
-#endif
-    jl_array_t *worlds = jl_alloc_array_1d(jl_array_ulong_type, 2);
-    fargs[0] = jl_compile_and_emit_func;
-    fargs[1] = (jl_value_t*)worlds;
-    jl_array_data(worlds, size_t)[0] = jl_typeinf_world;
-    int compiler_world = 1;
-    if (trim || jl_array_data(worlds, size_t)[0] == 0 || jl_array_data(worlds, size_t)[0] == world || external_linkage)
-        compiler_world = 0;
-    jl_array_data(worlds, size_t)[compiler_world] = world; // might overwrite previous
-    worlds->dimsize[0] = 1 + compiler_world;
-    fargs[2] = jl_box_uint8(trim);
-    fargs[3] = jl_box_bool(external_linkage);
-    fargs[4] = worklist ? (jl_value_t*)worklist : jl_nothing; // worklist (or nothing)
-    fargs[5] = mod_array ? (jl_value_t*)mod_array : jl_nothing; // mod_array (or nothing)
-    fargs[6] = jl_box_bool(all);
-    fargs[7] = (jl_value_t*)module_init_order; // module_init_order
-    fargs[8] = ext_foreign_cis ? (jl_value_t*)ext_foreign_cis : jl_nothing; // ext_foreign_cis (or nothing)
-    size_t last_age = ct->world_age;
-    ct->world_age = jl_typeinf_world;
-    fargs[0] = jl_apply(fargs, 9);
-    fargs[1] = fargs[2] = fargs[3] = fargs[4] = fargs[5] = fargs[6] = fargs[7] = fargs[8] = NULL;
-    ct->world_age = last_age;
-    // the bridge returns svec(codeinfos, ci_order): the interleaved
-    // CodeInstance/CodeInfo work list to emit, and the ordered CodeInstances to
-    // store in the method caches of the output image
-    jl_value_t *result = fargs[0];
-    assert(jl_is_svec(result) && jl_svec_len(result) == 2);
-    jl_value_t *codeinfos = jl_svecref(result, 0);
-    jl_value_t *ci_order = jl_svecref(result, 1);
-    JL_TYPECHK(jl_create_native, array_any, codeinfos);
-    JL_TYPECHK(jl_create_native, array_any, ci_order);
-    auto data = (jl_native_code_desc_t *)jl_emit_native((jl_array_t*)codeinfos, (jl_array_t*)ci_order, llvmmod, NULL, external_linkage ? 1 : 0);
-    JL_GC_POP();
+    uint64_t start = jl_typeinf_timing_begin();
+    auto data = (jl_native_code_desc_t *)jl_emit_native(codeinfos, NULL, NULL, external_linkage ? 1 : 0);
 
     // move everything inside, now that we've merged everything
     // (before adding the exported headers)
@@ -760,13 +690,7 @@ void *jl_create_native_impl(LLVMOrcThreadSafeModuleRef llvmmod, int trim, int ex
         }
     });
 
-    if (timed) {
-        if (measure_compile_time_enabled) {
-            auto end = jl_hrtime();
-            jl_atomic_fetch_add_relaxed(&jl_cumulative_compile_time, end - compiler_start_time);
-        }
-        ct->reentrant_timing &= ~1ull;
-    }
+    jl_typeinf_timing_end(start, 0);
     return data;
 }
 
@@ -958,7 +882,7 @@ static void aot_link_output(jl_codegen_output_t &out) JL_CANSAFEPOINT
 }
 
 static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *codeinfos,
-                                      jl_array_t *ci_order, const jl_cgparams_t *cgparams,
+                                      const jl_cgparams_t *cgparams,
                                       int external_linkage) JL_CANSAFEPOINT
 {
     jl_cgparams_t target_cgparams = *cgparams;
@@ -966,17 +890,6 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
     target_cgparams.sanitize_thread = jl_options.target_sanitize_thread;
     target_cgparams.sanitize_address = jl_options.target_sanitize_address;
     auto &out = *data->out;
-    // record the caller-provided ordering of CodeInstances to store in the
-    // image's method caches (see jl_get_llvm_mi_cache_order / jl_rewrite_mi_caches)
-    if (ci_order) {
-        size_t nci = jl_array_nrows(ci_order);
-        data->jl_ci_order.reserve(nci);
-        for (size_t k = 0; k < nci; k++) {
-            jl_value_t *ci = jl_array_ptr_ref(ci_order, k);
-            assert(jl_is_code_instance(ci));
-            data->jl_ci_order.push_back((jl_code_instance_t*)ci);
-        }
-    }
     // compile all methods for the current world and type-inference world
     DenseMap<jl_code_instance_t *, jl_code_info_t *> ci_infos;
     egal_set method_roots;
@@ -1088,7 +1001,7 @@ static void jl_emit_native_to_output(jl_native_code_desc_t *data, jl_array_t *co
 // also be used by extern consumers like GPUCompiler.jl to obtain a module containing
 // all reachable & inferrrable functions.
 extern "C" JL_DLLEXPORT_CODEGEN
-void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
+void *jl_emit_native_impl(jl_array_t *codeinfos, LLVMOrcThreadSafeModuleRef llvmmod, const jl_cgparams_t *cgparams, int external_linkage)
 {
     JL_TIMING(NATIVE_AOT, NATIVE_Create);
     ++CreateNativeCalls;
@@ -1110,7 +1023,7 @@ void *jl_emit_native_impl(jl_array_t *codeinfos, jl_array_t *ci_order, LLVMOrcTh
 
     data->TSM_ref->withModuleDo([&](Module &M) JL_CANSAFEPOINT {
         data->out = std::make_unique<jl_codegen_output_t>(M);
-        jl_emit_native_to_output(data, codeinfos, ci_order, cgparams, external_linkage);
+        jl_emit_native_to_output(data, codeinfos, cgparams, external_linkage);
     });
 
     return (void *)data;
