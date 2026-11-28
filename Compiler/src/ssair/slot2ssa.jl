@@ -547,8 +547,24 @@ struct NewPhiCNode2
     insert::NewSlotPhi{PhiCNode}
 end
 
+# Whether `ir` is a single basic block without CFG edges, try regions or a fallthrough
+# off its end, which `construct_ssa!` handles without a dominator tree.
+function is_straight_line(ir::IRCode)
+    blocks = ir.cfg.blocks
+    length(blocks) == 1 || return false
+    bb = blocks[1]
+    (all(iszero, bb.preds) && isempty(bb.succs)) || return false # pred 0 is the entry
+    code = ir.stmts.stmt
+    isa(code[last(bb.stmts)], ReturnNode) || return false
+    for stmt in code
+        isa(stmt, EnterNode) && return false
+    end
+    return true
+end
+
+# `domtree === nothing` means `ir` is straight-line code (see `is_straight_line`).
 function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
-                        domtree::DomTree, defuses::Vector{SlotInfo},
+                        domtree::Union{Nothing,DomTree}, defuses::Vector{SlotInfo},
                         𝕃ₒ::AbstractLattice)
     code = ir.stmts.stmt
     cfg = ir.cfg
@@ -575,6 +591,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     @zone "CC: IDF" for (idx, slot) in Iterators.enumerate(defuses)
         # No uses => no need for phi nodes
         isempty(slot.uses) && continue
+        if domtree === nothing
+            # The only block needs no phi nodes. As in `compute_live_ins`, the slot is
+            # live into it if it is used before its first def (arguments' defs are at 0).
+            defs = slot.defs
+            if isempty(defs) || first(slot.uses) <= first(defs)
+                push!(live_slots[1], idx)
+            end
+            continue
+        end
         # TODO: Restore this optimization
         if false # length(slot.defs) == 1
             if slot.defs[] == 0
@@ -666,6 +691,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     ]
     worklist = Tuple{Int, Int, Vector{Pair{Any, Any}}}[(1, 0, initial_incoming_vals)]
     visited = BitSet()
+    has_pinode = Vector{Bool}(undef, length(sv.slottypes))
     new_nodes = ir.new_nodes
     @zone "CC: SSA_RENAME" while !isempty(worklist)
         (item, pred, incoming_vals) = pop!(worklist)
@@ -714,7 +740,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
             end
         end
         # Record Pi nodes if necessary
-        has_pinode = fill(false, length(sv.slottypes))
+        fill!(has_pinode, false)
         for slot in live_slots[item]
             (ival, idef) = incoming_vals[slot]
             (ival === UNDEF_TOKEN) && continue
@@ -815,12 +841,15 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
                 incoming_vals[i] = Pair{Any, Any}(stmt.val, idef)
             end
         end
-        for succ in cfg.blocks[item].succs
-            push!(worklist, (succ, item, copy(incoming_vals)))
+        # `incoming_vals` belongs to this worklist item, so the last successor can have it
+        succs = cfg.blocks[item].succs
+        for (i, succ) in enumerate(succs)
+            push!(worklist, (succ, item, i == length(succs) ? incoming_vals : copy(incoming_vals)))
         end
     end
     # Delete any instruction in unreachable blocks (except for terminators)
-    for bb in setdiff(BitSet(1:length(cfg.blocks)), visited)
+    for bb in 1:length(cfg.blocks)
+        bb in visited && continue
         for idx in cfg.blocks[bb].stmts
             if isa(code[idx], Union{GotoNode, GotoIfNot, ReturnNode})
                 code[idx] = ReturnNode()
@@ -832,7 +861,7 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     # Convert into IRCode form
     ssavaluetypes = ci.ssavaluetypes::Vector{Any}
     nstmts = length(ir.stmts)
-    new_code = Vector{Any}(undef, nstmts)
+    new_code = code # each statement is only read before being replaced
     ssavalmap = fill(SSAValue(-1), length(ssavaluetypes) + 1)
     # Detect statement positions for assignments and construct array
     for (bb, idx) in bbidxiter(ir)
@@ -876,6 +905,13 @@ function construct_ssa!(ci::CodeInfo, ir::IRCode, sv::OptimizationState,
     for i = 1:length(new_nodes)
         local node = new_nodes.stmts[i]
         node[:stmt] = new_to_regular(renumber_ssa!(node[:stmt], ssavalmap), nstmts)
+    end
+    if domtree === nothing
+        # A single block is already in dominator order. Only give the IR its own CFG,
+        # as `domsort_ssa!` does, rather than the one shared with the `OptimizationState`.
+        bb = cfg.blocks[1]
+        newcfg = CFG(BasicBlock[BasicBlock(bb.stmts, copy(bb.preds), Int[])], Int[])
+        return IRCode(ir, ir.stmts, newcfg, ir.new_nodes)
     end
     @zone "CC: DOMSORT" ir = domsort_ssa!(ir, domtree)
     return ir

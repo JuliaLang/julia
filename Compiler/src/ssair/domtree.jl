@@ -124,6 +124,7 @@ function DFS!(D::DFSTree, blocks::Vector{BasicBlock}, is_post_dominator::Bool)
     resize!(D, length(blocks))
     fill!(D.to_pre, 0)
     to_visit = D._worklist # always starts empty
+    sizehint!(to_visit, length(blocks); shrink=false)
     if is_post_dominator
         # TODO: We're using -1 as the virtual exit node here. Would it make
         #       sense to actually have a real BB for the exit always?
