@@ -1484,6 +1484,26 @@ end
 ocachefile_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".", Libc.Libdl.dlext)
 cachefile_from_ocachefile(cachefile) = string(chopsuffix(cachefile, ".$(Libc.Libdl.dlext)"), ".ji")
 
+# On macOS, dyld does work for each `dlopen` that grows with the number of libraries loaded.
+# So a package gets a library without code that weakly links the libraries of its
+# dependencies' images, and one `dlopen` of it loads them all.
+# It has no library extension, since tools take each library in a cache directory to be a
+# package image with a .ji beside it
+closure_image_from_cachefile(cachefile) = string(chopsuffix(cachefile, ".ji"), ".closure")
+# a closure image for fewer libraries saves less than its extra file costs to check
+const CLOSURE_IMAGE_MIN_LIBS = 4
+closure_libs_file(output_o::String) = output_o * ".libs"
+const precompile_loaded_image_libs = String[]
+
+# the `compiled/vX.Y` directory that holds a cache file, directly or in its package's directory
+function compiled_root(path::String)
+    dir = dirname(path)
+    return occursin(r"^v\d+\.\d+$", basename(dir)) ? dir : dirname(dir)
+end
+# Relative to that directory, so that a closure image still finds the library after the
+# depot or the Julia installation has moved
+image_install_name(ocachefile::String) = "@rpath/" * relpath(ocachefile, compiled_root(ocachefile))
+
 
 # use an Int counter so that nested @time_imports calls all remain open
 const TIMING_IMPORTS = Threads.Atomic{Int}(0)
@@ -1535,6 +1555,11 @@ function _include_from_serialized(pkg::PkgId, path::String, ocachepath::Union{No
             return sv
         end
         keep_cachefile_lock(path, lockfile)
+        @static if Sys.isapple()
+            if generating_output(#=incremental=#true) && ocachepath !== nothing && ocachepath != path
+                push!(precompile_loaded_image_libs, ocachepath)
+            end
+        end
 
         sv = sv::SimpleVector
         internal_methods = sv[3]::Vector{Any}
@@ -2536,6 +2561,7 @@ end
             end
             staledeps, ocachefile, newbuild_id = staledeps::Tuple{Vector{Any}, Union{Nothing, String}, UInt128}
             startedloading = length(staledeps) + 1
+            closure_handle = nothing
             try # any exit from here (goto, break, continue, return) will end_loading
                 # finish checking staledeps module graph, while acquiring all start_loading locks
                 # so that concurrent require calls won't make any different decisions that might conflict with the decisions here
@@ -2607,6 +2633,11 @@ end
                 end
                 !trusted && checksums_invalid(path_to_try, ocachefile, newbuild_id, reasons; split_checksums = false) && continue next_path
                 stalecheck && tried > 1 && touch_cachefile(pkg, path_to_try)
+                @static if Sys.isapple()
+                    # a worker would pay the first-use check of each new closure image
+                    # it loads, which costs more than the batching saves there
+                    generating_output() || (closure_handle = load_closure_image(path_to_try, staledeps))
+                end
                 # finish loading module graph into staledeps
                 # n.b. this runs __init__ methods too early, so it is very unwise to have those, as they may see inconsistent loading state, causing them to fail unpredictably here
                 for i in eachindex(staledeps)
@@ -2632,6 +2663,9 @@ end
                 isa(restored, Module) && return restored
                 @debug "Deserialization checks failed while attempting to load cache from $path_to_try" exception=restored
             finally
+                # Restored images hold their own handles. Closing this one unloads the images
+                # nothing restored, so that a rebuild at the same path is not served a stale one.
+                closure_handle === nothing || Libc.Libdl.dlclose(closure_handle)
                 # cancel all start_loading locks that were taken but not fulfilled before failing
                 for i in startedloading:length(staledeps)
                     dep = staledeps[i]
@@ -3847,6 +3881,12 @@ function include_package_for_output(pkg::PkgId, input::String, edition::Tuple{In
     # have compiled for error handling and validation.
     ccall(:jl_set_newly_inferred, Cvoid, (Any,), newly_inferred)
     @lock require_lock end_loading(pkg, m)
+    @static if Sys.isapple()
+        outputo = JLOptions().outputo
+        if outputo != C_NULL
+            write(closure_libs_file(unsafe_string(outputo)), join(precompile_loaded_image_libs, '\n'))
+        end
+    end
     # insert_extension_triggers(pkg)
     # run_package_callbacks(pkg)
 end
@@ -4120,11 +4160,16 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
             modules, _, required_modules, _, prefs_blob = parse_cache_header(tmppath, header_flags)
             slot_cachefile = compilecache_path(pkg, prefs_blob; flags=cacheflags)
 
+            # never replace an older build, as another session may use it; the prune below
+            # removes it once no session holds it
+            new_cachefile = pkg.uuid === nothing ? slot_cachefile :
+                cachefile_with_build_id(slot_cachefile, last(first(modules)) % UInt64)
             # an image with no native code gets no object to link
             has_native = cache_objects && header_flags[] & JI_FLAG_NO_NATIVE == 0
             if has_native
                 # Run linker over tmppath_o
-                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so)
+                Compiler.@zone "PRECOMPILE_LINK" Linking.link_image(tmppath_o, tmppath_so;
+                    install_name = image_install_name(ocachefile_from_cachefile(new_cachefile)))
             end
 
             # append checksum for so to the end of the .ji file:
@@ -4149,12 +4194,9 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
             # (`filemode` is 0 if the source has disappeared in the meantime)
             chmod(tmppath, filemode(spec.path) & 0o777 | 0o600)
 
-            cachefile = slot_cachefile
+            cachefile = new_cachefile
             session_only = false
             if pkg.uuid !== nothing
-                # never replace an older build, as another session may use it; the prune below
-                # removes it once no session holds it
-                cachefile = cachefile_with_build_id(slot_cachefile, last(first(modules)) % UInt64)
                 session_only = built_against_other_sources(required_modules)
                 session_only && keep_session_build_lock(pkg, slot_cachefile, cachefile, lock_cachefile_shared(tmppath))
             end
@@ -4183,6 +4225,11 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
                 # move if the initial rename fails.
                 mv(tmppath, cachefile; force=true)
             end
+            @static if Sys.isapple()
+                if cache_objects
+                    write_closure_image(cachefile, ocachefile, closure_libs_file(tmppath_o::String))
+                end
+            end
             pkg.uuid === nothing || prune_cachefiles(pkg, slot_cachefile, cachefile; session_only)
             return cachefile, ocachefile
         end
@@ -4194,6 +4241,7 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
         if cache_objects
             rm(tmppath_o::String, force=true)
             rm(tmppath_so, force=true)
+            @static Sys.isapple() && rm(closure_libs_file(tmppath_o::String), force=true)
         end
     end
     if p.exitcode == 125
@@ -4201,6 +4249,49 @@ function compilecache(pkg::PkgId, spec::PkgLoadSpec, internal_stderr::Redirectab
     else
         error("Failed to precompile $(repr(MIME"text/plain"(), pkg)) to $(repr(tmppath)) ($(Base.process_status(p))).")
     end
+end
+
+function write_closure_image(cachefile::String, ocachefile::Union{Nothing, String}, libs_file::String)
+    out = closure_image_from_cachefile(cachefile)
+    # a package rebuilt in place must not keep the closure image of its previous build
+    rm(out; force=true)
+    isfile(libs_file) || return
+    libs = filter!(!isempty, readlines(libs_file))
+    ocachefile === nothing || ocachefile == cachefile || push!(libs, ocachefile)
+    length(libs) < CLOSURE_IMAGE_MIN_LIBS && return
+    # the libraries' install names are relative to these directories
+    roots = unique!(map(compiled_root, libs))
+    own = compiled_root(out)
+    rpaths = map(roots) do root
+        root == own || return root
+        rel = relpath(root, dirname(out))
+        return rel == "." ? "@loader_path" : "@loader_path/$rel"
+    end
+    tmp = string(out, ".", getpid(), ".tmp")
+    try
+        Linking.link_closure_image(tmp, libs; install_name = image_install_name(out), rpaths)
+        mv(tmp, out; force=true)
+    catch ex
+        # loading works without it, only more slowly
+        @debug "Could not link the closure image for $(repr(cachefile))" exception=ex
+    finally
+        rm(tmp; force=true)
+    end
+    nothing
+end
+
+function load_closure_image(cachefile::String, staledeps::Vector{Any})
+    nlibs = count(staledeps) do dep
+        dep isa Module && return false
+        _, _, _, modcachepath, _, modocachepath = dep::Tuple{PkgLoadSpec, PkgId, UInt128, String, Vector{Any}, Union{Nothing, String}}
+        return modocachepath !== nothing && modocachepath != modcachepath
+    end
+    # with only one library to load there is nothing to batch
+    nlibs < 2 && return nothing
+    lib = closure_image_from_cachefile(cachefile)
+    isfile(lib) || return nothing
+    # a failure only means each library is loaded on its own
+    return Libc.Libdl.dlopen(lib, Libc.Libdl.RTLD_LAZY | Libc.Libdl.RTLD_LOCAL; throw_error=false)
 end
 
 function rename_unique_ocachefile(tmppath_so::String, ocachefile_orig::String, ocachefile::String = ocachefile_orig, num = 0)
