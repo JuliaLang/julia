@@ -2217,6 +2217,28 @@ function parse_image_targets(targets::Vector{UInt8})
     return targets
 end
 
+# Clone targets come from a cache file that may be damaged, and the C reader trusts the counts
+# and lengths stored in them. Check that they describe exactly the bytes present.
+function clone_targets_wellformed(data::Vector{UInt8})
+    io = IOBuffer(data)
+    u32() = bytesavailable(io) >= 4 ? read(io, UInt32) : nothing
+    skipn(n::Int) = bytesavailable(io) >= n && (skip(io, n); true)
+    ntargets = u32()
+    ntargets === nothing && return false
+    for _ in 1:ntargets
+        skipn(8) || return false # flags and base
+        nwords = u32()
+        nwords === nothing && return false
+        skipn(16 * Int(nwords)) || return false # enabled and disabled feature words
+        for _ in 1:2 # cpu name, then extra features
+            len = u32()
+            len === nothing && return false
+            skipn(Int(len)) || return false
+        end
+    end
+    return eof(io)
+end
+
 function current_image_targets()
     targets = @ccall jl_reflect_clone_targets()::Vector{UInt8}
     return parse_image_targets(targets)
@@ -4915,6 +4937,7 @@ const CACHE_REJECT_REASONS = Dict{Symbol,Pair{Symbol,String}}(
     :flags_mismatch          => :actionable  => "different compilation options",
     :pkgimages_disabled      => :actionable  => "native code caching disabled",
     :cpu_target              => :actionable  => "different system or CPU target",
+    :clone_targets_invalid   => :actionable  => "cache file CPU target data is damaged",
     :ocachefile_missing      => :actionable  => "native code cache file not found",
     :dep_loaded_incompatible => :actionable  => "a dependency is already loaded at a different version",
     :dep_missing             => :actionable  => "dependency source file not found",
@@ -5192,6 +5215,11 @@ end
                 # presence of clone_targets means native code cache
                 @debug "Rejecting cache file $cachefile for $modkey since it would require usage of pkgimage"
                 record_reason(reasons, :pkgimages_disabled)
+                return true
+            end
+            if !clone_targets_wellformed(clone_targets)
+                @debug "Rejecting cache file $cachefile for $modkey since its CPU target data is damaged"
+                record_reason(reasons, :clone_targets_invalid)
                 return true
             end
             rejection_reasons = check_clone_targets(clone_targets)
