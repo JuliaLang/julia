@@ -194,6 +194,12 @@ JL_DLLEXPORT void jl_register_passbuilder_callbacks_fallback(void *PB) { }
 
 JL_DLLEXPORT void *jl_jit_abi_converter_fallback(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst) UNAVAILABLE
 
+JL_DLLEXPORT void *jl_jit_runtime_free_cfunction_fallback(jl_value_t *declrt, jl_value_t *sigt, jl_code_instance_t *codeinst, jl_array_t *codeinfos, jl_value_t **err)
+{
+    *err = jl_cstr_to_string("the compiler is not available in this build of Julia");
+    return NULL;
+}
+
 //LLVM C api to the julia JIT
 JL_DLLEXPORT void* JLJITGetLLVMOrcExecutionSession_fallback(void* JIT) UNAVAILABLE
 

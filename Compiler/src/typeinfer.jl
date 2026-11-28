@@ -1667,6 +1667,16 @@ be `->invoke`'d (because it has already been compiled).
 const SOURCE_MODE_ABI = 0x1
 
 """
+    SOURCE_MODE_RUNTIME_FREE
+
+Indicates to inference that the caller compiles the method as a callback that
+does not need the runtime (see `@cfunction`), for which it needs all the code
+that the method can run: it gets the result of [`typeinf_ext_runtime_free`](@ref)
+instead of a CodeInstance.
+"""
+const SOURCE_MODE_RUNTIME_FREE = 0x2
+
+"""
     SOURCE_MODE_GET_SOURCE
 
 Indicates to inference that it should return a CodeInstance after it has
@@ -2165,6 +2175,7 @@ end
 # collect a list of all code that is needed along with CodeInstance to codegen it fully
 function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vector{VarState};
                          invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+                         runtime_free_queue::Union{CompilationQueue,Nothing} = nothing,
                          trim::Bool = false,
                          external_linkage::Bool = false)
     src = ci.code
@@ -2231,6 +2242,15 @@ function collectinvokes!(workqueue::CompilationQueue, ci::CodeInfo, sptypes::Vec
                 push!(argtypes, sp_type_rewrap(at[i], linfo, #= isreturn =# false))
             end
             atype = argtypes_to_type(argtypes)
+            if stmt.args[5] === QuoteNode(:runtime_free)
+                # A runtime-free callback does not call the code that is ordinarily compiled
+                # for this function, but code that is compiled for the callback: that is
+                # compiled with this code, if all of it can be (see `typeinf_ext_runtime_free`)
+                runtime_free_queue === nothing && continue
+                mi = compileable_specialization_for_call(runtime_free_queue.interp, atype)
+                mi === nothing || push!(runtime_free_queue, mi)
+                continue
+            end
         elseif isexpr(stmt, :new)
             # When creating a struct of Function type, check to see if we should
             # proactively compile the lambda
@@ -2352,13 +2372,55 @@ end
 
 # This is a bridge for the C code calling `jl_typeinf_func()` on a single Method match
 function typeinf_ext_toplevel(mi::MethodInstance, world::UInt, source_mode::UInt8, trim_mode::UInt8)
+    source_mode == SOURCE_MODE_RUNTIME_FREE && return typeinf_ext_runtime_free(mi, world)
     inf_params = InferenceParams(; force_enable_inference = trim_mode != TRIM_NO)
     interp = NativeInterpreter(world; inf_params)
     return typeinf_ext_toplevel(interp, mi, source_mode)
 end
 
+"""
+    RUNTIME_FREE_OWNER
+
+The owner of the CodeInstances of the code of runtime-free callbacks (`@cfunction` with
+`runtime_free=true`).
+
+Such a callback is compiled so that it does not need the runtime: without the task for an
+argument, without a safepoint, and so that it can be called from C on any thread. That goes
+for all the code that it runs, so the methods that it calls are compiled a second time for
+it. Their CodeInstances are kept apart from those of the code that is ordinarily called, by
+this owner, so that the two never call each other, in the way that the code of a `--trim`
+image is kept apart while it is compiled. They are CodeInstances like any other otherwise:
+they are cached, record the methods and bindings that they depend on, and are invalidated
+with those, so that the runtime knows how long a callback is the code that would be compiled
+for it.
+"""
+const RUNTIME_FREE_OWNER = :runtime_free
+
+function runtime_free_interpreter(world::UInt)
+    inf_params = InferenceParams(; force_enable_inference = true, cache_owner = RUNTIME_FREE_OWNER)
+    return NativeInterpreter(world; inf_params)
+end
+
+"""
+    typeinf_ext_runtime_free(mi::MethodInstance, world::UInt) -> Vector{Any}
+
+All the code that a runtime-free callback of `mi` runs in `world`: the CodeInstances (owned
+by [`RUNTIME_FREE_OWNER`](@ref)) of `mi` and of everything that it can call, each followed
+by its source, with that of `mi` first.
+
+This is the closed set of code that `--trim` compiles for an entry point. Like there, a call
+that is not resolved statically has no code in it. Codegen compiles all of it for the
+callback, or refuses the callback if some of it needs the runtime.
+"""
+function typeinf_ext_runtime_free(mi::MethodInstance, world::UInt)
+    workqueue = CompilationQueue(; interp = runtime_free_interpreter(world))
+    push!(workqueue, mi)
+    return compile!(Any[], workqueue; trim = true, external_linkage = false)
+end
+
 function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
     invokelatest_queue::Union{CompilationQueue,Nothing} = nothing,
+    runtime_free_queue::Union{CompilationQueue,Nothing} = nothing,
     trim::Bool = false,
     external_linkage::Bool,
 )
@@ -2419,7 +2481,7 @@ function compile!(codeinfos::Vector{Any}, workqueue::CompilationQueue;
             markinspected!(workqueue, callee)
             if src isa CodeInfo
                 sptypes = sptypes_from_meth_instance(mi)
-                collectinvokes!(workqueue, src, sptypes; invokelatest_queue,
+                collectinvokes!(workqueue, src, sptypes; invokelatest_queue, runtime_free_queue,
                                 trim, external_linkage)
                 # try to reuse an existing CodeInstance from before to avoid making duplicates in the cache
                 if iszero(ccall(:jl_mi_cache_has_ci, Cint, (Any, Any), mi, callee))
@@ -2458,6 +2520,10 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         interp = NativeInterpreter(get_world_counter(); inf_params)
     )
 
+    # And a queue for the code of the runtime-free callbacks (`@cfunction`) of the code that
+    # is compiled, which codegen compiles with it for them (see `typeinf_ext_runtime_free`)
+    runtime_free_queue = CompilationQueue(; interp = runtime_free_interpreter(get_world_counter()))
+
     codeinfos = []
     workqueue = CompilationQueue(; interp = nothing)
     for this_world in reverse!(sort!(worlds))
@@ -2466,16 +2532,18 @@ function typeinf_ext_toplevel(methods::Vector{Any}, worlds::Vector{UInt}, trim_m
         )
 
         append!(workqueue, methods)
-        compile!(codeinfos, workqueue; invokelatest_queue, external_linkage,
+        compile!(codeinfos, workqueue; invokelatest_queue, runtime_free_queue, external_linkage,
                  trim = trim_mode != TRIM_NO)
     end
 
     if invokelatest_queue !== nothing
         # This queue is intentionally aliased, to handle e.g. a `finalizer` calling `Core.finalizer`
         # (it will enqueue into itself and immediately drain)
-        compile!(codeinfos, invokelatest_queue; invokelatest_queue, external_linkage,
+        compile!(codeinfos, invokelatest_queue; invokelatest_queue, runtime_free_queue, external_linkage,
                  trim = trim_mode != TRIM_NO)
     end
+
+    compile!(codeinfos, runtime_free_queue; trim = true, external_linkage = false)
 
     if trim_mode != TRIM_NO && trim_mode != TRIM_UNSAFE
         verify_typeinf_trim(codeinfos, trim_mode == TRIM_UNSAFE_WARN)

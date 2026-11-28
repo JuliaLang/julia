@@ -574,6 +574,7 @@
     YY(jl_get_libllvm) \
     YY(jl_register_passbuilder_callbacks) \
     YY(jl_jit_abi_converter) \
+    YY(jl_jit_runtime_free_cfunction) \
     YY(jl_jit_register_ci) \
     YY(jl_jit_unregister_ci) \
     YY(JLJITGetLLVMOrcExecutionSession) \

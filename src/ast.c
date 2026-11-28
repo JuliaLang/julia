@@ -315,6 +315,7 @@ void jl_init_common_symbols(void)
     jl_uninferred_sym = jl_symbol("uninferred");
     jl_latestworld_sym = jl_symbol("latestworld");
     jl_trim_sym = jl_symbol("trim");
+    jl_runtime_free_sym = jl_symbol("runtime_free");
 }
 
 void jl_lisp_prompt(void)

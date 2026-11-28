@@ -796,6 +796,7 @@ typedef union {
 // Also defined in typeinfer.jl - See documentation there.
 #define SOURCE_MODE_NOT_REQUIRED            0x0
 #define SOURCE_MODE_ABI                     0x1
+#define SOURCE_MODE_RUNTIME_FREE            0x2
 
 // dispatch_status bits.
 // - LATEST_WHICH: invoke of this mi's exact specTypes yields exactly this result.
@@ -815,6 +816,7 @@ JL_DLLEXPORT jl_code_instance_t *jl_engine_reserve(jl_method_instance_t *m, jl_v
 JL_DLLEXPORT void jl_engine_fulfill(jl_code_instance_t *ci, jl_code_info_t *src) JL_CANSAFEPOINT;
 
 JL_DLLEXPORT jl_code_instance_t *jl_type_infer(jl_method_instance_t *li JL_PROPAGATES_ROOT, size_t world, uint8_t source_mode, uint8_t trim_mode) JL_CANSAFEPOINT;
+jl_array_t *jl_type_infer_runtime_free(jl_method_instance_t *li, size_t world) JL_CANSAFEPOINT;
 JL_DLLEXPORT int8_t jl_get_type_infer_preserve_ir(void);
 JL_DLLEXPORT void jl_set_type_infer_preserve_ir(int8_t v);
 JL_DLLEXPORT int8_t jl_get_precompile_keep_ir(void);
@@ -2187,6 +2189,9 @@ JL_DLLEXPORT jl_value_t *jl_get_cfunction_trampoline(
     jl_unionall_t *env, jl_value_t **vals) JL_CANSAFEPOINT;
 JL_DLLEXPORT void *jl_get_abi_converter(jl_task_t *ct, void *data) JL_CANSAFEPOINT;
 JL_DLLIMPORT void *jl_jit_abi_converter(jl_task_t *ct, jl_abi_t from_abi, jl_code_instance_t *codeinst) JL_CANSAFEPOINT;
+// the C function of a `cfunction` expression that is `runtime_free`
+JL_DLLEXPORT void *jl_get_runtime_free_cfunction(void *data) JL_CANSAFEPOINT;
+JL_DLLIMPORT void *jl_jit_runtime_free_cfunction(jl_value_t *declrt, jl_value_t *sigt, jl_code_instance_t *codeinst, jl_array_t *codeinfos, jl_value_t **err) JL_CANSAFEPOINT;
 
 
 // Special filenames used to refer to internal julia libraries
@@ -2596,6 +2601,7 @@ JL_DLLEXPORT int jl_isabspath(const char *in) JL_NOTSAFEPOINT;
     XX(quote_sym) \
     XX(release_sym) \
     XX(return_sym) \
+    XX(runtime_free_sym) \
     XX(sequentially_consistent_sym) \
     XX(slot_sym) \
     XX(specialize_sym) \

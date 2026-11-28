@@ -433,7 +433,21 @@ function verify_codeinstance!(interp::NativeInterpreter, codeinst::CodeInstance,
             atype = argtypes_to_type(argtypes)
 
             mi = compileable_specialization_for_call(interp, atype)
-            if mi !== nothing
+            if mi !== nothing && stmt.args[5] === QuoteNode(:runtime_free)
+                # A runtime-free callback is not an adapter for the code that is otherwise
+                # called: it is compiled from CodeInstances of its own, which have this owner
+                # (see `typeinf_ext_runtime_free`). Those cover it, with the ones that they
+                # `invoke`, which are verified like the rest. (Whether that code needs the
+                # runtime for something else is for codegen to say.)
+                covered = false
+                for ci in inspected
+                    if ci.owner === :runtime_free && ci.def === mi
+                        covered = true
+                        break
+                    end
+                end
+                covered && continue
+            elseif mi !== nothing
                 # n.b.: Codegen may choose unpredictably to emit this `@cfunction` as a dynamic invoke or a full
                 # dynamic call, but in either case it guarantees that the required adapter(s) are emitted. All
                 # that we are required to verify here is that the callee CodeInstance is covered.

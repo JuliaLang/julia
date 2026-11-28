@@ -1012,7 +1012,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 int may_discard_trees = !jl_get_type_infer_preserve_ir();
                 int discard = 0;
                 if (may_discard_trees && native_functions &&
-                    jl_options.outputo != NULL && ci->owner == jl_nothing &&
+                    jl_options.outputo != NULL &&
+                    (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_runtime_free_sym) &&
                     (def->source != NULL || def->generator != NULL) &&
                     jl_is_code_info(inferred) && jl_ir_inlining_cost(inferred) == UINT16_MAX) {
                     // Drop IR retained only to generate native code (see jl_precompile_keep_ir).
@@ -1032,7 +1033,8 @@ static void jl_insert_into_serialization_queue(jl_serializer_state *s, jl_value_
                 }
                 else if (may_discard_trees &&
                          native_functions && // don't delete any code if making a ji file
-                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym) && // don't delete code for external interpreters
+                         (ci->owner == jl_nothing || ci->owner == (jl_value_t*)jl_trim_sym ||
+                          ci->owner == (jl_value_t*)jl_runtime_free_sym) && // don't delete code for external interpreters
                          !effects_foldable(jl_atomic_load_relaxed(&ci->ipo_purity_bits)) && // don't delete code we may want for irinterp
                          jl_ir_inlining_cost(inferred) == UINT16_MAX) { // don't delete inlineable code
                     // delete the code now: if we thought it was worth keeping, it would have been converted to object code

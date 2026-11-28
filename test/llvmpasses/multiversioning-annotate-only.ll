@@ -165,6 +165,38 @@ define noundef i32 @uncloned(i32 noundef %0) {
   ret i32 %4
 }
 
+; COM: the functions of a runtime-free callback (see `@cfunction`) are only cloned if clone_all is
+; COM: enabled on the target, whatever they have: they call each other, which they must not do
+; COM: through a relocation slot
+@runtime_free_gv = global i32 (i32)* @runtime_free_caller, align 8
+
+; CHECK: @runtime_free_loop{{.*}}#[[RUNTIME_FREE_ATTRS:[0-9]+]]
+define noundef i32 @runtime_free_loop(i32 noundef %0) #0 {
+  %2 = icmp sgt i32 %0, 0
+  br i1 %2, label %5, label %3
+
+3:                                                ; preds = %5, %1
+  %4 = phi i32 [ 0, %1 ], [ %9, %5 ]
+  ret i32 %4
+
+5:                                                ; preds = %1, %5
+  %6 = phi i32 [ %10, %5 ], [ 0, %1 ]
+  %7 = phi i32 [ %9, %5 ], [ 0, %1 ]
+  %8 = lshr i32 %6, 1
+  %9 = add nuw nsw i32 %8, %7
+  %10 = add nuw nsw i32 %6, 1
+  %11 = icmp eq i32 %10, %0
+  br i1 %11, label %3, label %5, !llvm.loop !9
+}
+
+; CHECK: @runtime_free_caller{{.*}}#[[RUNTIME_FREE_GV_ATTRS:[0-9]+]]
+define noundef i32 @runtime_free_caller(i32 noundef %0) #0 {
+  %2 = call noundef i32 @runtime_free_loop(i32 noundef %0)
+  ret i32 %2
+}
+
+attributes #0 = { "julia.runtime_free" }
+
 ; COM: Note that these strings are hex-encoded bits of the target indices that will be cloned
 ; CHECK-DAG: attributes #[[BORING_ATTRS]] = { "julia.mv.clones"="2" }
 ; CHECK-DAG: attributes #[[FASTMATH_TEST_ATTRS]] = { "julia.mv.clones"="6" }
@@ -180,6 +212,8 @@ define noundef i32 @uncloned(i32 noundef %0) {
 ; CHECK-DAG: attributes #[[CLONED_RELOC_ATTRS]]
 ; CHECK-SAME: "julia.mv.clones"="6"
 ; CHECK-SAME: "julia.mv.reloc"
+; CHECK-DAG: attributes #[[RUNTIME_FREE_ATTRS]] = { "julia.mv.clones"="2" "julia.runtime_free" }
+; CHECK-DAG: attributes #[[RUNTIME_FREE_GV_ATTRS]] = { "julia.mv.clones"="2" "julia.mv.fvar" "julia.runtime_free" }
 
 ; CHECK-LABEL: !llvm.module.flags
 
