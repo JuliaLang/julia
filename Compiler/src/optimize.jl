@@ -1835,7 +1835,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if isassigned(T_IFUNC, iidx)
                 minarg, maxarg, = T_IFUNC[iidx]
                 nargs = length(ex.args)
-                if minarg + 1 <= nargs <= maxarg + 1
+                if minarg <= nargs - 1 <= maxarg
                     # With mostly constant arguments, many Intrinsics tend to become very cheap
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.

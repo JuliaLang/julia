@@ -2670,4 +2670,12 @@ end
 one_arg_typeassert(x, c) = c ? Core.typeassert(x) : 1
 @test only(code_typed(one_arg_typeassert, (Int, Bool)))[2] === Int
 
+# `llvmcall` takes any number of arguments
+llvmcall_add_one(x::Int32) = Base.llvmcall("%r = add i32 %0, 1\nret i32 %r", Int32, Tuple{Int32}, x)
+let ir = first(only(Base.code_ircode(llvmcall_add_one, (Int32,))))
+    i = findfirst(iscall((ir, Core.Intrinsics.llvmcall)), ir.stmts.stmt)::Int
+    cost = Compiler.statement_cost(ir.stmts.stmt[i], i, ir, ir.sptypes, Compiler.OptimizationParams())
+    @test cost == Compiler.T_IFUNC_COST[Int(reinterpret(Int32, Core.Intrinsics.llvmcall)) + 1]
+end
+
 end # module inline_tests
