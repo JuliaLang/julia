@@ -7694,6 +7694,20 @@ let interp = CachedConditionalInterp();
     end == 1
 end
 
+# inference local cache lookup with argument types that end in `Vararg`
+@newinterp CachedVarargInterp
+const CACHED_VARARG_SIDE_EFFECT = Ref(0)
+# the side effect forces constprop rather than semi-concrete evaluation
+func_cached_vararg(a, b...) = (CACHED_VARARG_SIDE_EFFECT[] = 1; a == 1 ? length(b) : "s")
+test_func_cached_vararg(v) = (func_cached_vararg(1, v...), func_cached_vararg(1, v...))
+let interp = CachedVarargInterp()
+    @test Base.infer_return_type(test_func_cached_vararg, (Vector{Int},); interp) == Tuple{Int, Int}
+    @test count(interp.inf_cache) do entry
+        result = entry isa Compiler.LocalInferenceResult ? entry.result : entry
+        result.linfo.def.name === :func_cached_vararg && result.overridden_by_const !== nothing
+    end == 1
+end
+
 # fieldcount on `Tuple` should constant fold, even though `.fields` not const
 # (only for the egality kind; an `==`-only `Type{T}` no longer folds, #61323)
 @test fully_eliminated(Base.fieldcount, Tuple{Core.TypeEgal{Tuple{Nothing, Int, Int}}})

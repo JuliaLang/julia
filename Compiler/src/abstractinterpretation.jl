@@ -1511,7 +1511,7 @@ function const_prop_call(interp::AbstractInterpreter,
     end
     overridden_by_const = falses(length(argtypes))
     for i = 1:length(argtypes)
-        if argtypes[i] !== argtype_by_index(cache_argtypes, i)
+        if unwrapva(argtypes[i]) !== argtype_by_index(cache_argtypes, i)
             overridden_by_const[i] = true
         end
     end
