@@ -433,9 +433,9 @@ register_kinds!(JuliaSyntax, 0, [
     PREC_PIPE_GT
     PREC_COLON
     PREC_PLUS
-    PREC_BITSHIFT
     PREC_TIMES
     PREC_RATIONAL
+    PREC_BITSHIFT
     PREC_POWER
     PREC_DECL
     PREC_WHERE

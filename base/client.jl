@@ -853,6 +853,9 @@ end
 
 function init_frontend()
     JuliaSyntax.enable_in_core!(true; freeze_world_age=true)
+    # the runtime's jl_is_operator (for printing) answers as this JuliaSyntax
+    # classifies operators from now on, rather than ask the runtime's frontend
+    JuliaSyntax.register_operator_queries()
     if get_bool_env("JULIA_USE_FLISP_LOWERING", false) === true
         JuliaLowering.activate!(false)
     else

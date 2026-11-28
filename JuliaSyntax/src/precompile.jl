@@ -112,3 +112,9 @@ let code = raw"""
     end
     try parseall(Expr, "f(x") catch end
 end
+
+# the classification of operators for printing (see integration/operator_queries.jl)
+for name in (:+, :.+, Symbol("+₁"), :+=, :&&, :->, :(::), :in, :x)
+    operator_info(name)
+end
+precompile(_c_is_operator, (Cstring,))

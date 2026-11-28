@@ -333,6 +333,9 @@ include("docs/basedocs.jl")
 # Compiler frontend
 include(@__MODULE__, string(DATAROOT, "julia/JuliaSyntax/src/JuliaSyntax.jl"))
 JuliaSyntax.enable_in_core!(true; freeze_world_age=false)
+# classify operators (for printing) as JuliaSyntax does from now on
+Meta._operators_from_syntax[] = true
+JuliaSyntax.register_operator_queries()
 
 include(@__MODULE__, string(DATAROOT, "julia/JuliaLowering/src/JuliaLowering.jl"))
 JuliaLowering.activate!(true; freeze_world_age=false)

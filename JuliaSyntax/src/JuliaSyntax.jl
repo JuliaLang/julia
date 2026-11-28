@@ -105,6 +105,7 @@ end
 
 # Hooks to integrate the parser with Base
 include("integration/hooks.jl")
+include("integration/operator_queries.jl")
 include("precompile.jl")
 
 end

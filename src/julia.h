@@ -2589,11 +2589,17 @@ JL_DLLEXPORT const char *jl_cdi_file(jl_debuginfo_t *di) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint8_t jl_encode_inlining_cost(uint16_t inlining_cost) JL_NOTSAFEPOINT;
 JL_DLLEXPORT uint16_t jl_decode_inlining_cost(uint8_t inlining_cost) JL_NOTSAFEPOINT;
 
+// whether a name is an operator: asks the loaded JuliaSyntax once Base has
+// registered it, and otherwise flisp (jl_frontend_is_operator)
 JL_DLLEXPORT int jl_is_operator(const char *sym) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_is_unary_operator(const char *sym) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym) JL_CANSAFEPOINT;
-JL_DLLEXPORT int jl_operator_precedence(const char *sym) JL_CANSAFEPOINT;
+typedef int (*jl_operator_query_t)(const char *sym);
+JL_DLLEXPORT void jl_set_is_operator_query(jl_operator_query_t is_operator) JL_NOTSAFEPOINT;
+// flisp's classification of operators
+JL_DLLEXPORT int jl_frontend_is_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_frontend_is_unary_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_frontend_is_unary_and_binary_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_frontend_is_syntactic_operator(const char *sym) JL_CANSAFEPOINT;
+JL_DLLEXPORT int jl_frontend_operator_precedence(const char *sym) JL_CANSAFEPOINT;
 
 STATIC_INLINE int jl_vinfo_sa(uint8_t vi)
 {

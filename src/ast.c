@@ -859,7 +859,7 @@ JL_DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
     return expr;
 }
 
-JL_DLLEXPORT int jl_is_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -868,7 +868,7 @@ JL_DLLEXPORT int jl_is_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_unary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -877,7 +877,7 @@ JL_DLLEXPORT int jl_is_unary_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_unary_and_binary_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -886,7 +886,7 @@ JL_DLLEXPORT int jl_is_unary_and_binary_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
+JL_DLLEXPORT int jl_frontend_is_syntactic_operator(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
@@ -895,13 +895,40 @@ JL_DLLEXPORT int jl_is_syntactic_operator(const char *sym)
     return res;
 }
 
-JL_DLLEXPORT int jl_operator_precedence(const char *sym)
+JL_DLLEXPORT int jl_frontend_operator_precedence(const char *sym)
 {
     jl_ast_context_t *ctx = jl_ast_ctx_enter(NULL);
     fl_context_t *fl_ctx = &ctx->fl;
     int res = numval(fl_applyn(fl_ctx, 1, symbol_value(symbol(fl_ctx, "operator-precedence")), symbol(fl_ctx, sym)));
     jl_ast_ctx_leave(ctx);
     return res;
+}
+
+// Whether a name is an operator, which printing (jl_static_show) uses to decide
+// how to show code. This comes from the frontend: from the classification of
+// operators of the loaded JuliaSyntax once Base has registered it
+// (`JuliaSyntax.register_operator_queries`), and before that, as while
+// bootstrapping, from flisp (jl_frontend_is_operator above). Base asks
+// JuliaSyntax itself.
+static _Atomic(jl_operator_query_t) registered_is_operator;
+
+JL_DLLEXPORT void jl_set_is_operator_query(jl_operator_query_t is_operator) JL_NOTSAFEPOINT
+{
+    jl_atomic_store_release(&registered_is_operator, is_operator);
+}
+
+JL_DLLEXPORT int jl_is_operator(const char *sym) JL_CANSAFEPOINT
+{
+    // The registered query is a Julia function, which can only run on a
+    // thread that is running Julia code (e.g., not during GC, nor on a foreign
+    // thread). Otherwise, flisp answers.
+    jl_operator_query_t f = jl_atomic_load_acquire(&registered_is_operator);
+    if (f != NULL) {
+        jl_task_t *ct = jl_get_current_task();
+        if (ct != NULL && jl_atomic_load_relaxed(&ct->ptls->gc_state) == JL_GC_STATE_UNSAFE)
+            return f(sym);
+    }
+    return jl_frontend_is_operator(sym);
 }
 
 int jl_has_meta(jl_array_t *body, jl_sym_t *sym) JL_NOTSAFEPOINT
