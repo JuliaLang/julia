@@ -2190,7 +2190,7 @@ let subtype_tfunc(@nospecialize xs...) =
     @test subtype_tfunc(Type{<:Array}, Const(AbstractArray)) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray}) === Const(true)
     @test subtype_tfunc(Type{<:Array}, Type{AbstractArray{Int}}) == Bool
-    @test subtype_tfunc(Type{<:Array{Real}}, Type{AbstractArray{Int}}) === Const(false)
+    @test subtype_tfunc(Type{<:Array{Real}}, Type{AbstractArray{Int}}) === Bool # Union{} <: AbstractArray{Int}
     @test subtype_tfunc(Type{<:Array{Real, 2}}, Const(AbstractArray{Real, 2})) === Const(true)
     @test subtype_tfunc(Type{Array{Real, 2}}, Const(AbstractArray{Int, 2})) === Const(false)
     @test subtype_tfunc(DataType, Int) === Bool
@@ -2234,6 +2234,8 @@ let subtype_tfunc(@nospecialize xs...) =
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Real}) === Const(true)
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{Integer}) === Bool
     @test subtype_tfunc(Union{Type{Int64}, Type{Float64}}, Type{AbstractArray}) === Const(false)
+    @test subtype_tfunc(Type{<:Integer}, Type{String}) === Bool # Union{} <: String
+    @test subtype_tfunc(Union{Type{Int}, typeof(Union{})}, Type{String}) === Bool # Union{} <: String
 end
 
 let egal_tfunc

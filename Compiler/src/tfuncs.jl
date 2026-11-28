@@ -1006,17 +1006,16 @@ add_tfunc(isa, 2, 2, isa_tfunc, 1)
 end
 
 @nospecs function subtype_tfunc(𝕃::AbstractLattice, a, b)
-    a, isexact_a = instanceof_tfunc(a, false)
+    a′, isexact_a = instanceof_tfunc(a, false)
     b, isexact_b = instanceof_tfunc(b, false)
-    if !has_free_typevars(a) && !has_free_typevars(b)
-        if a <: b
-            if isexact_b || a === Bottom
+    if !has_free_typevars(a′) && !has_free_typevars(b)
+        if a′ <: b
+            if isexact_b || a′ === Bottom
                 return Const(true)
             end
-        else
-            if isexact_a || (b !== Bottom && !hasintersect(a, b))
-                return Const(false)
-            end
+        elseif isexact_a || (b !== Bottom && !hasintersect(a′, b))
+            # `a` may still be `Union{}`, which is a subtype of every `b`
+            hasintersect(widenconst(a), Core.TypeofBottom) || return Const(false)
         end
     end
     return Bool
