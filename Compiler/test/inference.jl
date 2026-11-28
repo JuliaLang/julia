@@ -23,6 +23,24 @@ let ast = only(code_typed(f39082, Tuple{Rational, Vararg{Rational}}))[1]
     @test ast.slottypes == Any[Const(f39082), Tuple{Rational, Vararg{Rational}}]
 end
 
+# Inferring a fixed-arity call should not explore a branch reachable only at other arities.
+module FixedArityInference
+    other_arity(xs) = sum(xs)
+    @noinline combine(xs...) = length(xs) == 3 ? xs[1] + xs[2] + xs[3] : other_arity(xs)
+    triple(x, y) = combine(x, y, x)
+    pair(x, y) = combine(x, y)
+end
+let M = FixedArityInference
+    interp = Compiler.NativeInterpreter(; inf_params=Compiler.InferenceParams(; cache_owner=M))
+    inferred_other_arity() = any(Base.specializations(only(methods(M.other_arity)))) do mi
+        get(Compiler.code_cache(interp), mi, nothing) !== nothing
+    end
+    @test Base.infer_return_type(M.triple, (Int, Float64); interp) === Float64
+    @test !inferred_other_arity()
+    @test Base.infer_return_type(M.pair, (Int, Float64); interp) === Float64
+    @test inferred_other_arity()
+end
+
 # demonstrate some of the type-size limits
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref, Ref, 100, 0) == Ref
 @test Compiler.limit_type_size(Ref{Complex{T} where T}, Ref{Complex{T} where T}, Ref, 100, 0) == Ref{Complex{T} where T}

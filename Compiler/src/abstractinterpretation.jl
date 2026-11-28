@@ -338,6 +338,12 @@ function abstract_call_gf_by_type(interp::AbstractInterpreter, @nospecialize(fun
                         !const_prop_methodinstance_heuristic(interp, call_result.result, mi, arginfo, sv))
                         csig = get_compileable_sig(method, sig, match.sparams)
                         if csig !== nothing && (!seenall || csig !== sig) # corresponds to whether the first look already looked at this, so repeating abstract_call_method is not useful
+                            # A fixed-arity call can widen to arbitrarily many unrelated argument types.
+                            # Defer inference of that signature until code generation needs it.
+                            if iszero(method.nospecialize) && !isvatuple(sig) && isvatuple(csig) &&
+                                    unwrap_unionall(csig).parameters[end] === Vararg{Any}
+                                continue
+                            end
                             #println(sig, " changed to ", csig, " for ", method)
                             (_, sparams) = typeintersect_env(csig, method.sig)
                             mresult = abstract_call_method(interp, method, csig, sparams, multiple_matches, StmtInfo(false, false), sv)::Future
