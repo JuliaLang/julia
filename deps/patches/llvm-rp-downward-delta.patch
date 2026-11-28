@@ -1,0 +1,178 @@
+From 43665c06bc1602ab9c51c41ec83814b21cbe924e Mon Sep 17 00:00:00 2001
+From: Ian Butterworth <i.r.butterworth@gmail.com>
+Date: Thu, 26 Nov 2026 09:35:53 -0500
+Subject: [PATCH] [RegisterPressure] Compare only the changed pressure sets in
+ getMaxDownwardPressureDelta
+
+The top-down query copied the current and max pressure of every pressure
+set, then compared all of them. AArch64 has 190 sets, and the scheduler
+makes this query for every ready candidate at each top-down pick, so on
+large regions the copies and scans dominate the machine scheduler. Only
+the sets of the instruction's registers can change, so save, compare and
+restore just those, in ascending order. No change in the result.
+
+Assisted-by: Claude Code (Opus 5.5)
+---
+ llvm/include/llvm/CodeGen/RegisterPressure.h |   4 +
+ llvm/lib/CodeGen/RegisterPressure.cpp        | 109 +++++++++++++++++--
+ 2 files changed, 102 insertions(+), 11 deletions(-)
+
+diff --git a/llvm/include/llvm/CodeGen/RegisterPressure.h b/llvm/include/llvm/CodeGen/RegisterPressure.h
+index 7485be6..2e937f1 100644
+--- a/llvm/include/llvm/CodeGen/RegisterPressure.h
++++ b/llvm/include/llvm/CodeGen/RegisterPressure.h
+@@ -562,6 +562,10 @@ protected:
+ 
+   LLVM_ABI void bumpUpwardPressure(const MachineInstr *MI);
+   LLVM_ABI void bumpDownwardPressure(const MachineInstr *MI);
++  LLVM_ABI SlotIndex collectDownwardOperands(const MachineInstr *MI,
++                                             RegisterOperands &RegOpers);
++  LLVM_ABI void bumpDownwardPressure(const RegisterOperands &RegOpers,
++                                     SlotIndex SlotIdx);
+ 
+   LLVM_ABI void
+   discoverLiveInOrOut(VRegMaskOrUnit Pair,
+diff --git a/llvm/lib/CodeGen/RegisterPressure.cpp b/llvm/lib/CodeGen/RegisterPressure.cpp
+index dd7468a..d265695 100644
+--- a/llvm/lib/CodeGen/RegisterPressure.cpp
++++ b/llvm/lib/CodeGen/RegisterPressure.cpp
+@@ -1275,6 +1275,14 @@ LaneBitmask RegPressureTracker::getLiveThroughAt(VirtRegOrUnit VRegOrUnit,
+ /// This is intended for speculative queries. It leaves pressure inconsistent
+ /// with the current position, so must be restored by the caller.
+ void RegPressureTracker::bumpDownwardPressure(const MachineInstr *MI) {
++  RegisterOperands RegOpers;
++  SlotIndex SlotIdx = collectDownwardOperands(MI, RegOpers);
++  bumpDownwardPressure(RegOpers, SlotIdx);
++}
++
++SlotIndex
++RegPressureTracker::collectDownwardOperands(const MachineInstr *MI,
++                                            RegisterOperands &RegOpers) {
+   assert(!MI->isDebugOrPseudoInstr() && "Expect a nondebug instruction.");
+ 
+   SlotIndex SlotIdx;
+@@ -1282,11 +1290,14 @@ void RegPressureTracker::bumpDownwardPressure(const MachineInstr *MI) {
+     SlotIdx = LIS->getInstructionIndex(*MI).getRegSlot();
+ 
+   // Account for register pressure similar to RegPressureTracker::advance().
+-  RegisterOperands RegOpers;
+   RegOpers.collect(*MI, *TRI, *MRI, TrackLaneMasks, /*IgnoreDead=*/false);
+   if (TrackLaneMasks)
+     RegOpers.adjustLaneLiveness(*LIS, *MRI, SlotIdx);
++  return SlotIdx;
++}
+ 
++void RegPressureTracker::bumpDownwardPressure(const RegisterOperands &RegOpers,
++                                              SlotIndex SlotIdx) {
+   if (RequireIntervals) {
+     for (const VRegMaskOrUnit &Use : RegOpers.Uses) {
+       VirtRegOrUnit VRegOrUnit = Use.VRegOrUnit;
+@@ -1336,22 +1347,98 @@ void RegPressureTracker::
+ getMaxDownwardPressureDelta(const MachineInstr *MI, RegPressureDelta &Delta,
+                             ArrayRef<PressureChange> CriticalPSets,
+                             ArrayRef<unsigned> MaxPressureLimit) {
+-  // Snapshot Pressure.
+-  std::vector<unsigned> SavedPressure = CurrSetPressure;
+-  std::vector<unsigned> SavedMaxPressure = P.MaxSetPressure;
++  RegisterOperands RegOpers;
++  SlotIndex SlotIdx = collectDownwardOperands(MI, RegOpers);
++
++  // Only the pressure sets of MI's registers can change. Some targets have
++  // hundreds of sets, so save and compare just these, in ascending order.
++  SmallVector<unsigned, 32> PSets;
++  auto AddPSets = [&](ArrayRef<VRegMaskOrUnit> Regs) {
++    for (const VRegMaskOrUnit &R : Regs)
++      for (PSetIterator PSetI = MRI->getPressureSets(R.VRegOrUnit);
++           PSetI.isValid(); ++PSetI)
++        PSets.push_back(*PSetI);
++  };
++  AddPSets(RegOpers.Uses);
++  AddPSets(RegOpers.Defs);
++  AddPSets(RegOpers.DeadDefs);
++  llvm::sort(PSets);
++  PSets.erase(llvm::unique(PSets), PSets.end());
++
++  SmallVector<unsigned, 32> SavedPressure, SavedMaxPressure;
++  for (unsigned PSet : PSets) {
++    SavedPressure.push_back(CurrSetPressure[PSet]);
++    SavedMaxPressure.push_back(P.MaxSetPressure[PSet]);
++  }
+ 
+-  bumpDownwardPressure(MI);
++  bumpDownwardPressure(RegOpers, SlotIdx);
+ 
+-  computeExcessPressureDelta(SavedPressure, CurrSetPressure, Delta, RCI,
+-                             LiveThruPressure);
+-  computeMaxPressureDelta(SavedMaxPressure, P.MaxSetPressure, CriticalPSets,
+-                          MaxPressureLimit, Delta);
++  // Find the first set whose pressure goes past its limit.
++  Delta.Excess = PressureChange();
++  for (unsigned K = 0, E = PSets.size(); K != E; ++K) {
++    unsigned I = PSets[K];
++    unsigned POld = SavedPressure[K];
++    unsigned PNew = CurrSetPressure[I];
++    int PDiff = (int)PNew - (int)POld;
++    if (!PDiff)
++      continue;
++    unsigned Limit = RCI->getRegPressureSetLimit(I);
++    if (!LiveThruPressure.empty())
++      Limit += LiveThruPressure[I];
++
++    if (Limit > POld) {
++      if (Limit > PNew)
++        PDiff = 0;
++      else
++        PDiff = PNew - Limit;
++    } else if (Limit > PNew)
++      PDiff = Limit - POld;
++
++    if (PDiff) {
++      Delta.Excess = PressureChange(I);
++      Delta.Excess.setUnitInc(PDiff);
++      break;
++    }
++  }
++
++  // Find the first sets whose max pressure passes a critical or current limit.
++  Delta.CriticalMax = PressureChange();
++  Delta.CurrentMax = PressureChange();
++  unsigned CritIdx = 0, CritEnd = CriticalPSets.size();
++  for (unsigned K = 0, E = PSets.size(); K != E; ++K) {
++    unsigned I = PSets[K];
++    unsigned POld = SavedMaxPressure[K];
++    unsigned PNew = P.MaxSetPressure[I];
++    if (PNew == POld)
++      continue;
++
++    if (!Delta.CriticalMax.isValid()) {
++      while (CritIdx != CritEnd && CriticalPSets[CritIdx].getPSet() < I)
++        ++CritIdx;
++
++      if (CritIdx != CritEnd && CriticalPSets[CritIdx].getPSet() == I) {
++        int PDiff = (int)PNew - CriticalPSets[CritIdx].getUnitInc();
++        if (PDiff > 0) {
++          Delta.CriticalMax = PressureChange(I);
++          Delta.CriticalMax.setUnitInc(PDiff);
++        }
++      }
++    }
++    if (!Delta.CurrentMax.isValid() && PNew > MaxPressureLimit[I]) {
++      Delta.CurrentMax = PressureChange(I);
++      Delta.CurrentMax.setUnitInc(PNew - POld);
++      if (CritIdx == CritEnd || Delta.CriticalMax.isValid())
++        break;
++    }
++  }
+   assert(Delta.CriticalMax.getUnitInc() >= 0 &&
+          Delta.CurrentMax.getUnitInc() >= 0 && "cannot decrease max pressure");
+ 
+   // Restore the tracker's state.
+-  P.MaxSetPressure.swap(SavedMaxPressure);
+-  CurrSetPressure.swap(SavedPressure);
++  for (unsigned K = 0, E = PSets.size(); K != E; ++K) {
++    CurrSetPressure[PSets[K]] = SavedPressure[K];
++    P.MaxSetPressure[PSets[K]] = SavedMaxPressure[K];
++  }
+ }
+ 
+ /// Get the pressure of each PSet after traversing this instruction bottom-up.
