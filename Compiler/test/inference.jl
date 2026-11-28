@@ -8100,6 +8100,10 @@ f57292(xs::Union{Tuple{String}, Int}...) = getfield(xs...)
 g57292(xs::String...) = getfield(("abc",), 1, :not_atomic, xs...)
 @test Base.infer_return_type(f57292) == String
 @test Base.infer_return_type(g57292) == String
+# a `Vararg` that may be empty, after fewer arguments than the most `getfield` takes
+getfield_maybe_empty_vararg(x, b::Bool...) = (getfield(x, 1, false, b...); :reached)
+@test Base.infer_return_type(getfield_maybe_empty_vararg, (Tuple{Int}, Vararg{Bool})) === Symbol
+@test getfield_maybe_empty_vararg((1,)) === :reached
 
 mutable struct Issue57673{C<:Union{Int,Float64}}
     c::C

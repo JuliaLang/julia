@@ -1177,10 +1177,10 @@ end
     return getfield_tfunc(𝕃, s00, name)
 end
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name, order, boundscheck)
+    # the `Vararg` may be empty, and then `order` is the boundscheck flag
+    isvarargtype(boundscheck) && return getfield_tfunc(𝕃, s00, name, order)
     hasintersect(widenconst(order), Symbol) || return Bottom
-    if !isvarargtype(boundscheck)
-        hasintersect(widenconst(boundscheck), Bool) || return Bottom
-    end
+    hasintersect(widenconst(boundscheck), Bool) || return Bottom
     return getfield_tfunc(𝕃, s00, name)
 end
 @nospecs function getfield_tfunc(𝕃::AbstractLattice, s00, name)
