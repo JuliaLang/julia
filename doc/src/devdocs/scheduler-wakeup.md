@@ -134,6 +134,15 @@ wakes `io_loop_tid`. Outside a threaded region no wake is needed, since `io_loop
 waits for the iolock instead of leaving the loop to its holder, and the thread that
 ends a threaded region wakes `io_loop_tid`.
 
+A pool thread that leaves the loop to a waiter does not always come back to the
+scheduler, though: it may already be there. A thread on its way to sleep that takes
+the iolock, sees a waiter and skips `uv_run` runs finalizers when it releases the
+iolock, and those can wait for the iolock in turn. A second thread on its way to
+sleep can then take the iolock, see the first thread's finalizer waiting, and skip
+`uv_run` as well. So a thread that skipped `uv_run` for a waiter makes the same
+check before parking as one that found the loop idle: if the iolock is busy, or
+free while the loop still has work, it retries instead of parking.
+
 [`IoLoopWake.tla`](https://github.com/JuliaLang/julia/blob/master/doc/src/devdocs/scheduler-wakeup/IoLoopWake.tla)
 models this handoff outside threaded regions, including iolock contention and
 finalizers that take the iolock before the loop runs and after its unlock. It

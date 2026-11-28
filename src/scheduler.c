@@ -589,12 +589,15 @@ JL_DLLEXPORT jl_task_t *jl_task_get_next(jl_value_t *trypoptask, jl_value_t *q, 
                         jl_gc_safepoint();
                     }
                     JL_UV_UNLOCK();
-                    if (enter_eventloop && !active) {
+                    if (!active) {
                         // The unlock may have run finalizers, and those can take the
                         // iolock (e.g. `uvfinalize`). A thread that armed a handle in
                         // the meantime and found the iolock held relies on us to get
                         // the loop serviced, so check again that it is idle, this
-                        // time without running finalizers.
+                        // time without running finalizers. Do so as well when we left
+                        // the loop to a thread waiting for the iolock: that waiter can
+                        // be another thread on its way to sleep, which in turn left the
+                        // loop to the finalizers our unlock ran.
                         active = 1;
                         if (jl_mutex_trylock_nogc(&jl_uv_mutex)) {
                             active = uv_loop_alive(jl_global_event_loop());
