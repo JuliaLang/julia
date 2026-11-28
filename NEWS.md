@@ -17,6 +17,21 @@ Compiler/Runtime improvements
   reduces the memory footprint of workloads that allocate many small objects on many threads and
   keep few of them, such as a language server that runs type inference repeatedly ([#63512]).
 
+* A field or `Memory` element whose type is a `Union` mixing reference components with
+  up to four small primitive components (each leaving one to three bits of a word free
+  for a tag, e.g. `Union{String, Int16}`, or `Union{String, Int32}` on 64-bit platforms)
+  is now stored as a single tagged word: loading or storing a value of such a
+  primitive component allocates no box. The encoding is documented ABI (see the devdocs on tagged word Union
+  optimizations, which also list the operations that still box); such fields were
+  previously stored as a pointer to a boxed value, which C code should not have relied
+  upon. Elements of such arrays can no longer be accessed with `jl_array_ptr_ref`,
+  `jl_genericmemory_ptr_ref` or their `_set` counterparts; read them with
+  `jl_genericmemoryref` instead. Converting a `Ref{T}` of such a union `T` to a pointer
+  throws an `ArgumentError` while it holds such a value. `unsafe_wrap` throws an
+  `ArgumentError` for an element type that is such a union or a struct with such a
+  field, and such a struct can no longer be passed to or returned from `ccall` by value
+  ([#62918]).
+
 Command-line option changes
 ---------------------------
 

@@ -49,6 +49,7 @@ function unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, b::RefValue{T})
         if p == C_NULL
             throw(UndefRefError())
         end
+        tagged_word_isref(UInt(p)) || throw_unboxed_address(b)
     end
     return p
 end

@@ -1963,7 +1963,9 @@ void jl_gc_multi_wb_cold(const jl_value_t *parent, void *dest JL_UNUSED, const v
     // the caller checked that parent is old and not in the remset, and that npointers != 0
     size_t npointers = dt->layout->npointers;
     for (size_t i = 0; i < npointers; i++) {
-        if (jl_gc_wb_must_remember(parent, ((jl_value_t**)ptr)[jl_ptr_offset(dt, i)])) {
+        jl_value_t *ptrf = ((jl_value_t**)ptr)[jl_ptr_offset(dt, i)];
+        // an immediate has no header to read
+        if (jl_tagged_word_isptr((uintptr_t)ptrf) && jl_gc_wb_must_remember(parent, ptrf)) {
             jl_gc_queue_root(parent);
             return;
         }
@@ -2159,6 +2161,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj8(jl_ptls_t ptls, char *obj8_parent, uint8_
     for (; obj8_begin < obj8_end; obj8_begin++) {
         slot = &((jl_value_t**)obj8_parent)[*obj8_begin];
         new_obj = *slot;
+        if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+            new_obj = NULL; // #undef, or an immediate
         if (new_obj != NULL) {
             verify_parent2("object", obj8_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj8_parent, slot, (jl_datatype_t*)jl_typeof(obj8_parent)));
@@ -2196,6 +2200,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj16(jl_ptls_t ptls, char *obj16_parent, uint
     for (; obj16_begin < obj16_end; obj16_begin++) {
         slot = &((jl_value_t **)obj16_parent)[*obj16_begin];
         new_obj = *slot;
+        if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+            new_obj = NULL; // #undef, or an immediate
         if (new_obj != NULL) {
             verify_parent2("object", obj16_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj16_parent, slot, (jl_datatype_t*)jl_typeof(obj16_parent)));
@@ -2233,6 +2239,8 @@ STATIC_INLINE jl_value_t *gc_mark_obj32(jl_ptls_t ptls, char *obj32_parent, uint
     for (; obj32_begin < obj32_end; obj32_begin++) {
         slot = &((jl_value_t **)obj32_parent)[*obj32_begin];
         new_obj = *slot;
+        if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+            new_obj = NULL; // #undef, or an immediate
         if (new_obj != NULL) {
             verify_parent2("object", obj32_parent, slot, "field(%d)",
                             gc_slot_to_fieldidx(obj32_parent, slot, (jl_datatype_t*)jl_typeof(obj32_parent)));
@@ -2275,6 +2283,8 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
         for (; obj_begin < obj_end; obj_begin += step) {
             jl_value_t **slot = obj_begin;
             new_obj = *slot;
+            if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+                new_obj = NULL; // #undef, or an immediate
             if (new_obj != NULL) {
                 verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                                gc_slot_to_arrayidx(obj_parent, obj_begin));
@@ -2309,6 +2319,8 @@ STATIC_INLINE void gc_mark_objarray(jl_ptls_t ptls, jl_value_t *obj_parent, jl_v
     for (; obj_begin < scan_end; obj_begin += step) {
         jl_value_t **slot = obj_begin;
         new_obj = *obj_begin;
+        if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+            new_obj = NULL; // #undef, or an immediate
         if (new_obj != NULL) {
             verify_parent2("obj array", obj_parent, obj_begin, "elem(%d)",
                         gc_slot_to_arrayidx(obj_parent, obj_begin));
@@ -2347,6 +2359,8 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
             for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
                 jl_value_t **slot = &ary8_begin[*pindex];
                 new_obj = *slot;
+                if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+                    new_obj = NULL; // #undef, or an immediate
                 if (new_obj != NULL) {
                     verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary8_parent, ary8_begin));
@@ -2387,6 +2401,8 @@ STATIC_INLINE void gc_mark_memory8(jl_ptls_t ptls, jl_value_t *ary8_parent, jl_v
         for (uint8_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             jl_value_t **slot = &ary8_begin[*pindex];
             new_obj = *slot;
+            if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+                new_obj = NULL; // #undef, or an immediate
             if (new_obj != NULL) {
                 verify_parent2("array", ary8_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary8_parent, ary8_begin));
@@ -2426,6 +2442,8 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
             for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
                 jl_value_t **slot = &ary16_begin[*pindex];
                 new_obj = *slot;
+                if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+                    new_obj = NULL; // #undef, or an immediate
                 if (new_obj != NULL) {
                     verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                 gc_slot_to_arrayidx(ary16_parent, ary16_begin));
@@ -2466,6 +2484,8 @@ STATIC_INLINE void gc_mark_memory16(jl_ptls_t ptls, jl_value_t *ary16_parent, jl
         for (uint16_t *pindex = elem_begin; pindex < elem_end; pindex++) {
             jl_value_t **slot = &ary16_begin[*pindex];
             new_obj = *slot;
+            if (!jl_tagged_word_isptr((uintptr_t)new_obj))
+                new_obj = NULL; // #undef, or an immediate
             if (new_obj != NULL) {
                 verify_parent2("array", ary16_parent, &new_obj, "elem(%d)",
                                gc_slot_to_arrayidx(ary16_parent, ary16_begin));

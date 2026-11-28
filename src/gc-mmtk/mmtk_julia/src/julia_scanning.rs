@@ -2,6 +2,7 @@ use crate::api::mmtk_object_is_managed_by_mmtk;
 use crate::julia_types::*;
 use crate::slots::JuliaVMSlot;
 use crate::slots::OffsetSlot;
+use crate::slots::TaggedSlot;
 use crate::JULIA_BUFF_TAG;
 use memoffset::offset_of;
 use mmtk::util::{Address, ObjectReference};
@@ -327,7 +328,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             if npointers == 1 {
                 objary_begin = objary_begin.shift::<Address>((*layout).first_ptr as isize);
                 while objary_begin < objary_end {
-                    process_slot(closure, objary_begin);
+                    process_pointer_table_slot(closure, objary_begin);
                     objary_begin = objary_begin.shift::<Address>(elsize as isize);
                 }
             } else if (*layout).fielddesc_type_custom() == 0 {
@@ -340,7 +341,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                     while elem_begin < elem_end {
                         let elem_begin_loaded = elem_begin.load::<u8>();
                         let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
+                        process_pointer_table_slot(closure, slot);
                         elem_begin = elem_begin.shift::<u8>(1);
                     }
                     elem_begin = obj8_begin;
@@ -354,7 +355,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
                     while obj16_begin < obj16_end {
                         let elem_begin_loaded = obj16_begin.load::<u16>();
                         let slot = objary_begin.shift::<Address>(elem_begin_loaded as isize);
-                        process_slot(closure, slot);
+                        process_pointer_table_slot(closure, slot);
                         obj16_begin = obj16_begin.shift::<u16>(1);
                     }
                     obj16_begin = mmtk_jl_dt_layout_ptrs(layout);
@@ -401,7 +402,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj8_begin < obj8_end {
                 let obj8_begin_loaded = obj8_begin.load::<u8>();
                 let slot = obj.shift::<Address>(obj8_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj8_begin = obj8_begin.shift::<u8>(1);
             }
         } else if (*layout).fielddesc_type_custom() == 1 {
@@ -411,7 +412,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj16_begin < obj16_end {
                 let obj16_begin_loaded = obj16_begin.load::<u16>();
                 let slot = obj.shift::<Address>(obj16_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj16_begin = obj16_begin.shift::<u16>(1);
             }
         } else if (*layout).fielddesc_type_custom() == 2 {
@@ -421,7 +422,7 @@ pub unsafe fn scan_julia_object<SV: SlotVisitor<JuliaVMSlot>>(obj: Address, clos
             while obj32_begin < obj32_end {
                 let obj32_begin_loaded = obj32_begin.load::<u32>();
                 let slot = obj.shift::<Address>(obj32_begin_loaded as isize);
-                process_slot(closure, slot);
+                process_pointer_table_slot(closure, slot);
                 obj32_begin = obj32_begin.shift::<u32>(1);
             }
         } else {
@@ -569,10 +570,20 @@ fn get_stack_addr(addr: Address, offset: isize, lb: u64, ub: u64) -> Address {
     }
 }
 
+// A pointer-table slot may be a tagged word, whose immediates the slot skips.
+// Moving plans store a plain pointer, which keeps the encoding.
+#[inline(always)]
+pub fn process_pointer_table_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
+    visit_slot(closure, JuliaVMSlot::Tagged(TaggedSlot::from_address(slot)));
+}
+
 #[inline(always)]
 pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Address) {
-    let simple_slot = SimpleSlot::from_address(slot);
+    visit_slot(closure, JuliaVMSlot::Simple(SimpleSlot::from_address(slot)));
+}
 
+#[inline(always)]
+fn visit_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: JuliaVMSlot) {
     #[cfg(debug_assertions)]
     {
         use mmtk::vm::slot::Slot;
@@ -580,17 +591,17 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
         if PRINT_OBJ_TYPE {
             println!(
                 "\tprocess slot = {:?} - {:?}\n",
-                simple_slot,
-                simple_slot.load()
+                slot,
+                slot.load()
             );
         }
 
-        if let Some(objref) = simple_slot.load() {
+        if let Some(objref) = slot.load() {
             debug_assert!(
                 mmtk::memory_manager::is_in_mmtk_spaces(objref),
                 "Object {:?} in slot {:?} is not mapped address",
                 objref,
-                simple_slot
+                slot
             );
 
             let raw_addr_usize = objref.to_raw_address().as_usize();
@@ -600,12 +611,12 @@ pub fn process_slot<EV: SlotVisitor<JuliaVMSlot>>(closure: &mut EV, slot: Addres
                 raw_addr_usize % 16 == 0 || raw_addr_usize % 8 == 0,
                 "Object {:?} in slot {:?} is not aligned to 8 or 16",
                 objref,
-                simple_slot
+                slot
             );
         }
     }
 
-    closure.visit_slot(JuliaVMSlot::Simple(simple_slot));
+    closure.visit_slot(slot);
 }
 
 #[inline(always)]
