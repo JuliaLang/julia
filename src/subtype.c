@@ -3272,12 +3272,14 @@ static int subtype(jl_value_t *x, jl_value_t *y, jl_stenv_t *e, jl_param_pos_t p
                 return 0;
             return subtype((jl_value_t*)jl_type_type, y, e, param);
         }
-        // `Type{Type{T}}` with an unbounded `T` contains every `Type{X}` value
-        // (among others), so a kind contained in `TypeEq` is a subtype
+        // `Type{Type{T}}` with an unbounded existential `T` contains every `Type{X}` value
+        // (among others), so a kind contained in `TypeEq` is a subtype. A free or
+        // forall-bound `T` stands for one type, so `Type{Type{T}}` then holds one value.
         if (jl_is_typeeq(tp0)) {
             jl_value_t *inner = jl_typeeq_T(tp0);
-            if (jl_is_typevar(inner) && ((jl_tvar_t*)inner)->lb == jl_bottom_type &&
-                    ((jl_tvar_t*)inner)->ub == (jl_value_t*)jl_any_type)
+            jl_varbinding_t *vb = jl_is_typevar(inner) ? lookup(e, (jl_tvar_t*)inner) : NULL;
+            if (vb && vb->existential && vb->lb == jl_bottom_type &&
+                    vb->ub == (jl_value_t*)jl_any_type)
                 return subtype(x, (jl_value_t*)jl_typeeq_type, e, param);
         }
         return 0;

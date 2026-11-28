@@ -625,6 +625,11 @@ function test_old()
     @test Core.TypeEq != (Type{Type{T}} where T)
     @test !((Type{Type{T}} where T) <: Core.TypeEq)
     @test !(DataType <: (Type{Type{T}} where T))
+    # a free `T` stands for one type, so `Type{Type{T}}` then holds one value
+    let T = TypeVar(:T)
+        @test !(Core.TypeEq <: Type{Type{T}})
+        @test Type{Type{T}} <: Core.TypeEq
+    end
     # a `Type{X}` never lies in a single kind, even when instantiated: its
     # members include `UnionAll` spellings such as `Ref{S} where Int<:S<:Int`
     @test !((Type{Ref{T}} where T<:Real) <: DataType)
