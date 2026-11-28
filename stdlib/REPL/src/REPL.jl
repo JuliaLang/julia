@@ -1645,6 +1645,11 @@ function setup_interface(
                         curr_prompt_len = sizeof(detected_pkg_prompt)
                         oldpos += curr_prompt_len
                         julia_prompt.keymap_dict[']'](s, o...)
+                        # pasted lines skip the Enter that swaps the placeholder Pkg mode for the real one
+                        if LineEdit.mode(s) === dummy_pkg_mode
+                            load_pkg()
+                            @invokelatest dummy_pkg_mode.on_enter(s)
+                        end
                         pasting_help = false
                     # Check if input line starts with "shell> ", remove it if we are in prompt paste mode and switch mode
                     elseif (firstline || isprompt_paste) && startswith(substr, SHELL_PROMPT)

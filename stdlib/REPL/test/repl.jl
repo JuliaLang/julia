@@ -917,6 +917,29 @@ let exename = `$(Base.julia_cmd()) --startup-file=no --color=no`
     p = open(`$exename -q`, "r+")
     write(p, "1\nexit()\n")
     @test read(p, String) == "1\n"
+
+    # Pasted `pkg>` lines run in a fresh session, before Pkg mode has loaded
+    if !Sys.iswindows()
+        with_fake_pty() do pts, ptm
+            nENV = copy(ENV)
+            nENV["TERM"] = "xterm" # a dumb terminal gets the basic REPL, which has no modes
+            p = run(detach(setenv(`$exename -q --history-file=no`, nENV)), pts, pts, pts, wait=false)
+            Base.close_stdio(pts)
+            readuntil(ptm, "julia> ")
+            timer = kill_timer(60, ptm)
+            write(ptm, "\e[200~pkg> activate --temp\njulia> exit()\n\e[201~")
+            output = readuntil(ptm, "Activating new project at", keep=true)
+            @test endswith(output, "Activating new project at")
+            try
+                read(ptm) # let the child finish writing and exit
+            catch ex
+                (ex isa Base.IOError && ex.code == Base.UV_EIO) || rethrow() # linux reports EIO instead of EOF
+            end
+            wait(p)
+            @test isopen(timer)
+            close(timer)
+        end
+    end
 end # let exename
 
 # issue #19864
