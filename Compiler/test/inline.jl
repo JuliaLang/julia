@@ -2644,4 +2644,38 @@ let src = code_typed1((Base.RefValue{Any},)) do r
     @test count(iscall((src, Core._apply_iterate)), src.code) == 0
 end
 
+# a callee costing more than the largest encoded finite cost, under a raised threshold
+@newinterp HighInlineThreshold
+Compiler.OptimizationParams(::HighInlineThreshold) =
+    Compiler.OptimizationParams(; inline_cost_threshold=Int(Compiler.MAX_INLINE_COST))
+five_dynamic_calls(r) = (r[](1); r[](1); r[](1); r[](1); r[](1); nothing)
+let src = code_typed1((Base.RefValue{Any},); interp=HighInlineThreshold()) do r
+        five_dynamic_calls(r)
+    end
+    @test count(isinvoke(:five_dynamic_calls), src.code) == 0
+end
+
+# a non-concrete tuple return under the largest possible threshold
+@newinterp MaxInlineThreshold
+Compiler.OptimizationParams(::MaxInlineThreshold) =
+    Compiler.OptimizationParams(; inline_cost_threshold=typemax(Int))
+tuple_return_inline(x::Int) = x > 0 ? (x,) : (x, x)
+let src = code_typed1((Int,); interp=MaxInlineThreshold()) do x
+        tuple_return_inline(x)
+    end
+    @test count(isinvoke(:tuple_return_inline), src.code) == 0
+end
+
+# a one-argument `typeassert` call, which always throws
+one_arg_typeassert(x, c) = c ? Core.typeassert(x) : 1
+@test only(code_typed(one_arg_typeassert, (Int, Bool)))[2] === Int
+
+# `llvmcall` takes any number of arguments
+llvmcall_add_one(x::Int32) = Base.llvmcall("%r = add i32 %0, 1\nret i32 %r", Int32, Tuple{Int32}, x)
+let ir = first(only(Base.code_ircode(llvmcall_add_one, (Int32,))))
+    i = findfirst(iscall((ir, Core.Intrinsics.llvmcall)), ir.stmts.stmt)::Int
+    cost = Compiler.statement_cost(ir.stmts.stmt[i], i, ir, ir.sptypes, Compiler.OptimizationParams())
+    @test cost == Compiler.T_IFUNC_COST[Int(reinterpret(Int32, Core.Intrinsics.llvmcall)) + 1]
+end
+
 end # module inline_tests

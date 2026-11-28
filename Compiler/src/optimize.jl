@@ -35,7 +35,6 @@ const IR_FLAG_NOUB        = one(UInt32) << 10
 const IR_FLAG_NORTCALL = one(UInt32) << 13
 # This statement is proven :reset_safe
 const IR_FLAG_RESET_SAFE = one(UInt32) << 14
-# Reserved: one(UInt32) << 15 used for RSIIMO below
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
@@ -126,7 +125,7 @@ function inline_cost_clamp(x::Int)
     x > MAX_INLINE_COST && return MAX_INLINE_COST
     x < MIN_INLINE_COST && return MIN_INLINE_COST
     x = ccall(:jl_encode_inlining_cost, UInt8, (InlineCostType,), x)
-    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), x)
+    x = ccall(:jl_decode_inlining_cost, InlineCostType, (UInt8,), min(x, 0xfe)) # 0xff means never inline
     return x
 end
 
@@ -1805,8 +1804,9 @@ end
 
 ## Computing the cost of a function body
 
-# saturating sum (inputs are non-negative), prevents overflow with typemax(Int) below
+# saturating sum and product (inputs are non-negative), prevents overflow with typemax(Int)
 plus_saturate(x::Int, y::Int) = max(x, y, x+y)
+times_saturate(x::Int, y::Int) = x == 0 || y <= typemax(Int) ÷ x ? x * y : typemax(Int)
 
 # known return type
 isknowntype(@nospecialize T) = (T === Union{}) || isa(T, Const) || isconcretetype(widenconst(T))
@@ -1834,7 +1834,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             if isassigned(T_IFUNC, iidx)
                 minarg, maxarg, = T_IFUNC[iidx]
                 nargs = length(ex.args)
-                if minarg + 1 <= nargs <= maxarg + 1
+                if minarg <= nargs - 1 <= maxarg
                     # With mostly constant arguments, many Intrinsics tend to become very cheap
                     # and are likely to combine with the operations around them,
                     # so reduce their cost by half.
@@ -1879,7 +1879,7 @@ function statement_cost(ex::Expr, line::Int, src::Union{CodeInfo, IRCode}, sptyp
             elseif f === Core.memoryrefunset! && length(ex.args) >= 3
                 atyp = argextype(ex.args[2], src, sptypes)
                 return isknowntype(atyp) ? 5 : params.inline_nonleaf_penalty
-            elseif f === typeassert && isconstType(argextype_widened(ex.args[3], src, sptypes))
+            elseif f === typeassert && length(ex.args) == 3 && isconstType(argextype_widened(ex.args[3], src, sptypes))
                 return 1
             elseif f === Core._apply_iterate && length(ex.args) >= 3
                 fa = singleton_type(argextype(ex.args[3], src, sptypes))
