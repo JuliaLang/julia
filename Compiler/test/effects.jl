@@ -1129,6 +1129,17 @@ function isdefined_alias_loop(t::Tuple)
 end
 @test Compiler.is_nothrow(Base.infer_effects(isdefined_alias_loop, (Tuple{String,String},)))
 
+# ... and when two `@isdefined` results of the same slot merge
+function isdefined_merged(b1::Bool, b2::Bool)
+    if b1
+        x = 1
+    end
+    c = b2 ? @isdefined(x) : @isdefined(x)
+    c && return x
+    return 0
+end
+@test Compiler.is_nothrow(Base.infer_effects(isdefined_merged, (Bool, Bool)))
+
 # Effects of Base.hasfield (#50198)
 hf50198(s) = hasfield(typeof((;x=1, y=2)), s)
 f50198() = (hf50198(Ref(:x)[]); nothing)
