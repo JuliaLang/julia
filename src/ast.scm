@@ -494,6 +494,7 @@
 (define (vinfo:never-undef v) (< 0 (logand (caddr v) 4)))
 (define (vinfo:read v) (< 0 (logand (caddr v) 8)))
 (define (vinfo:sa v) (< 0 (logand (caddr v) 16)))
+(define (vinfo:called v) (< 0 (logand (caddr v) 64)))
 (define (vinfo:nospecialize v) (< 0 (logand (caddr v) 128)))
 (define (set-bit x b val) (if val (logior x b) (logand x (lognot b))))
 ;; record whether var is captured

@@ -4,7 +4,14 @@ mutable struct DesugaringContext <: AbstractLoweringContext
     const layer::ScopeLayer
     const bindings::Bindings
     const ssa_mapping::Dict{Int, IdTag}
+    const fn_args::Dict{FunctionId, Set{NameKey}}
     const world::UInt
+end
+
+function new_function_id!(ctx::DesugaringContext)
+    fid = length(ctx.fn_args) + 1
+    ctx.fn_args[fid] = Set{NameKey}()
+    return fid
 end
 
 # Translate a :ssavalue node from pre-lowered code into a normal SSA binding.
@@ -778,20 +785,20 @@ function expand_dotcall(ctx, ex)
     k = head(ex)
     if k == :dotcall
         @jl_assert numchildren(ex) >= 1 ex
-        farg = setmeta(ex[1], :is_called, true)
+        farg = ex[1]
         args = SyntaxList()
         append!(args, ex[2:end])
         kws = remove_kw_args!(ctx, args)
-        @ast ctx ex [:call
-            (isnothing(kws) ? "broadcasted" : "broadcasted_kwsyntax")::top
-            farg    # todo: What about (z=f).(x,y) ?
-            (expand_dotcall(ctx, arg) for arg in args)...
-            if !isnothing(kws)
-                [:parameters
-                    kws...
-                ]
-            end
-        ]
+        @ast ctx ex [:block
+            head(farg) === :identifier ? [:mark_called farg] : nothing
+            [:call
+                (isnothing(kws) ? "broadcasted" : "broadcasted_kwsyntax")::top
+                farg    # todo: What about (z=f).(x,y) ?
+                (expand_dotcall(ctx, arg) for arg in args)...
+                if !isnothing(kws)
+                    [:parameters kws...]
+                end
+        ]]
     elseif k == :comparison
         expand_dotcall(ctx, expand_compare_chain(ctx, ex))
     elseif k == :.&& || k == :.||
@@ -810,7 +817,6 @@ function expand_fuse_broadcast(ctx, ex)
         @jl_assert numchildren(ex) == 2 ex
         lhs = ex[1]
         kl = head(lhs)
-        rhs = expand_dotcall(ctx, ex[2])
         @ast ctx ex [:block
             dest := if kl == :ref
                 sctx = with_stmts(ctx)
@@ -831,15 +837,17 @@ function expand_fuse_broadcast(ctx, ex)
             else
                 lhs
             end
-            bc := if !(head(rhs) == :call && head(rhs[1]) == :top && syntax_name(rhs[1]) == "broadcasted")
+            bc := if !(head(ex[2]) in (:dotcall, :.&&, :.||) ||
+                    (head(ex[2]) === :comparison &&
+                        any(is_dotted, children(ex[2])[2:2:end])))
                 # Ensure the rhs of .= is always wrapped in a call to `broadcasted()`
-                [:call(rhs)
+                [:call(ex[2])
                     "broadcasted"::top
                     "identity"::top
-                    rhs
+                    expand_dotcall(ctx, ex[2])
                 ]
             else
-                rhs
+                expand_dotcall(ctx, ex[2])
             end
             [:call "materialize!"::top dest bc]
             dest
@@ -1084,12 +1092,9 @@ function expand_splat(ctx, ex, topfunc, args)
     wrapped_args = _wrap_unsplatted_args(ctx, ex, args)
 
     # Construct the unevaluated _apply_iterate call
-    result = @ast ctx ex [:call
-        "_apply_iterate"::core
-        "iterate"::top
-        setmeta(topfunc, :is_called, true)
-        wrapped_args...
-    ]
+    result = @ast ctx ex [:block
+        head(topfunc) === :identifier ? [:mark_called topfunc] : nothing
+        [:call "_apply_iterate"::core "iterate"::top topfunc wrapped_args...]]
 
     # Recursively expand the entire call (matching native's expand-forms)
     return expand_forms_2(ctx, result)
@@ -1805,9 +1810,10 @@ function expand_kw_call(ctx, st)
     stmts = Syntax[]
     st = remove_argument_side_effects(ctx, stmts, st)
     args = copy(st[2:end])
-    func = setmeta(st[1], :is_called, true)
+    func = st[1]
     kws = remove_kw_args!(ctx, args)
     @ast ctx st [:block
+        head(func) === :identifier ? [:mark_called func] : nothing
         stmts...
         kw_container := expand_named_tuple(ctx, st, kws;
                                            field_name="keyword argument",
@@ -2678,7 +2684,7 @@ function generated_method_defs(ctx, src, mtable, sparams, argl, body, rett)
     @ast ctx src [:block
         [:global gen_name]
         [:function_decl gen_name]
-        [:method_defs gen_name [:block] gen_mdef]
+        [:method_defs new_function_id!(ctx)::value gen_name [:block] gen_mdef]
         nongen_mdef]
 end
 
@@ -2793,7 +2799,7 @@ is_vararg_type_expr(st) = @stm st begin
     _ -> (head(st) === :core || head(st) === :identifier) && syntax_name(st) == "Vararg"
 end
 
-function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, overlay)
+function keywords_method_def_expr(ctx, src, fid, mtable, sparams, argl, body, rett, overlay)
     kws = argl[end]
     pargl = argl[1:end-1]
     @jl_assert head(kws) === :parameters src
@@ -2952,18 +2958,18 @@ function keywords_method_def_expr(ctx, src, mtable, sparams, argl, body, rett, o
     if overlay || head(mtable) === :nothing
         @ast ctx src [:block
             [:function_decl m1_name]
-            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
-            [:method_defs (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            [:method_defs fid::value m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs fid::value (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs fid::value (::nothing) method_def_sparams(ctx, src, pos_sparams) mdefs3]
             (::nothing)]
     else
         @ast ctx src [:block
             [:function_decl m1_name]
             [:no_method_defs m1_name] # hack: define closure type for next decl
             [:function_decl mtable]
-            [:method_defs m1_name method_def_sparams(ctx, src, sparams) mdefs1]
-            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
-            [:method_defs mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
+            [:method_defs fid::value m1_name method_def_sparams(ctx, src, sparams) mdefs1]
+            [:method_defs fid::value mtable method_def_sparams(ctx, src, pos_sparams) mdefs2]
+            [:method_defs fid::value mtable method_def_sparams(ctx, src, pos_sparams) mdefs3]
             mtable]
     end
 end
@@ -3072,14 +3078,20 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
             end
         end
     end
+    fid = new_function_id!(ctx)
+    for a in argl
+        head(a) === :parameters && continue
+        aname = head(a) === :kw ? a[1][1] : a[1]
+        head(aname) === :identifier && push!(ctx.fn_args[fid], NameKey(aname))
+    end
     sparams = mapsyntax(typevar_bounds, wheres)
     if has_kws
         keywords_method_def_expr(
-            ctx, src, mtable, sparams, argl, body, rett, overlay)
+            ctx, src, fid, mtable, sparams, argl, body, rett, overlay)
     elseif overlay
         mtmp = ssavar(ctx, mtable)
         @ast ctx src [:block
-            [:method_defs (::nothing)
+            [:method_defs fid::value (::nothing)
                 method_def_sparams(ctx, src, sparams)
                 [:block [:(=) mtmp method_def_expr(
                     ctx, src, mtable, sparams, argl, body, rett)]]]
@@ -3087,7 +3099,7 @@ function expand_function_def(ctx, src, raw_args, wheres, body, rett)
     else
         @ast ctx src [:block
             (head(mtable) === :nothing) ? nothing : [:function_decl mtable]
-            [:method_defs mtable
+            [:method_defs fid::value mtable
                 method_def_sparams(ctx, src, sparams)
                 [:block method_def_expr(ctx, src, mtable, sparams, argl, body, rett)]]
             [:removable mtable]]
@@ -4647,7 +4659,8 @@ end
 
 @fzone "JL: desugar" function expand_forms_2(ex::SyntaxTree, world::UInt)
     sl = base_layer(ex.context)
-    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(), world)
+    ctx_out = DesugaringContext(sl, Bindings(), Dict{Int, IdTag}(),
+                                Dict{FunctionId, Set{NameKey}}(), world)
     vr = valid_st1(ex)
     # surface only one error until we have pretty-printing for multiple
     if !validation_ok(vr)

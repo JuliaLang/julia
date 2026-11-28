@@ -153,7 +153,6 @@ precompile(Tuple{typeof(Base.setindex!), Base.Dict{String, Array{String, 1}}, Ar
 precompile(Tuple{typeof(Base.setindex!), GenericMemory{:not_atomic, Union{Base.Libc.RawFD, Base.SyncCloseFD, IO}, Core.AddrSpace{Core}(0x00)}, Base.TTY, Int})
 precompile(Tuple{typeof(Base.setup_stdio), Base.TTY, Bool})
 precompile(Tuple{typeof(Base.spawn_opts_inherit), Base.DevNull, Base.TTY, Base.TTY})
-precompile(Tuple{typeof(Core.kwcall), NamedTuple{(:context,), Tuple{Base.TTY}}, typeof(Base.sprint), Function})
 precompile(Tuple{Type{Base.UUID}, Base.UUID})
 """
 

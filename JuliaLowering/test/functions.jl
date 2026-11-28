@@ -506,6 +506,63 @@ end
     """)
     @test first(methods(test_mod.f45162)).called != 0
     @test first(methods(test_mod.f45162_2)).called != 0
+
+    # arguments forwarded to a method that calls them are marked called
+    # (whether argument `i` of `m`, not counting the function itself, is called)
+    called_arg(m::Method, i::Int) = (m.called >> (i - 1)) & 0x1 == 0x1
+    JuliaLowering.include_string(test_mod, """
+    f_called_kw(f, x; k = 1) = f(x) + k
+    f_called_kw_map(f, x; k = 1) = map(f, x)
+    f_called_opt(f::Function, x = 1) = f(x)
+    f_called_both(f, x = 1; k = 1) = f(x) + k
+    """)
+    @test called_arg(which(test_mod.f_called_kw, (Any, Any)), 1)
+    @test called_arg(which(Core.kwcall, (NamedTuple, typeof(test_mod.f_called_kw), Any, Any)), 3)
+    @test !called_arg(which(test_mod.f_called_kw_map, (Any, Any)), 1)
+    @test called_arg(which(test_mod.f_called_opt, (Function,)), 1)
+    @test called_arg(which(test_mod.f_called_both, (Any,)), 1)
+    JuliaLowering.include_string(test_mod, """
+    f_called_rett(g, x = 1)::g() = x
+    f_called_chain(g, x::T = 1, y = g(T)) where {T} = y
+    f_called_bcast(g, x = [1]) = g.(x)
+    f_called_quoted(g, x; k = 1) = :(g(x))
+    """)
+    @test called_arg(which(test_mod.f_called_rett, (Any,)), 1)
+    @test called_arg(which(test_mod.f_called_chain, (Any,)), 1)
+    @test called_arg(which(test_mod.f_called_bcast, (Any,)), 1)
+    @test !called_arg(which(test_mod.f_called_quoted, (Any, Any)), 1)
+    JuliaLowering.include_string(test_mod, """
+    f_called_shadow(g, x; k = 1) = let g = identity; g(x); end
+    f_called_shadow_opt(g, x = 1) = let g = identity; g(x); end
+    f_called_dflt(g, x = g(), y = 2) = x + y
+    """)
+    @test !called_arg(which(test_mod.f_called_shadow, (Any, Any)), 1)
+    @test !called_arg(which(test_mod.f_called_shadow_opt, (Any,)), 1)
+    @test called_arg(which(test_mod.f_called_dflt, (Any,)), 1)
+    # `(g, x)` only forwards `g` to a method that doesn't call it, but the call in
+    # the default for `x` marks `g` in every method of `f_called_dflt`
+    @test_broken !called_arg(which(test_mod.f_called_dflt, (Any, Any)), 1)
+    JuliaLowering.include_string(test_mod, """
+    function f_called_gen(g, x = 1; k = 1)
+        if @generated
+            :(g(x))
+        else
+            g(x)
+        end
+    end
+    """)
+    @test called_arg(which(test_mod.f_called_gen, (Any,)), 1)
+    @test called_arg(which(test_mod.f_called_gen, (Any, Any)), 1)
+    @test called_arg(which(Core.kwcall, (NamedTuple, typeof(test_mod.f_called_gen), Any)), 3)
+    # only the code a generated function produces calls `g`, which lowering does not see
+    JuliaLowering.include_string(test_mod, """
+    @generated f_called_gen_only(g, x = 1; k = 1) = :(g(x))
+    """)
+    @test_broken called_arg(which(test_mod.f_called_gen_only, (Any,)), 1)
+    let g = let y = 1; x -> x + y; end
+        @test test_mod.f_called_kw(g, 1) == 3
+        @test all(mi -> mi.specTypes.parameters[2] !== Function, Base.specializations(which(test_mod.f_called_kw, (Any, Any))))
+    end
 end
 
 @testset "nospecialize" begin
