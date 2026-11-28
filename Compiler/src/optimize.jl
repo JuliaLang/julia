@@ -35,7 +35,6 @@ const IR_FLAG_NOUB        = one(UInt32) << 10
 const IR_FLAG_NORTCALL = one(UInt32) << 13
 # This statement is proven :reset_safe
 const IR_FLAG_RESET_SAFE = one(UInt32) << 14
-# Reserved: one(UInt32) << 15 used for RSIIMO below
 # An optimization pass has updated this statement in a way that may
 # have exposed information that inference did not see. Re-running
 # inference on this statement may be profitable.
