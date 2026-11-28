@@ -901,6 +901,15 @@ checkbounds(::Type{Bool}, A::AbstractArray, i::LogicalIndex) = checkbounds(Bool,
 checkindex(::Type{Bool}, inds::AbstractUnitRange, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
 checkindex(::Type{Bool}, inds::Tuple, i::LogicalIndex) = checkindex(Bool, inds, i.mask)
 
+function copyto_unaliased!(::IndexLinear, dest::AbstractArray, ::IndexStyle, src::LogicalIndex)
+    isempty(src) && return dest
+    i = first(LinearIndices(dest)) - 1
+    @inbounds for a in src
+        dest[i+=1] = a
+    end
+    return dest
+end
+
 setindex!(A::Array, X::AbstractArray, I::LogicalIndex{Int}) =
     (@_propagate_inbounds_meta; _setindex!(IndexStyle(A), A, X, I))
 
