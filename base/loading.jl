@@ -722,6 +722,13 @@ const manifest_names = (
     "JuliaManifest.toml",
     "Manifest.toml",
 )
+
+# the v<major> environment is shared by all minor versions, so each one keeps its own manifest
+function is_shared_major_env(dir::AbstractString)
+    dir = dirname(joinpath(dir, ""))
+    return basename(dir) == "v$(VERSION.major)" && basename(dirname(dir)) == "environments"
+end
+manifest_names_for(dir::AbstractString) = is_shared_major_env(dir) ? manifest_names[1:2] : manifest_names
 const preferences_names = ("JuliaLocalPreferences.toml", "LocalPreferences.toml")
 
 function locate_project_file(env::String)
@@ -1045,7 +1052,7 @@ function project_file_manifest_path(project_file::String)::Union{Nothing,String}
         end
     end
     if manifest_path === nothing
-        for mfst in manifest_names
+        for mfst in manifest_names_for(dir)
             manifest_file = joinpath(dir, mfst)
             if isfile_casesensitive(manifest_file)
                 manifest_path = manifest_file

@@ -200,7 +200,7 @@ end
 # this will inherit an existing JULIA_LOAD_PATH value or if there is none, leave
 # a trailing empty entry in JULIA_LOAD_PATH which will be replaced with defaults.
 
-const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
+const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@v#", "@stdlib"]
 
 """
     LOAD_PATH
@@ -208,7 +208,7 @@ const DEFAULT_LOAD_PATH = ["@", "@v#.#", "@stdlib"]
 An array of paths for `using` and `import` statements to consider as project
 environments or package directories when loading code. It is populated based on
 the [`JULIA_LOAD_PATH`](@ref JULIA_LOAD_PATH) environment variable if set;
-otherwise it defaults to `["@", "@v#.#", "@stdlib"]`. Entries starting with `@`
+otherwise it defaults to `["@", "@v#.#", "@v#", "@stdlib"]`. Entries starting with `@`
 have special meanings:
 
 - `@` refers to the "current active environment", whose value is determined by the [`JULIA_PROJECT`](@ref JULIA_PROJECT) environment
@@ -226,6 +226,12 @@ have special meanings:
   and patch components of the Julia version number. For example, if you are
   running Julia 1.2 then `@v#.#` expands to `@v1.2` and will look for an
   environment by that name, typically at `~/.julia/environments/v1.2`.
+
+- `@v#` expands to the environment shared by all minor versions with the same
+  major version, typically at `~/.julia/environments/v1`. It is not created
+  automatically. Since each minor version resolves its packages separately, its
+  manifests are named after the minor version that wrote them, e.g.
+  `Manifest-v1.2.toml`.
 
 The fully expanded value of `LOAD_PATH` that is searched for projects and packages
 can be seen by calling the `Base.load_path()` function.
@@ -379,6 +385,8 @@ function load_path_expand(env::AbstractString)::Union{String, Nothing}
         end
         isempty(DEPOT_PATH) && return nothing
         new_named_env_path = abspath(DEPOT_PATH[1], "environments", name, project_names[end])
+        # don't create the shared major version env just because it is on the default load path
+        is_shared_major_env(dirname(new_named_env_path)) && return new_named_env_path
         return init_named_env!(new_named_env_path)
     end
     # otherwise, it's a path

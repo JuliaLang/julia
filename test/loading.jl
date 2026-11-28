@@ -736,6 +736,30 @@ mktempdir() do dir
     @test success(cmd)
 end
 
+@testset "shared major version environment" begin
+    @test "@v#" in Base.DEFAULT_LOAD_PATH
+    mktempdir() do dir
+        old_depot_path = copy(DEPOT_PATH)
+        try
+            append!(empty!(DEPOT_PATH), [dir])
+            envdir = joinpath(dir, "environments", "v$(VERSION.major)")
+            project_file = joinpath(envdir, "Project.toml")
+            @test Base.load_path_expand("@v#") == project_file
+            @test !ispath(envdir)
+
+            mkpath(envdir)
+            write(project_file, "")
+            write(joinpath(envdir, "Manifest.toml"), "")
+            @test Base.project_file_manifest_path(project_file) === nothing
+            versioned = joinpath(envdir, "Manifest-v$(VERSION.major).$(VERSION.minor).toml")
+            write(versioned, "")
+            @test Base.project_file_manifest_path(project_file) == versioned
+        finally
+            append!(empty!(DEPOT_PATH), old_depot_path)
+        end
+    end
+end
+
 function _with_empty_load_path(f::Function)
     old_load_path = copy(Base.LOAD_PATH)
     try
