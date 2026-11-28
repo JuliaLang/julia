@@ -468,6 +468,7 @@ Base.Experimental.show_error_hints
 Base.ArgumentError
 Base.AssertionError
 Core.BoundsError
+Base.CanonicalIndexError
 Base.CompositeException
 Base.DimensionMismatch
 Core.DivideError
